@@ -1,0 +1,29 @@
+{
+  "name": "foodies",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Grocery receipt and food tracking web app",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "firebase": "^12.7.0",
+    "openai": "^6.15.0",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
+    "tesseract.js": "^7.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^4.0.0",
+    "typescript": "^5.9.3",
+    "vite": "^4.5.0"
+  }
+}
