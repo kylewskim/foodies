@@ -24,6 +24,8 @@ export function AddItemPage() {
   // Check if returning from EditItemPage with updated item
   const returningWithUpdate = location.state?.updatedItem as Item | undefined;
   const returningItems = location.state?.processedItems as Item[] | undefined;
+  // Check if file was selected from AddFoodModal
+  const selectedFile = location.state?.selectedFile as File | undefined;
   
   const getInitialMethod = (): InputMethod => {
     // If returning from edit with items, go to review
@@ -48,6 +50,7 @@ export function AddItemPage() {
   const [processedItems, setProcessedItems] = useState<Item[]>(returningItems || []);
   const [saving, setSaving] = useState(false);
   const [defaultLocation, setDefaultLocation] = useState<StorageLocation>('fridge');
+  const [autoProcessStarted, setAutoProcessStarted] = useState(false);
 
   // Handle returning from EditItemPage with an updated item
   useEffect(() => {
@@ -61,6 +64,53 @@ export function AddItemPage() {
       window.history.replaceState({}, '');
     }
   }, [returningWithUpdate]);
+
+  // Auto-process file if selected from AddFoodModal
+  useEffect(() => {
+    if (selectedFile && !autoProcessStarted) {
+      setAutoProcessStarted(true);
+      processSelectedFile(selectedFile);
+      // Clear the state to prevent re-processing
+      window.history.replaceState({}, '');
+    }
+  }, [selectedFile, autoProcessStarted]);
+
+  const processSelectedFile = async (file: File) => {
+    setProcessing(true);
+    try {
+      // Import OCR functions
+      const { extractTextWithGoogleVision, isGoogleVisionConfigured } = await import('../utils/googleVisionOCR');
+      const Tesseract = (await import('tesseract.js')).default;
+      
+      let extractedText: string;
+      
+      if (isGoogleVisionConfigured()) {
+        try {
+          extractedText = await extractTextWithGoogleVision(file);
+        } catch (googleError) {
+          console.warn('Google Vision API failed, falling back to Tesseract:', googleError);
+          const result = await Tesseract.recognize(file, 'eng+kor');
+          extractedText = result.data.text;
+        }
+      } else {
+        const result = await Tesseract.recognize(file, 'eng+kor');
+        extractedText = result.data.text;
+      }
+      
+      if (!extractedText.trim()) {
+        alert('Could not extract text from image. Please try again.');
+        setProcessing(false);
+        return;
+      }
+      
+      // Process the extracted text
+      await handleImageUpload(extractedText);
+    } catch (error) {
+      console.error('Error processing file:', error);
+      alert('Failed to process image. Please try again.');
+      setProcessing(false);
+    }
+  };
   
   // Form state
   const [itemName, setItemName] = useState(editItem?.name || '');

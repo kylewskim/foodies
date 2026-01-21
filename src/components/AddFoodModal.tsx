@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 interface AddFoodModalProps {
@@ -7,17 +8,19 @@ interface AddFoodModalProps {
 
 export function AddFoodModal({ isOpen, onClose }: AddFoodModalProps) {
   const navigate = useNavigate();
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const albumInputRef = useRef<HTMLInputElement>(null);
 
   if (!isOpen) return null;
 
   const handleScanReceipt = () => {
-    navigate('/add-item?method=scan');
-    onClose();
+    // 카메라 input 클릭
+    cameraInputRef.current?.click();
   };
 
   const handleUploadImage = () => {
-    navigate('/add-item?method=upload');
-    onClose();
+    // 앨범 input 클릭
+    albumInputRef.current?.click();
   };
 
   const handleManualEntry = () => {
@@ -25,8 +28,38 @@ export function AddFoodModal({ isOpen, onClose }: AddFoodModalProps) {
     onClose();
   };
 
+  const handleFileSelected = (event: React.ChangeEvent<HTMLInputElement>, method: 'scan' | 'upload') => {
+    const file = event.target.files?.[0];
+    if (file) {
+      // 파일을 state로 전달하면서 페이지 이동
+      navigate(`/add-item?method=${method}`, { 
+        state: { selectedFile: file }
+      });
+      onClose();
+    }
+    // input 초기화 (같은 파일 다시 선택 가능하도록)
+    event.target.value = '';
+  };
+
   return (
     <>
+      {/* Hidden file inputs */}
+      <input
+        ref={cameraInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        onChange={(e) => handleFileSelected(e, 'scan')}
+        style={{ display: 'none' }}
+      />
+      <input
+        ref={albumInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/gif,image/webp,image/heic"
+        onChange={(e) => handleFileSelected(e, 'upload')}
+        style={{ display: 'none' }}
+      />
+
       {/* Backdrop */}
       <div
         onClick={onClose}
@@ -182,7 +215,7 @@ export function AddFoodModal({ isOpen, onClose }: AddFoodModalProps) {
               justifyContent: 'center',
               fontSize: '24px'
             }}>
-              📤
+              🖼️
             </div>
             <div style={{ flex: 1 }}>
               <div style={{
@@ -197,7 +230,7 @@ export function AddFoodModal({ isOpen, onClose }: AddFoodModalProps) {
                 fontSize: '14px',
                 color: '#666'
               }}>
-                Add photo of food items
+                Select photo from album
               </div>
             </div>
           </button>
