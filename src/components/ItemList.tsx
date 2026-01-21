@@ -43,6 +43,7 @@ export function ItemList({ items, onItemUpdate, onSaveAll, isSaving }: ItemListP
               <th style={{ padding: '12px', textAlign: 'left' }}>Item Name</th>
               <th style={{ padding: '12px', textAlign: 'left' }}>Quantity</th>
               <th style={{ padding: '12px', textAlign: 'left' }}>Category</th>
+              <th style={{ padding: '12px', textAlign: 'left' }}>Location</th>
               <th style={{ padding: '12px', textAlign: 'left' }}>Expiration</th>
               <th style={{ padding: '12px', textAlign: 'left' }}>Source</th>
             </tr>

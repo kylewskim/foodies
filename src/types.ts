@@ -11,18 +11,19 @@ export interface Receipt {
   createdAt: string;
 }
 
+// New category system matching design requirements
 export type FoodCategory =
-  | 'produce'
-  | 'dairy'
-  | 'meat'
-  | 'seafood'
-  | 'bakery'
-  | 'pantry'
-  | 'frozen'
-  | 'snack'
-  | 'beverage'
-  | 'non-food'
-  | 'unknown';
+  | 'Produce'
+  | 'Protein'
+  | 'Grains'
+  | 'Dairy'
+  | 'Snacks'
+  | 'Condiments'
+  | 'Beverages'
+  | 'Prepared';
+
+// Storage location
+export type StorageLocation = 'fridge' | 'freezer' | 'pantry';
 
 export type ExpirationSource = 'auto' | 'manual';
 
@@ -32,6 +33,7 @@ export interface Item {
   name: string;
   quantity: string | null;
   category: FoodCategory;
+  location: StorageLocation;
   purchaseDate: string;
   autoExpirationDate: string;
   manualExpirationDate: string | null;

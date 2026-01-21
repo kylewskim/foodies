@@ -4,12 +4,13 @@ import { getFirestore } from 'firebase/firestore';
 // Firebase configuration
 // TODO: Replace with your Firebase project configuration
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_AUTH_DOMAIN",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_STORAGE_BUCKET",
-  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-  appId: "YOUR_APP_ID"
+  apiKey: "AIzaSyCbi--OGrmvk34vLR21Coco5DJZDv6W_fQ",
+  authDomain: "foodies-d91fa.firebaseapp.com",
+  projectId: "foodies-d91fa",
+  storageBucket: "foodies-d91fa.firebasestorage.app",
+  messagingSenderId: "397694091110",
+  appId: "1:397694091110:web:f0e08879049171cddb92a7",
+  measurementId: "G-P2420KE28R"
 };
 
 // Initialize Firebase

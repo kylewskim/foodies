@@ -117,23 +117,20 @@ function estimateWithRules(
   
   // 카테고리별 기본값
   const categoryDefaults: Record<FoodCategory, { days: number; confidence: 'high' | 'medium' | 'low' }> = {
-    produce: { days: 7, confidence: 'medium' },
-    dairy: { days: 14, confidence: 'high' },
-    meat: { days: 3, confidence: 'high' },
-    seafood: { days: 2, confidence: 'high' },
-    bakery: { days: 5, confidence: 'medium' },
-    pantry: { days: 365, confidence: 'medium' },
-    frozen: { days: 180, confidence: 'medium' },
-    snack: { days: 60, confidence: 'medium' },
-    beverage: { days: 30, confidence: 'medium' },
-    'non-food': { days: 365, confidence: 'low' },
-    unknown: { days: 14, confidence: 'low' },
+    Produce: { days: 7, confidence: 'medium' },
+    Protein: { days: 3, confidence: 'high' },
+    Grains: { days: 5, confidence: 'medium' },
+    Dairy: { days: 14, confidence: 'high' },
+    Snacks: { days: 60, confidence: 'medium' },
+    Condiments: { days: 365, confidence: 'medium' },
+    Beverages: { days: 30, confidence: 'medium' },
+    Prepared: { days: 3, confidence: 'medium' },
   };
   
   let result = { ...categoryDefaults[category] };
   
   // 농산물 세부 조정
-  if (category === 'produce') {
+  if (category === 'Produce') {
     // 빨리 상하는 것들
     if (/berry|strawberry|raspberry|lettuce|spinach|salad|딸기|상추|시금치|샐러드/.test(nameLower)) {
       result = { days: 3, confidence: 'high' };
@@ -153,7 +150,7 @@ function estimateWithRules(
   }
   
   // 유제품 세부 조정
-  if (category === 'dairy') {
+  if (category === 'Dairy') {
     if (/milk|우유/.test(nameLower)) {
       result = { days: 7, confidence: 'high' };
     } else if (/yogurt|요거트|요구르트/.test(nameLower)) {
@@ -165,8 +162,8 @@ function estimateWithRules(
     }
   }
   
-  // 육류 세부 조정
-  if (category === 'meat') {
+  // 단백질 세부 조정
+  if (category === 'Protein') {
     if (/ground|다진|간/.test(nameLower)) {
       result = { days: 2, confidence: 'high' };
     } else if (/chicken|닭/.test(nameLower)) {
@@ -178,15 +175,8 @@ function estimateWithRules(
     }
   }
   
-  // 해산물 세부 조정
-  if (category === 'seafood') {
-    if (/fresh|신선/.test(nameLower)) {
-      result = { days: 1, confidence: 'high' };
-    }
-  }
-  
-  // 빵류 세부 조정
-  if (category === 'bakery') {
+  // 빵류/곡물 세부 조정
+  if (category === 'Grains') {
     if (/bread|식빵|빵/.test(nameLower)) {
       result = { days: 7, confidence: 'high' };
     } else if (/bagel|베이글/.test(nameLower)) {
@@ -197,7 +187,7 @@ function estimateWithRules(
   }
   
   // 음료 세부 조정
-  if (category === 'beverage') {
+  if (category === 'Beverages') {
     if (/juice|주스/.test(nameLower)) {
       result = { days: 7, confidence: 'high' };
     } else if (/water|물/.test(nameLower)) {

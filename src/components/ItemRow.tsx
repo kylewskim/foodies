@@ -55,6 +55,9 @@ export function ItemRow({ item, onUpdate }: ItemRowProps) {
       <td style={{ padding: '12px' }}>{item.name}</td>
       <td style={{ padding: '12px' }}>{item.quantity || '-'}</td>
       <td style={{ padding: '12px' }}>{item.category}</td>
+      <td style={{ padding: '12px', textTransform: 'capitalize' }}>
+        {item.location || 'fridge'}
+      </td>
       <td style={{ padding: '12px' }}>
         {isEditing ? (
           <div style={{ display: 'flex', gap: '5px', alignItems: 'center' }}>

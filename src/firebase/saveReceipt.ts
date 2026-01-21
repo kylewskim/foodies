@@ -1,4 +1,4 @@
-import { collection, addDoc, doc, setDoc, query, where, getDocs, orderBy } from 'firebase/firestore';
+import { collection, addDoc, doc, setDoc, query, where, getDocs } from 'firebase/firestore';
 import { db } from './firebaseConfig';
 import type { Receipt, Item } from '../types';
 
@@ -85,8 +85,7 @@ export async function getReceiptsBySession(sessionId: string): Promise<Receipt[]
   try {
     const q = query(
       collection(db, 'receipts'),
-      where('sessionId', '==', sessionId),
-      orderBy('createdAt', 'desc')
+      where('sessionId', '==', sessionId)
     );
     
     const querySnapshot = await getDocs(q);
@@ -99,7 +98,12 @@ export async function getReceiptsBySession(sessionId: string): Promise<Receipt[]
       } as Receipt);
     });
     
-    return receipts;
+    // Sort by createdAt descending (client-side) to avoid needing a composite index
+    return receipts.sort((a, b) => {
+      const dateA = new Date(a.createdAt).getTime();
+      const dateB = new Date(b.createdAt).getTime();
+      return dateB - dateA;
+    });
   } catch (error) {
     console.error('Error getting receipts:', error);
     throw new Error('Failed to get receipts');
@@ -123,9 +127,11 @@ export async function getItemsByReceipt(receiptId: string): Promise<Item[]> {
     const items: Item[] = [];
     
     querySnapshot.forEach((doc) => {
+      const data = doc.data();
       items.push({
         itemId: doc.id,
-        ...doc.data(),
+        location: data.location || 'fridge', // Default location for old data
+        ...data,
       } as Item);
     });
     
@@ -133,5 +139,100 @@ export async function getItemsByReceipt(receiptId: string): Promise<Item[]> {
   } catch (error) {
     console.error('Error getting items:', error);
     throw new Error('Failed to get items');
+  }
+}
+
+/**
+ * Get all items for a session
+ * 
+ * @param sessionId - Session ID to query
+ * @returns Array of items
+ */
+export async function getItemsBySession(sessionId: string): Promise<Item[]> {
+  try {
+    // First get all receipts for the session
+    const receipts = await getReceiptsBySession(sessionId);
+    const receiptIds = receipts.map(r => r.receiptId);
+    
+    if (receiptIds.length === 0) {
+      return [];
+    }
+    
+    // Get all items for these receipts
+    const allItems: Item[] = [];
+    for (const receiptId of receiptIds) {
+      const items = await getItemsByReceipt(receiptId);
+      allItems.push(...items);
+    }
+    
+    // Ensure location field exists (for backward compatibility)
+    return allItems.map(item => ({
+      ...item,
+      location: item.location || 'fridge',
+    }));
+  } catch (error) {
+    console.error('Error getting items by session:', error);
+    throw new Error('Failed to get items by session');
+  }
+}
+
+/**
+ * Get items expiring soon (within specified days)
+ * 
+ * @param sessionId - Session ID to query
+ * @param days - Number of days to look ahead (default: 7)
+ * @returns Array of items expiring soon
+ */
+export async function getItemsExpiringSoon(sessionId: string, days: number = 7): Promise<Item[]> {
+  try {
+    const allItems = await getItemsBySession(sessionId);
+    const now = new Date();
+    const futureDate = new Date();
+    futureDate.setDate(now.getDate() + days);
+    
+    return allItems
+      .map(item => ({
+        ...item,
+        location: item.location || 'fridge', // Default location for old data
+      }))
+      .filter(item => {
+        const expirationDate = item.manualExpirationDate || item.autoExpirationDate;
+        const expDate = new Date(expirationDate);
+        return expDate >= now && expDate <= futureDate;
+      }).sort((a, b) => {
+      const expA = new Date(a.manualExpirationDate || a.autoExpirationDate);
+      const expB = new Date(b.manualExpirationDate || b.autoExpirationDate);
+      return expA.getTime() - expB.getTime();
+    });
+  } catch (error) {
+    console.error('Error getting items expiring soon:', error);
+    throw new Error('Failed to get items expiring soon');
+  }
+}
+
+/**
+ * Get items by location
+ * 
+ * @param sessionId - Session ID to query
+ * @param location - Storage location to filter by
+ * @returns Array of items in the specified location
+ */
+export async function getItemsByLocation(sessionId: string, location: 'fridge' | 'freezer' | 'pantry'): Promise<Item[]> {
+  try {
+    const allItems = await getItemsBySession(sessionId);
+    return allItems
+      .map(item => ({
+        ...item,
+        location: item.location || 'fridge', // Default location for old data
+      }))
+      .filter(item => item.location === location)
+      .sort((a, b) => {
+        const expA = new Date(a.manualExpirationDate || a.autoExpirationDate);
+        const expB = new Date(b.manualExpirationDate || b.autoExpirationDate);
+        return expA.getTime() - expB.getTime();
+      });
+  } catch (error) {
+    console.error('Error getting items by location:', error);
+    throw new Error('Failed to get items by location');
   }
 }
