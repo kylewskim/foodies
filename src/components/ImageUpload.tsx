@@ -245,18 +245,6 @@ export function ImageUpload({ onTextExtracted }: ImageUploadProps) {
       >
         <strong>💡 팁:</strong> 선명한 이미지일수록 인식률이 높습니다. 
         영수증이 잘 보이도록 밝은 곳에서 촬영해주세요.
-        {!isGoogleVisionConfigured() && (
-          <>
-            <br />
-            <strong>✨ Google Vision API를 설정하면 더 정확한 인식이 가능합니다!</strong>
-            <br />
-            <small>
-              1. https://console.cloud.google.com/ 접속<br />
-              2. Vision API 활성화<br />
-              3. API 키 발급 후 .env에 VITE_GOOGLE_VISION_API_KEY 추가
-            </small>
-          </>
-        )}
       </div>
     </div>
   );
