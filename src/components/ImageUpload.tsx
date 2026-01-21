@@ -176,7 +176,7 @@ export function ImageUpload({ onTextExtracted, useCamera = true }: ImageUploadPr
       <input
         ref={fileInputRef}
         type="file"
-        accept="image/*"
+        accept={useCamera ? "image/*" : "image/jpeg,image/png,image/gif,image/webp,image/heic"}
         {...(useCamera ? { capture: 'environment' } : {})}
         onChange={handleFileChange}
         disabled={uploading}
