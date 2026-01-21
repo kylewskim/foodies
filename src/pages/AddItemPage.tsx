@@ -287,6 +287,9 @@ export function AddItemPage() {
   };
 
   if (inputMethod === 'image') {
+    // methodParam이 'scan'이면 카메라, 'upload'면 앨범
+    const useCamera = methodParam === 'scan';
+    
     return (
       <div style={{ minHeight: '100vh', backgroundColor: '#f5f5f5', padding: '20px' }}>
         <button
@@ -304,7 +307,7 @@ export function AddItemPage() {
         >
           ← Back
         </button>
-        <ImageUpload onTextExtracted={handleImageUpload} />
+        <ImageUpload onTextExtracted={handleImageUpload} useCamera={useCamera} />
         {processing && (
           <div style={{ textAlign: 'center', marginTop: '20px' }}>
             <div>Processing...</div>

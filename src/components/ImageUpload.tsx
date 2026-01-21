@@ -4,9 +4,10 @@ import { extractTextWithGoogleVision, isGoogleVisionConfigured } from '../utils/
 
 interface ImageUploadProps {
   onTextExtracted: (text: string) => void;
+  useCamera?: boolean; // true: 카메라 직접 실행, false: 앨범에서 선택
 }
 
-export function ImageUpload({ onTextExtracted }: ImageUploadProps) {
+export function ImageUpload({ onTextExtracted, useCamera = true }: ImageUploadProps) {
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -109,7 +110,7 @@ export function ImageUpload({ onTextExtracted }: ImageUploadProps) {
 
   return (
     <div style={{ padding: '20px', border: '1px solid #ccc', borderRadius: '8px' }}>
-      <h3>📷 영수증 이미지 업로드</h3>
+      <h3>{useCamera ? '📷 영수증 촬영' : '🖼️ 이미지 선택'}</h3>
       
       {/* 드래그 앤 드롭 영역 */}
       <div
@@ -163,10 +164,10 @@ export function ImageUpload({ onTextExtracted }: ImageUploadProps) {
         ) : (
           <div>
             <p style={{ fontSize: '16px', color: '#666', margin: 0 }}>
-              📤 클릭하거나 이미지를 드래그하세요
+              {useCamera ? '📷 클릭하여 카메라 실행' : '🖼️ 클릭하여 앨범에서 선택'}
             </p>
             <p style={{ fontSize: '14px', color: '#999', marginTop: '8px' }}>
-              영수증, 식료품 목록 등의 이미지를 업로드하세요
+              {useCamera ? '영수증을 촬영해주세요' : '식료품 사진을 선택해주세요'}
             </p>
           </div>
         )}
@@ -176,7 +177,7 @@ export function ImageUpload({ onTextExtracted }: ImageUploadProps) {
         ref={fileInputRef}
         type="file"
         accept="image/*"
-        capture="environment"
+        {...(useCamera ? { capture: 'environment' } : {})}
         onChange={handleFileChange}
         disabled={uploading}
         style={{ display: 'none' }}
