@@ -176,6 +176,7 @@ export function ImageUpload({ onTextExtracted }: ImageUploadProps) {
         ref={fileInputRef}
         type="file"
         accept="image/*"
+        capture="environment"
         onChange={handleFileChange}
         disabled={uploading}
         style={{ display: 'none' }}

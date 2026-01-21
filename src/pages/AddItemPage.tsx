@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { ImageUpload } from '../components/ImageUpload';
 import { ManualInput } from '../components/ManualInput';
@@ -11,7 +11,7 @@ import { normalizeInputText } from '../llm/normalizeInputText';
 import { classifyItems } from '../llm/classifyItems';
 import { estimateExpirationDays } from '../llm/estimateExpirationDays';
 
-type InputMethod = 'select' | 'image' | 'manual' | 'form' | 'review';
+type InputMethod = 'image' | 'manual' | 'form' | 'review';
 
 export function AddItemPage() {
   const navigate = useNavigate();
@@ -20,19 +20,47 @@ export function AddItemPage() {
   const editItem = location.state?.item as Item | undefined;
   
   const methodParam = searchParams.get('method');
-  const initialMethod = editItem 
-    ? 'form' 
-    : methodParam === 'scan' || methodParam === 'upload' 
-      ? 'image' 
-      : methodParam === 'manual' 
-        ? 'manual' 
-        : 'select';
   
-  const [inputMethod, setInputMethod] = useState<InputMethod>(initialMethod);
+  // Check if returning from EditItemPage with updated item
+  const returningWithUpdate = location.state?.updatedItem as Item | undefined;
+  const returningItems = location.state?.processedItems as Item[] | undefined;
+  
+  const getInitialMethod = (): InputMethod => {
+    // If returning from edit with items, go to review
+    if (returningWithUpdate || returningItems) {
+      return 'review';
+    }
+    if (editItem) {
+      return 'form';
+    }
+    if (methodParam === 'scan' || methodParam === 'upload') {
+      return 'image';
+    }
+    if (methodParam === 'manual') {
+      return 'manual';
+    }
+    // No method specified - go back to home
+    return 'image'; // Default to image since we removed select screen
+  };
+  
+  const [inputMethod, setInputMethod] = useState<InputMethod>(getInitialMethod);
   const [processing, setProcessing] = useState(false);
-  const [processedItems, setProcessedItems] = useState<Item[]>([]);
+  const [processedItems, setProcessedItems] = useState<Item[]>(returningItems || []);
   const [saving, setSaving] = useState(false);
   const [defaultLocation, setDefaultLocation] = useState<StorageLocation>('fridge');
+
+  // Handle returning from EditItemPage with an updated item
+  useEffect(() => {
+    if (returningWithUpdate) {
+      setProcessedItems(prevItems =>
+        prevItems.map(item =>
+          item.itemId === returningWithUpdate.itemId ? returningWithUpdate : item
+        )
+      );
+      // Clear the state to prevent re-processing
+      window.history.replaceState({}, '');
+    }
+  }, [returningWithUpdate]);
   
   // Form state
   const [itemName, setItemName] = useState(editItem?.name || '');
@@ -258,120 +286,11 @@ export function AddItemPage() {
     }
   };
 
-  if (inputMethod === 'select') {
-    return (
-      <div style={{ minHeight: '100vh', backgroundColor: '#f5f5f5', padding: '20px' }}>
-        <div style={{ marginBottom: '30px' }}>
-          <button
-            onClick={() => navigate(-1)}
-            style={{
-              padding: '8px 16px',
-              fontSize: '14px',
-              backgroundColor: '#6c757d',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-            }}
-          >
-            ← Back
-          </button>
-        </div>
-
-        <h1 style={{ fontSize: '24px', marginBottom: '30px', textAlign: 'center' }}>
-          Add New Item
-        </h1>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', maxWidth: '400px', margin: '0 auto' }}>
-          <button
-            onClick={() => setInputMethod('image')}
-            style={{
-              padding: '30px',
-              fontSize: '18px',
-              backgroundColor: '#007bff',
-              color: 'white',
-              border: 'none',
-              borderRadius: '12px',
-              cursor: 'pointer',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: '10px',
-            }}
-          >
-            <span style={{ fontSize: '48px' }}>📷</span>
-            <span>Scan receipt</span>
-          </button>
-
-          <button
-            onClick={() => setInputMethod('image')}
-            style={{
-              padding: '30px',
-              fontSize: '18px',
-              backgroundColor: '#28a745',
-              color: 'white',
-              border: 'none',
-              borderRadius: '12px',
-              cursor: 'pointer',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: '10px',
-            }}
-          >
-            <span style={{ fontSize: '48px' }}>🖼️</span>
-            <span>Upload image</span>
-          </button>
-
-          <button
-            onClick={() => setInputMethod('manual')}
-            style={{
-              padding: '30px',
-              fontSize: '18px',
-              backgroundColor: '#ffc107',
-              color: 'white',
-              border: 'none',
-              borderRadius: '12px',
-              cursor: 'pointer',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: '10px',
-            }}
-          >
-            <span style={{ fontSize: '48px' }}>⌨️</span>
-            <span>Manual entry</span>
-          </button>
-
-          <button
-            onClick={() => setInputMethod('form')}
-            style={{
-              padding: '30px',
-              fontSize: '18px',
-              backgroundColor: '#6c757d',
-              color: 'white',
-              border: 'none',
-              borderRadius: '12px',
-              cursor: 'pointer',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: '10px',
-            }}
-          >
-            <span style={{ fontSize: '48px' }}>✏️</span>
-            <span>Fill form directly</span>
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   if (inputMethod === 'image') {
     return (
       <div style={{ minHeight: '100vh', backgroundColor: '#f5f5f5', padding: '20px' }}>
         <button
-          onClick={() => setInputMethod('select')}
+          onClick={() => navigate('/')}
           style={{
             marginBottom: '20px',
             padding: '8px 16px',
@@ -399,7 +318,7 @@ export function AddItemPage() {
     return (
       <div style={{ minHeight: '100vh', backgroundColor: '#f5f5f5', padding: '20px' }}>
         <button
-          onClick={() => setInputMethod('select')}
+          onClick={() => navigate('/')}
           style={{
             marginBottom: '20px',
             padding: '8px 16px',

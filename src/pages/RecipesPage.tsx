@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { getOrCreateSessionId } from '../utils/session';
 import { getItemsBySession } from '../firebase/saveReceipt';
 import type { Item } from '../types';
+import { BottomNavigation } from '../components/BottomNavigation';
+import { AddFoodModal } from '../components/AddFoodModal';
 
 interface Recipe {
   id: string;
@@ -16,6 +17,7 @@ interface Recipe {
 export function RecipesPage() {
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isAddFoodModalOpen, setIsAddFoodModalOpen] = useState(false);
 
   useEffect(() => {
     loadRecipes();
@@ -101,8 +103,8 @@ export function RecipesPage() {
         matchedIngredients: matched,
         missingIngredients: missing,
       };
-    }).filter(recipe => recipe.matchedIngredients.length > 0) // Only show recipes with at least one matched ingredient
-      .sort((a, b) => b.matchedIngredients.length - a.matchedIngredients.length); // Sort by most matched ingredients
+    }).filter(recipe => recipe.matchedIngredients.length > 0)
+      .sort((a, b) => b.matchedIngredients.length - a.matchedIngredients.length);
   };
 
   if (loading) {
@@ -112,7 +114,7 @@ export function RecipesPage() {
         display: 'flex', 
         alignItems: 'center', 
         justifyContent: 'center',
-        backgroundColor: '#f5f5f5'
+        backgroundColor: '#fafaf8'
       }}>
         <div style={{ fontSize: '18px', color: '#666' }}>Loading...</div>
       </div>
@@ -122,46 +124,70 @@ export function RecipesPage() {
   return (
     <div style={{ 
       minHeight: '100vh', 
-      backgroundColor: '#f5f5f5',
-      paddingBottom: '80px'
+      backgroundColor: '#fafaf8',
+      paddingBottom: '100px'
     }}>
       {/* Header */}
       <div style={{
-        backgroundColor: 'white',
         padding: '20px',
-        borderBottom: '1px solid #e0e0e0',
       }}>
-        <h1 style={{ margin: 0, fontSize: '24px', fontWeight: 'bold' }}>Suggested Recipes</h1>
-        <p style={{ margin: '5px 0 0 0', fontSize: '14px', color: '#666' }}>
+        <h1 style={{ 
+          margin: 0, 
+          fontSize: '20px', 
+          fontWeight: '600',
+          fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+        }}>
+          Suggested Recipes
+        </h1>
+        <p style={{ 
+          margin: '8px 0 0 0', 
+          fontSize: '14px', 
+          color: '#999',
+          fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+        }}>
           Based on your current inventory
         </p>
       </div>
 
       {/* Recipes List */}
-      <div style={{ padding: '20px' }}>
+      <div style={{ padding: '0 20px' }}>
         {recipes.length === 0 ? (
           <div style={{
+            backgroundColor: '#fff',
+            borderRadius: '16px',
             textAlign: 'center',
-            padding: '40px 20px',
-            color: '#999'
+            padding: '60px 20px',
+            color: '#999',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
           }}>
-            <div style={{ fontSize: '48px', marginBottom: '15px' }}>🍳</div>
-            <div style={{ fontSize: '18px', marginBottom: '5px' }}>No recipes found</div>
-            <div style={{ fontSize: '14px' }}>Add more items to your inventory to get recipe suggestions</div>
+            <div style={{ fontSize: '48px', marginBottom: '16px' }}>🍳</div>
+            <div style={{ 
+              fontSize: '18px', 
+              marginBottom: '8px',
+              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+            }}>
+              No recipes found
+            </div>
+            <div style={{ 
+              fontSize: '14px',
+              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+            }}>
+              Add more items to your inventory to get recipe suggestions
+            </div>
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             {recipes.map(recipe => (
               <div
                 key={recipe.id}
                 style={{
-                  backgroundColor: 'white',
-                  borderRadius: '12px',
+                  backgroundColor: '#fff',
+                  borderRadius: '16px',
                   padding: '20px',
-                  boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
                 }}
               >
-                <div style={{ display: 'flex', gap: '15px', marginBottom: '15px' }}>
+                <div style={{ display: 'flex', gap: '16px', marginBottom: '16px' }}>
                   {recipe.image ? (
                     <img
                       src={recipe.image}
@@ -169,7 +195,7 @@ export function RecipesPage() {
                       style={{
                         width: '80px',
                         height: '80px',
-                        borderRadius: '8px',
+                        borderRadius: '12px',
                         objectFit: 'cover'
                       }}
                     />
@@ -177,8 +203,8 @@ export function RecipesPage() {
                     <div style={{
                       width: '80px',
                       height: '80px',
-                      borderRadius: '8px',
-                      backgroundColor: '#f0f0f0',
+                      borderRadius: '12px',
+                      backgroundColor: '#f5f5f5',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
@@ -188,13 +214,24 @@ export function RecipesPage() {
                     </div>
                   )}
                   <div style={{ flex: 1 }}>
-                    <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 'bold', marginBottom: '10px' }}>
+                    <h3 style={{ 
+                      margin: 0, 
+                      fontSize: '18px', 
+                      fontWeight: '600', 
+                      marginBottom: '12px',
+                      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+                    }}>
                       {recipe.name}
                     </h3>
                     
                     {recipe.matchedIngredients.length > 0 && (
                       <div style={{ marginBottom: '8px' }}>
-                        <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>
+                        <div style={{ 
+                          fontSize: '12px', 
+                          color: '#999', 
+                          marginBottom: '6px',
+                          fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+                        }}>
                           You have:
                         </div>
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
@@ -202,12 +239,13 @@ export function RecipesPage() {
                             <span
                               key={idx}
                               style={{
-                                padding: '4px 8px',
-                                backgroundColor: '#d4edda',
-                                color: '#155724',
+                                padding: '4px 10px',
+                                backgroundColor: '#e8f5e9',
+                                color: '#2e7d32',
                                 borderRadius: '12px',
                                 fontSize: '12px',
-                                fontWeight: 'bold'
+                                fontWeight: '500',
+                                fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
                               }}
                             >
                               {ing}
@@ -219,7 +257,12 @@ export function RecipesPage() {
 
                     {recipe.missingIngredients.length > 0 && (
                       <div>
-                        <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>
+                        <div style={{ 
+                          fontSize: '12px', 
+                          color: '#999', 
+                          marginBottom: '6px',
+                          fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+                        }}>
                           You need:
                         </div>
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
@@ -227,11 +270,12 @@ export function RecipesPage() {
                             <span
                               key={idx}
                               style={{
-                                padding: '4px 8px',
-                                backgroundColor: '#fff3cd',
-                                color: '#856404',
+                                padding: '4px 10px',
+                                backgroundColor: '#fff3e0',
+                                color: '#e65100',
                                 borderRadius: '12px',
-                                fontSize: '12px'
+                                fontSize: '12px',
+                                fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
                               }}
                             >
                               {ing}
@@ -249,31 +293,13 @@ export function RecipesPage() {
       </div>
 
       {/* Bottom Navigation */}
-      <div style={{
-        position: 'fixed',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        backgroundColor: 'white',
-        borderTop: '1px solid #e0e0e0',
-        display: 'flex',
-        justifyContent: 'space-around',
-        padding: '15px 0',
-        boxShadow: '0 -2px 10px rgba(0,0,0,0.1)'
-      }}>
-        <Link to="/" style={{ textDecoration: 'none', color: '#666', textAlign: 'center' }}>
-          <div style={{ fontSize: '24px' }}>🏠</div>
-          <div style={{ fontSize: '12px', marginTop: '5px' }}>Home</div>
-        </Link>
-        <Link to="/recipes" style={{ textDecoration: 'none', color: '#007bff', textAlign: 'center' }}>
-          <div style={{ fontSize: '24px' }}>🍳</div>
-          <div style={{ fontSize: '12px', marginTop: '5px' }}>Recipes</div>
-        </Link>
-        <Link to="/add-item" style={{ textDecoration: 'none', color: '#666', textAlign: 'center' }}>
-          <div style={{ fontSize: '24px' }}>➕</div>
-          <div style={{ fontSize: '12px', marginTop: '5px' }}>Add</div>
-        </Link>
-      </div>
+      <BottomNavigation onAddClick={() => setIsAddFoodModalOpen(true)} />
+
+      {/* Add Food Modal */}
+      <AddFoodModal
+        isOpen={isAddFoodModalOpen}
+        onClose={() => setIsAddFoodModalOpen(false)}
+      />
     </div>
   );
 }

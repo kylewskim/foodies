@@ -1,5 +1,4 @@
-import { useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import type { Item } from '../types';
 import { getDaysUntilExpiration } from '../utils/dateHelpers';
 
@@ -14,24 +13,12 @@ interface ProcessedItemsListProps {
 
 export function ProcessedItemsList({
   items,
-  onItemUpdate,
   onSaveAll,
   onChangeLocation,
   onManualEntry,
   isSaving,
 }: ProcessedItemsListProps) {
   const navigate = useNavigate();
-  const location = useLocation();
-
-  // Check if we're returning from EditItemPage with an updated item
-  useEffect(() => {
-    const updatedItem = location.state?.updatedItem as Item | undefined;
-    if (updatedItem) {
-      onItemUpdate(updatedItem);
-      // Clear the state to avoid re-processing
-      window.history.replaceState({}, '');
-    }
-  }, [location.state, onItemUpdate]);
 
   const getLocationText = (location: string) => {
     const locations: Record<string, string> = {
@@ -56,7 +43,8 @@ export function ProcessedItemsList({
       state: { 
         item,
         isTemporary: item.itemId.startsWith('temp_'),
-        returnPath: '/add-item' // Return path for ProcessedItemsList
+        returnPath: '/add-item?method=review',
+        processedItems: items // Pass current items list
       } 
     });
   };

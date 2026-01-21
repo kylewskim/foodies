@@ -5,6 +5,7 @@ import { getItemsExpiringSoon, getItemsBySession } from '../firebase/saveReceipt
 import type { Item } from '../types';
 import { getDaysUntilExpiration } from '../utils/dateHelpers';
 import { AddFoodModal } from '../components/AddFoodModal';
+import { BottomNavigation } from '../components/BottomNavigation';
 
 interface MonthlyStats {
   itemsUsedJustInTime: number;
@@ -34,25 +35,19 @@ export function HomePage() {
 
   useEffect(() => {
     loadHomeData();
-  }, [location.pathname]); // Reload when pathname changes (e.g., returning from add-item)
+  }, [location.pathname]);
 
   const loadHomeData = async () => {
     try {
       const sessionId = getOrCreateSessionId();
       
-      // Get all items
       const allItems = await getItemsBySession(sessionId);
-      
-      // Get expiring items (within 7 days)
       const expiring = await getItemsExpiringSoon(sessionId, 7);
       setExpiringItems(expiring);
 
-      // Calculate monthly stats
       const now = new Date();
       const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
       
-      // Items used just in time (items that were used before expiring, within last month)
-      // For now, we'll count active items that haven't expired yet as "used just in time"
       const activeItems = allItems.filter(item => {
         const expirationDate = item.manualExpirationDate || item.autoExpirationDate;
         const expDate = new Date(expirationDate);
@@ -60,14 +55,13 @@ export function HomePage() {
       });
       
       const itemsUsedJustInTime = activeItems.length;
-      const estimatedValueSaved = itemsUsedJustInTime * 2.5; // $2.50 per item average
+      const estimatedValueSaved = itemsUsedJustInTime * 2.5;
       
       setMonthlyStats({
         itemsUsedJustInTime,
         estimatedValueSaved,
       });
 
-      // Calculate inventory stats
       const total = allItems.length;
       const usedThisWeek = allItems.filter(item => {
         const purchaseDate = new Date(item.purchaseDate);
@@ -89,14 +83,11 @@ export function HomePage() {
 
   const handleUseItem = async (item: Item) => {
     try {
-      // Mark item as used by deleting it (for now)
       const { deleteDoc } = await import('firebase/firestore');
       const { doc } = await import('firebase/firestore');
       const { db } = await import('../firebase/firebaseConfig');
       
       await deleteDoc(doc(db, 'items', item.itemId));
-      
-      // Reload data
       await loadHomeData();
     } catch (error) {
       console.error('Error using item:', error);
@@ -106,16 +97,16 @@ export function HomePage() {
 
   const getCategoryIcon = (category: string) => {
     const icons: Record<string, string> = {
-      'Produce': '🍎',
+      'Produce': '🍓',
       'Protein': '🥩',
-      'Grains': '🍞',
-      'Dairy': '🥛',
+      'Grains': '🌾',
+      'Dairy': '🧀',
       'Snacks': '🍪',
       'Condiments': '🧂',
       'Beverages': '🥤',
       'Prepared': '🍱',
     };
-    return icons[category] || '📦';
+    return icons[category] || '🍽️';
   };
 
   const getExpirationTag = (item: Item) => {
@@ -123,13 +114,13 @@ export function HomePage() {
     const daysUntil = getDaysUntilExpiration(expirationDate);
     
     if (daysUntil < 0) {
-      return { text: 'Expired', color: '#dc3545', bgColor: '#fee' };
+      return { text: 'Expired', color: '#dc3545', bgColor: '#ffebee' };
     }
     if (daysUntil === 0) {
-      return { text: 'Today', color: '#fff', bgColor: '#fd7e14' };
+      return { text: 'Today', color: '#c62828', bgColor: '#ffcdd2' };
     }
-    if (daysUntil <= 2) {
-      return { text: 'Soon', color: '#fff', bgColor: '#ffc107' };
+    if (daysUntil <= 3) {
+      return { text: 'Soon', color: '#e65100', bgColor: '#fff3e0' };
     }
     return null;
   };
@@ -154,22 +145,6 @@ export function HomePage() {
     return locations[location] || location;
   };
 
-  const getExpirationText = (item: Item) => {
-    const expirationDate = item.manualExpirationDate || item.autoExpirationDate;
-    const daysUntil = getDaysUntilExpiration(expirationDate);
-    
-    if (daysUntil < 0) {
-      return `Expired ${Math.abs(daysUntil)} days ago`;
-    }
-    if (daysUntil === 0) {
-      return 'Expires today';
-    }
-    if (daysUntil === 1) {
-      return 'Expires tomorrow';
-    }
-    return `Expires in ${daysUntil} days`;
-  };
-
   if (loading) {
     return (
       <div style={{ 
@@ -177,7 +152,7 @@ export function HomePage() {
         display: 'flex', 
         alignItems: 'center', 
         justifyContent: 'center',
-        backgroundColor: '#fafafa'
+        backgroundColor: '#fafaf8'
       }}>
         <div style={{ fontSize: '18px', color: '#666' }}>Loading...</div>
       </div>
@@ -187,82 +162,121 @@ export function HomePage() {
   return (
     <div style={{ 
       minHeight: '100vh', 
-      backgroundColor: '#fafafa',
-      paddingBottom: '80px'
+      backgroundColor: '#fafaf8',
+      paddingBottom: '100px'
     }}>
       {/* Top Header */}
       <div style={{
-        backgroundColor: 'white',
-        padding: '20px',
+        backgroundColor: '#fafaf8',
+        padding: '16px 20px',
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <div style={{
-            width: '40px',
-            height: '40px',
+            width: '44px',
+            height: '44px',
             borderRadius: '50%',
-            backgroundColor: '#e0e0e0',
+            backgroundColor: '#e8e8e8',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            fontSize: '20px'
+            overflow: 'hidden'
           }}>
-            👤
+            <span style={{ fontSize: '24px' }}>👤</span>
           </div>
-          <h1 style={{ margin: 0, fontSize: '20px', fontWeight: 'bold', color: '#000' }}>
-            Hi, User!
+          <h1 style={{ 
+            margin: 0, 
+            fontSize: '20px', 
+            fontWeight: '600', 
+            color: '#1a1a1a',
+            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+          }}>
+            Hi, Steve!
           </h1>
         </div>
         <div style={{
-          fontSize: '20px',
+          padding: '8px',
           cursor: 'pointer',
-          color: '#000'
+          color: '#1a1a1a'
         }}>
-          ☰
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <line x1="3" y1="6" x2="21" y2="6" />
+            <line x1="3" y1="12" x2="21" y2="12" />
+            <line x1="3" y1="18" x2="21" y2="18" />
+          </svg>
         </div>
       </div>
 
       {/* Monthly Impact Section */}
-      <div style={{ padding: '20px' }}>
+      <div style={{ padding: '12px 20px 20px 20px' }}>
         <div style={{
           display: 'flex',
           alignItems: 'center',
-          gap: '8px',
-          marginBottom: '15px'
+          gap: '6px',
+          marginBottom: '12px'
         }}>
           <h2 style={{ 
-            fontSize: '18px', 
-            fontWeight: 'bold',
-            color: '#000',
-            margin: 0
+            fontSize: '16px', 
+            fontWeight: '600',
+            color: '#1a1a1a',
+            margin: 0,
+            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
           }}>
             Monthly impact
           </h2>
-          <span style={{ fontSize: '14px', color: '#999' }}>?</span>
+          <div style={{
+            width: '16px',
+            height: '16px',
+            borderRadius: '50%',
+            border: '1px solid #ccc',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '10px',
+            color: '#999',
+            cursor: 'pointer'
+          }}>
+            ?
+          </div>
         </div>
         
         <div style={{
-          backgroundColor: 'white',
-          borderRadius: '12px',
-          padding: '20px',
+          backgroundColor: '#fff',
+          borderRadius: '16px',
+          padding: '24px',
           display: 'flex',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+          boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
         }}>
           {/* Left Column */}
           <div style={{
             flex: 1,
-            borderRight: '1px solid #e0e0e0',
-            paddingRight: '20px'
+            borderRight: '1px solid #f0f0f0',
+            paddingRight: '24px'
           }}>
-            <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#000', marginBottom: '4px' }}>
+            <div style={{ 
+              fontSize: '36px', 
+              fontWeight: '600', 
+              color: '#1a1a1a', 
+              marginBottom: '2px',
+              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+            }}>
               {monthlyStats.itemsUsedJustInTime}
             </div>
-            <div style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>
+            <div style={{ 
+              fontSize: '14px', 
+              color: '#999', 
+              marginBottom: '4px',
+              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+            }}>
               items
             </div>
-            <div style={{ fontSize: '12px', color: '#999' }}>
+            <div style={{ 
+              fontSize: '13px', 
+              color: '#b0b0b0',
+              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+            }}>
               Used just in time
             </div>
           </div>
@@ -270,15 +284,30 @@ export function HomePage() {
           {/* Right Column */}
           <div style={{
             flex: 1,
-            paddingLeft: '20px'
+            paddingLeft: '24px'
           }}>
-            <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#000', marginBottom: '4px' }}>
+            <div style={{ 
+              fontSize: '36px', 
+              fontWeight: '600', 
+              color: '#1a1a1a', 
+              marginBottom: '2px',
+              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+            }}>
               {Math.round(monthlyStats.estimatedValueSaved)}
             </div>
-            <div style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>
+            <div style={{ 
+              fontSize: '14px', 
+              color: '#999', 
+              marginBottom: '4px',
+              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+            }}>
               USD
             </div>
-            <div style={{ fontSize: '12px', color: '#999' }}>
+            <div style={{ 
+              fontSize: '13px', 
+              color: '#b0b0b0',
+              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+            }}>
               Est. value saved
             </div>
           </div>
@@ -291,13 +320,14 @@ export function HomePage() {
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          marginBottom: '15px'
+          marginBottom: '12px'
         }}>
           <h2 style={{ 
-            fontSize: '18px', 
-            fontWeight: 'bold',
-            color: '#000',
-            margin: 0
+            fontSize: '16px', 
+            fontWeight: '600',
+            color: '#1a1a1a',
+            margin: 0,
+            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
           }}>
             Eat Soon
           </h2>
@@ -307,7 +337,8 @@ export function HomePage() {
               style={{
                 fontSize: '14px',
                 color: '#999',
-                textDecoration: 'none'
+                textDecoration: 'none',
+                fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
               }}
             >
               See All
@@ -317,15 +348,20 @@ export function HomePage() {
 
         {expiringItems.length === 0 ? (
           <div style={{
-            backgroundColor: 'white',
-            borderRadius: '12px',
-            padding: '30px',
+            backgroundColor: '#fff',
+            borderRadius: '16px',
+            padding: '40px 30px',
             textAlign: 'center',
             color: '#999',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+            boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
           }}>
-            <div style={{ fontSize: '32px', marginBottom: '10px' }}>✅</div>
-            <div style={{ fontSize: '14px' }}>No items expiring soon!</div>
+            <div style={{ fontSize: '32px', marginBottom: '12px' }}>✅</div>
+            <div style={{ 
+              fontSize: '14px',
+              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+            }}>
+              No items expiring soon!
+            </div>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -335,74 +371,123 @@ export function HomePage() {
                 <div
                   key={item.itemId}
                   style={{
-                    backgroundColor: 'white',
-                    borderRadius: '12px',
-                    padding: '15px',
+                    backgroundColor: '#fff',
+                    borderRadius: '16px',
+                    padding: '16px',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
+                  }}
+                >
+                  {/* Top Row - Icon, Tag, Purchase Info, Arrow */}
+                  <div style={{
                     display: 'flex',
                     alignItems: 'center',
                     gap: '12px',
-                    boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
-                  }}
-                >
-                  {/* Category Icon */}
-                  <div style={{ fontSize: '24px' }}>
-                    {getCategoryIcon(item.category)}
-                  </div>
-
-                  {/* Tag */}
-                  {tag && (
-                    <div style={{
-                      padding: '4px 10px',
-                      borderRadius: '12px',
-                      backgroundColor: tag.bgColor,
-                      color: tag.color,
-                      fontSize: '12px',
-                      fontWeight: 'bold',
-                      whiteSpace: 'nowrap'
+                    marginBottom: '12px'
+                  }}>
+                    {/* Category Icon */}
+                    <div style={{ 
+                      width: '32px',
+                      height: '32px',
+                      borderRadius: '50%',
+                      backgroundColor: '#f5f5f5',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '16px'
                     }}>
-                      {tag.text}
+                      {getCategoryIcon(item.category)}
                     </div>
-                  )}
 
-                  {/* Item Info */}
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: '16px', fontWeight: '500', color: '#000', marginBottom: '4px' }}>
-                      {item.name}
-                    </div>
-                    <div style={{ fontSize: '12px', color: '#666' }}>
-                      {getLocationText(item.location)}
-                    </div>
-                  </div>
-
-                  {/* Expiration Info and Actions */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontSize: '12px', color: '#666', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <span>⏰</span>
-                        <span>{getExpirationText(item)}</span>
+                    {/* Tag */}
+                    {tag && (
+                      <div style={{
+                        padding: '4px 12px',
+                        borderRadius: '12px',
+                        backgroundColor: tag.bgColor,
+                        color: tag.color,
+                        fontSize: '13px',
+                        fontWeight: '500',
+                        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+                      }}>
+                        {tag.text}
                       </div>
+                    )}
+
+                    {/* Spacer */}
+                    <div style={{ flex: 1 }} />
+
+                    {/* Purchase Info */}
+                    <div style={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: '4px',
+                      color: '#999',
+                      fontSize: '13px',
+                      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+                    }}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <circle cx="12" cy="12" r="10" />
+                        <polyline points="12,6 12,12 16,14" />
+                      </svg>
+                      <span>{getDaysSincePurchase(item)}</span>
                     </div>
+
+                    {/* Arrow */}
                     <Link
                       to={`/item/${item.itemId}`}
-                      style={{ fontSize: '16px', color: '#ccc', textDecoration: 'none' }}
+                      style={{ 
+                        color: '#ccc', 
+                        textDecoration: 'none',
+                        display: 'flex',
+                        alignItems: 'center'
+                      }}
                     >
-                      ›
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <polyline points="9,18 15,12 9,6" />
+                      </svg>
                     </Link>
+                  </div>
+
+                  {/* Bottom Row - Name, Location, Used Button */}
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'flex-end',
+                    justifyContent: 'space-between'
+                  }}>
+                    <div>
+                      <div style={{ 
+                        fontSize: '18px', 
+                        fontWeight: '600', 
+                        color: '#1a1a1a', 
+                        marginBottom: '4px',
+                        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+                      }}>
+                        {item.name}
+                      </div>
+                      <div style={{ 
+                        fontSize: '14px', 
+                        color: '#999',
+                        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+                      }}>
+                        {getLocationText(item.location)}
+                      </div>
+                    </div>
+                    
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
                         handleUseItem(item);
                       }}
                       style={{
-                        padding: '6px 16px',
+                        padding: '8px 20px',
                         border: '1px solid #e0e0e0',
-                        borderRadius: '6px',
+                        borderRadius: '8px',
                         backgroundColor: 'white',
-                        color: '#666',
-                        fontSize: '12px',
+                        color: '#1a1a1a',
+                        fontSize: '14px',
                         fontWeight: '500',
                         cursor: 'pointer',
-                        whiteSpace: 'nowrap'
+                        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
                       }}
                     >
                       Used
@@ -421,13 +506,14 @@ export function HomePage() {
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          marginBottom: '15px'
+          marginBottom: '12px'
         }}>
           <h2 style={{ 
-            fontSize: '18px', 
-            fontWeight: 'bold',
-            color: '#000',
-            margin: 0
+            fontSize: '16px', 
+            fontWeight: '600',
+            color: '#1a1a1a',
+            margin: 0,
+            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
           }}>
             Inventory
           </h2>
@@ -436,7 +522,8 @@ export function HomePage() {
             style={{
               fontSize: '14px',
               color: '#999',
-              textDecoration: 'none'
+              textDecoration: 'none',
+              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
             }}
           >
             See All
@@ -444,26 +531,40 @@ export function HomePage() {
         </div>
 
         <div style={{
-          backgroundColor: 'white',
-          borderRadius: '12px',
-          padding: '20px',
+          backgroundColor: '#fff',
+          borderRadius: '16px',
+          padding: '24px 16px',
           display: 'flex',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+          boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
         }}>
           {/* Total Column */}
           <div style={{
             flex: 1,
-            borderRight: '1px solid #e0e0e0',
-            paddingRight: '20px',
+            borderRight: '1px solid #f0f0f0',
             textAlign: 'center'
           }}>
-            <div style={{ fontSize: '12px', color: '#666', marginBottom: '8px' }}>
+            <div style={{ 
+              fontSize: '13px', 
+              color: '#999', 
+              marginBottom: '8px',
+              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+            }}>
               Total
             </div>
-            <div style={{ fontSize: '28px', fontWeight: 'bold', color: '#000', marginBottom: '4px' }}>
+            <div style={{ 
+              fontSize: '32px', 
+              fontWeight: '600', 
+              color: '#1a1a1a', 
+              marginBottom: '4px',
+              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+            }}>
               {inventoryStats.total}
             </div>
-            <div style={{ fontSize: '12px', color: '#999' }}>
+            <div style={{ 
+              fontSize: '13px', 
+              color: '#b0b0b0',
+              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+            }}>
               items
             </div>
           </div>
@@ -471,18 +572,31 @@ export function HomePage() {
           {/* Used Column */}
           <div style={{
             flex: 1,
-            borderRight: '1px solid #e0e0e0',
-            paddingLeft: '20px',
-            paddingRight: '20px',
+            borderRight: '1px solid #f0f0f0',
             textAlign: 'center'
           }}>
-            <div style={{ fontSize: '12px', color: '#666', marginBottom: '8px' }}>
+            <div style={{ 
+              fontSize: '13px', 
+              color: '#999', 
+              marginBottom: '8px',
+              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+            }}>
               Used
             </div>
-            <div style={{ fontSize: '28px', fontWeight: 'bold', color: '#28a745', marginBottom: '4px' }}>
+            <div style={{ 
+              fontSize: '32px', 
+              fontWeight: '600', 
+              color: '#4caf50', 
+              marginBottom: '4px',
+              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+            }}>
               {inventoryStats.usedThisWeek}
             </div>
-            <div style={{ fontSize: '12px', color: '#999' }}>
+            <div style={{ 
+              fontSize: '13px', 
+              color: '#b0b0b0',
+              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+            }}>
               this week
             </div>
           </div>
@@ -490,102 +604,38 @@ export function HomePage() {
           {/* Expiring Column */}
           <div style={{
             flex: 1,
-            paddingLeft: '20px',
             textAlign: 'center'
           }}>
-            <div style={{ fontSize: '12px', color: '#666', marginBottom: '8px' }}>
+            <div style={{ 
+              fontSize: '13px', 
+              color: '#999', 
+              marginBottom: '8px',
+              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+            }}>
               Expiring
             </div>
-            <div style={{ fontSize: '28px', fontWeight: 'bold', color: '#dc3545', marginBottom: '4px' }}>
+            <div style={{ 
+              fontSize: '32px', 
+              fontWeight: '600', 
+              color: '#f44336', 
+              marginBottom: '4px',
+              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+            }}>
               {inventoryStats.expiringSoon}
             </div>
-            <div style={{ fontSize: '12px', color: '#999' }}>
+            <div style={{ 
+              fontSize: '13px', 
+              color: '#b0b0b0',
+              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+            }}>
               soon
             </div>
           </div>
         </div>
       </div>
 
-      {/* Bottom Navigation Bar - Black Background */}
-      <div style={{
-        position: 'fixed',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        backgroundColor: '#000',
-        display: 'flex',
-        justifyContent: 'space-around',
-        alignItems: 'center',
-        padding: '12px 0',
-        zIndex: 100
-      }}>
-        {/* Today (Active) */}
-        <Link 
-          to="/" 
-          style={{ 
-            textDecoration: 'none', 
-            color: '#000', 
-            textAlign: 'center',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: '4px',
-            flex: 1
-          }}
-        >
-          <div style={{ fontSize: '20px' }}>🏠</div>
-          <div style={{ fontSize: '12px', fontWeight: '500' }}>Today</div>
-        </Link>
-
-        {/* Add Button - Large Circular */}
-        <button
-          onClick={() => setIsAddFoodModalOpen(true)}
-          style={{
-            background: 'none',
-            border: 'none',
-            padding: 0,
-            cursor: 'pointer',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: '4px',
-            marginTop: '-25px'
-          }}
-        >
-          <div style={{
-            width: '56px',
-            height: '56px',
-            borderRadius: '50%',
-            backgroundColor: '#000',
-            color: '#fff',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: '32px',
-            border: '2px solid #fff'
-          }}>
-            +
-          </div>
-        </button>
-
-        {/* Inventory (Inactive) */}
-        <Link 
-          to="/inventory" 
-          style={{ 
-            textDecoration: 'none', 
-            color: '#999', 
-            textAlign: 'center',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: '4px',
-            flex: 1
-          }}
-        >
-          <div style={{ fontSize: '20px' }}>📦</div>
-          <div style={{ fontSize: '12px' }}>Inventory          </div>
-        </Link>
-      </div>
+      {/* Bottom Navigation */}
+      <BottomNavigation onAddClick={() => setIsAddFoodModalOpen(true)} />
 
       {/* Add Food Modal */}
       <AddFoodModal

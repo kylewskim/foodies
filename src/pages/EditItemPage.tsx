@@ -77,7 +77,19 @@ export function EditItemPage() {
       if (isTemporary) {
         // Temporary item - pass updatedItem back via navigate state
         const returnPath = location.state?.returnPath as string | undefined;
-        navigate(returnPath || '/add-item', { state: { updatedItem } });
+        const processedItems = location.state?.processedItems as Item[] | undefined;
+        
+        // Update the item in the list
+        const updatedItems = processedItems?.map(i => 
+          i.itemId === updatedItem.itemId ? updatedItem : i
+        ) || [updatedItem];
+        
+        navigate(returnPath || '/add-item?method=review', { 
+          state: { 
+            updatedItem,
+            processedItems: updatedItems
+          } 
+        });
       } else {
         // Real item - update in Firebase
         await updateItem(updatedItem);
