@@ -24,15 +24,13 @@ export function LoginPage() {
 
   return (
     <div style={{
-      height: '100vh',
+      height: '100dvh', // dynamic viewport height for mobile browsers
       backgroundColor: '#f7f6ef',
       display: 'flex',
       flexDirection: 'column',
       alignItems: 'center',
       justifyContent: 'space-between',
-      padding: '0 24px',
-      paddingTop: '60px',
-      paddingBottom: '40px',
+      padding: '24px',
       boxSizing: 'border-box',
       overflow: 'hidden',
     }}>
@@ -42,16 +40,18 @@ export function LoginPage() {
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: '24px',
+        gap: '16px',
         maxWidth: '327px',
         width: '100%',
         flex: 1,
+        minHeight: 0, // Important for flex shrinking
       }}>
         {/* Broccoli Image */}
         <div style={{
-          width: '191px',
-          height: '194px',
+          width: 'min(191px, 40vw)',
+          height: 'min(194px, 25vh)',
           overflow: 'hidden',
+          flexShrink: 0,
         }}>
           <img
             src={broccoliImage}
@@ -69,23 +69,23 @@ export function LoginPage() {
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
-          gap: '12px',
+          gap: '8px',
           textAlign: 'center',
           color: '#073d35',
         }}>
           <h1 style={{
             fontFamily: '"Playfair Display", Georgia, serif',
-            fontSize: '28px',
+            fontSize: 'clamp(22px, 5vw, 28px)',
             fontWeight: '300',
             letterSpacing: '-0.042px',
             margin: 0,
-            lineHeight: 'normal',
+            lineHeight: '1.2',
           }}>
             Your food, seen clearly before it's wasted.
           </h1>
           <p style={{
             fontFamily: '"Poppins", sans-serif',
-            fontSize: '16px',
+            fontSize: 'clamp(14px, 3.5vw, 16px)',
             fontWeight: '400',
             letterSpacing: '-0.4316px',
             lineHeight: '1.35',
@@ -118,8 +118,9 @@ export function LoginPage() {
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
-        gap: '16px',
+        gap: '12px',
         width: '100%',
+        flexShrink: 0,
       }}>
         {/* Google Sign In Button */}
         <button
