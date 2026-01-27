@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { getOrCreateSessionId } from '../utils/session';
-import { getItemsExpiringSoon, getItemsBySession } from '../firebase/saveReceipt';
+import { useAuth } from '../contexts/AuthContext';
+import { getItemsExpiringSoon, getItemsByUser } from '../firebase/saveReceipt';
 import type { Item } from '../types';
 import { getDaysUntilExpiration } from '../utils/dateHelpers';
 import { AddFoodModal } from '../components/AddFoodModal';
@@ -20,6 +20,7 @@ interface InventoryStats {
 
 export function HomePage() {
   const location = useLocation();
+  const { user, logout } = useAuth();
   const [expiringItems, setExpiringItems] = useState<Item[]>([]);
   const [monthlyStats, setMonthlyStats] = useState<MonthlyStats>({
     itemsUsedJustInTime: 0,
@@ -32,17 +33,20 @@ export function HomePage() {
   });
   const [loading, setLoading] = useState(true);
   const [isAddFoodModalOpen, setIsAddFoodModalOpen] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
 
   useEffect(() => {
-    loadHomeData();
-  }, [location.pathname]);
+    if (user) {
+      loadHomeData();
+    }
+  }, [location.pathname, user]);
 
   const loadHomeData = async () => {
+    if (!user) return;
+    
     try {
-      const sessionId = getOrCreateSessionId();
-      
-      const allItems = await getItemsBySession(sessionId);
-      const expiring = await getItemsExpiringSoon(sessionId, 7);
+      const allItems = await getItemsByUser(user.uid);
+      const expiring = await getItemsExpiringSoon(user.uid, 7);
       setExpiringItems(expiring);
 
       const now = new Date();
@@ -171,7 +175,8 @@ export function HomePage() {
         padding: '16px 20px',
         display: 'flex',
         justifyContent: 'space-between',
-        alignItems: 'center'
+        alignItems: 'center',
+        position: 'relative'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <div style={{
@@ -184,7 +189,15 @@ export function HomePage() {
             justifyContent: 'center',
             overflow: 'hidden'
           }}>
-            <span style={{ fontSize: '24px' }}>👤</span>
+            {user?.photoURL ? (
+              <img 
+                src={user.photoURL} 
+                alt="Profile" 
+                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+              />
+            ) : (
+              <span style={{ fontSize: '24px' }}>👤</span>
+            )}
           </div>
           <h1 style={{ 
             margin: 0, 
@@ -193,20 +206,79 @@ export function HomePage() {
             color: '#1a1a1a',
             fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
           }}>
-            Hi, Steve!
+            Hi, {user?.displayName?.split(' ')[0] || 'there'}!
           </h1>
         </div>
-        <div style={{
-          padding: '8px',
-          cursor: 'pointer',
-          color: '#1a1a1a'
-        }}>
+        <div 
+          onClick={() => setShowMenu(!showMenu)}
+          style={{
+            padding: '8px',
+            cursor: 'pointer',
+            color: '#1a1a1a'
+          }}
+        >
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <line x1="3" y1="6" x2="21" y2="6" />
             <line x1="3" y1="12" x2="21" y2="12" />
             <line x1="3" y1="18" x2="21" y2="18" />
           </svg>
         </div>
+
+        {/* Dropdown Menu */}
+        {showMenu && (
+          <>
+            <div 
+              onClick={() => setShowMenu(false)}
+              style={{
+                position: 'fixed',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                zIndex: 999
+              }}
+            />
+            <div style={{
+              position: 'absolute',
+              top: '60px',
+              right: '20px',
+              backgroundColor: 'white',
+              borderRadius: '12px',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+              padding: '8px 0',
+              minWidth: '160px',
+              zIndex: 1000
+            }}>
+              <div style={{
+                padding: '12px 16px',
+                borderBottom: '1px solid #f0f0f0',
+                fontSize: '14px',
+                color: '#666'
+              }}>
+                {user?.email}
+              </div>
+              <button
+                onClick={() => {
+                  setShowMenu(false);
+                  logout();
+                }}
+                style={{
+                  width: '100%',
+                  padding: '12px 16px',
+                  border: 'none',
+                  backgroundColor: 'transparent',
+                  textAlign: 'left',
+                  fontSize: '14px',
+                  color: '#dc3545',
+                  cursor: 'pointer',
+                  fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+                }}
+              >
+                Sign out
+              </button>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Monthly Impact Section */}

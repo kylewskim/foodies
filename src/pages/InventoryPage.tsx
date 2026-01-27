@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { getOrCreateSessionId } from '../utils/session';
-import { getItemsByLocation, getItemsBySession } from '../firebase/saveReceipt';
+import { useAuth } from '../contexts/AuthContext';
+import { getItemsByLocation, getItemsByUser } from '../firebase/saveReceipt';
 import type { Item, StorageLocation } from '../types';
 import { getDaysUntilExpiration } from '../utils/dateHelpers';
 import { BottomNavigation } from '../components/BottomNavigation';
 import { AddFoodModal } from '../components/AddFoodModal';
 
 export function InventoryPage() {
+  const { user } = useAuth();
   const [searchParams] = useSearchParams();
   const locationFilter = (searchParams.get('location') as StorageLocation | 'all') || 'all';
   const [items, setItems] = useState<Item[]>([]);
@@ -16,18 +17,21 @@ export function InventoryPage() {
   const [categoryFilter, setCategoryFilter] = useState<string>('All');
 
   useEffect(() => {
-    loadItems();
-  }, [locationFilter]);
+    if (user) {
+      loadItems();
+    }
+  }, [locationFilter, user]);
 
   const loadItems = async () => {
+    if (!user) return;
+    
     try {
-      const sessionId = getOrCreateSessionId();
       let allItems: Item[];
 
       if (locationFilter === 'all') {
-        allItems = await getItemsBySession(sessionId);
+        allItems = await getItemsByUser(user.uid);
       } else {
-        allItems = await getItemsByLocation(sessionId, locationFilter);
+        allItems = await getItemsByLocation(user.uid, locationFilter);
       }
 
       // Sort by expiration date

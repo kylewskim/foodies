@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { getOrCreateSessionId } from '../utils/session';
-import { getItemsBySession } from '../firebase/saveReceipt';
+import { useAuth } from '../contexts/AuthContext';
+import { getItemsByUser } from '../firebase/saveReceipt';
 import type { Item } from '../types';
 import { BottomNavigation } from '../components/BottomNavigation';
 import { AddFoodModal } from '../components/AddFoodModal';
@@ -15,18 +15,22 @@ interface Recipe {
 }
 
 export function RecipesPage() {
+  const { user } = useAuth();
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAddFoodModalOpen, setIsAddFoodModalOpen] = useState(false);
 
   useEffect(() => {
-    loadRecipes();
-  }, []);
+    if (user) {
+      loadRecipes();
+    }
+  }, [user]);
 
   const loadRecipes = async () => {
+    if (!user) return;
+    
     try {
-      const sessionId = getOrCreateSessionId();
-      const items = await getItemsBySession(sessionId);
+      const items = await getItemsByUser(user.uid);
 
       // Generate recipe recommendations based on inventory
       const recommendedRecipes = generateRecipes(items);

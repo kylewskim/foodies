@@ -6,6 +6,7 @@ export interface Session {
 
 export interface Receipt {
   receiptId: string;
+  userId: string;  // User who owns this receipt
   sessionId: string;
   purchaseDate: string | null;
   createdAt: string;
@@ -29,6 +30,7 @@ export type ExpirationSource = 'auto' | 'manual';
 
 export interface Item {
   itemId: string;
+  userId: string;  // User who owns this item
   receiptId: string;
   name: string;
   quantity: string | null;

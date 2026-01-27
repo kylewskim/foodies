@@ -76,16 +76,16 @@ export async function updateItem(item: Item): Promise<void> {
 }
 
 /**
- * Get all receipts for a session
+ * Get all receipts for a user
  * 
- * @param sessionId - Session ID to query
+ * @param userId - User ID to query
  * @returns Array of receipts
  */
-export async function getReceiptsBySession(sessionId: string): Promise<Receipt[]> {
+export async function getReceiptsByUser(userId: string): Promise<Receipt[]> {
   try {
     const q = query(
       collection(db, 'receipts'),
-      where('sessionId', '==', sessionId)
+      where('userId', '==', userId)
     );
     
     const querySnapshot = await getDocs(q);
@@ -143,49 +143,47 @@ export async function getItemsByReceipt(receiptId: string): Promise<Item[]> {
 }
 
 /**
- * Get all items for a session
+ * Get all items for a user
  * 
- * @param sessionId - Session ID to query
+ * @param userId - User ID to query
  * @returns Array of items
  */
-export async function getItemsBySession(sessionId: string): Promise<Item[]> {
+export async function getItemsByUser(userId: string): Promise<Item[]> {
   try {
-    // First get all receipts for the session
-    const receipts = await getReceiptsBySession(sessionId);
-    const receiptIds = receipts.map(r => r.receiptId);
+    const q = query(
+      collection(db, 'items'),
+      where('userId', '==', userId)
+    );
     
-    if (receiptIds.length === 0) {
-      return [];
-    }
+    const querySnapshot = await getDocs(q);
+    const items: Item[] = [];
     
-    // Get all items for these receipts
-    const allItems: Item[] = [];
-    for (const receiptId of receiptIds) {
-      const items = await getItemsByReceipt(receiptId);
-      allItems.push(...items);
-    }
+    querySnapshot.forEach((doc) => {
+      const data = doc.data();
+      items.push({
+        itemId: doc.id,
+        location: data.location || 'fridge', // Default location for old data
+        ...data,
+      } as Item);
+    });
     
-    // Ensure location field exists (for backward compatibility)
-    return allItems.map(item => ({
-      ...item,
-      location: item.location || 'fridge',
-    }));
+    return items;
   } catch (error) {
-    console.error('Error getting items by session:', error);
-    throw new Error('Failed to get items by session');
+    console.error('Error getting items by user:', error);
+    throw new Error('Failed to get items by user');
   }
 }
 
 /**
  * Get items expiring soon (within specified days)
  * 
- * @param sessionId - Session ID to query
+ * @param userId - User ID to query
  * @param days - Number of days to look ahead (default: 7)
  * @returns Array of items expiring soon
  */
-export async function getItemsExpiringSoon(sessionId: string, days: number = 7): Promise<Item[]> {
+export async function getItemsExpiringSoon(userId: string, days: number = 7): Promise<Item[]> {
   try {
-    const allItems = await getItemsBySession(sessionId);
+    const allItems = await getItemsByUser(userId);
     const now = new Date();
     const futureDate = new Date();
     futureDate.setDate(now.getDate() + days);
@@ -213,13 +211,13 @@ export async function getItemsExpiringSoon(sessionId: string, days: number = 7):
 /**
  * Get items by location
  * 
- * @param sessionId - Session ID to query
+ * @param userId - User ID to query
  * @param location - Storage location to filter by
  * @returns Array of items in the specified location
  */
-export async function getItemsByLocation(sessionId: string, location: 'fridge' | 'freezer' | 'pantry'): Promise<Item[]> {
+export async function getItemsByLocation(userId: string, location: 'fridge' | 'freezer' | 'pantry'): Promise<Item[]> {
   try {
-    const allItems = await getItemsBySession(sessionId);
+    const allItems = await getItemsByUser(userId);
     return allItems
       .map(item => ({
         ...item,

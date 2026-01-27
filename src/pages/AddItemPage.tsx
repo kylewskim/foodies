@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 import { ImageUpload } from '../components/ImageUpload';
 import { ManualInput } from '../components/ManualInput';
 import { ProcessedItemsList } from '../components/ProcessedItemsList';
 import type { Item, StorageLocation, FoodCategory } from '../types';
-import { getOrCreateSessionId } from '../utils/session';
 import { saveReceipt, saveItems } from '../firebase/saveReceipt';
 import { getCurrentDateISO, calculateExpirationDate } from '../utils/dateHelpers';
 import { normalizeInputText } from '../llm/normalizeInputText';
@@ -16,6 +16,7 @@ type InputMethod = 'image' | 'manual' | 'form' | 'review';
 export function AddItemPage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { user } = useAuth();
   const [searchParams] = useSearchParams();
   const editItem = location.state?.item as Item | undefined;
   
@@ -152,6 +153,7 @@ export function AddItemPage() {
         
         items.push({
           itemId: `temp_${i}_${Date.now()}`,
+          userId: user?.uid || '',
           receiptId: tempReceiptId,
           name: classifiedItem.normalized_name,
           quantity: normalizedItem.quantity,
@@ -202,6 +204,7 @@ export function AddItemPage() {
         
         items.push({
           itemId: `temp_${i}_${Date.now()}`,
+          userId: user?.uid || '',
           receiptId: tempReceiptId,
           name: classifiedItem.normalized_name,
           quantity: normalizedItem.quantity,
@@ -233,21 +236,22 @@ export function AddItemPage() {
   };
 
   const handleSaveAll = async () => {
-    if (processedItems.length === 0) return;
+    if (processedItems.length === 0 || !user) return;
     
     setSaving(true);
     try {
-      const sessionId = getOrCreateSessionId();
       const purchaseDate = processedItems[0].purchaseDate;
       
       const receipt = await saveReceipt({
-        sessionId,
+        userId: user.uid,
+        sessionId: `session_${Date.now()}`,
         purchaseDate,
         createdAt: getCurrentDateISO(),
       });
       
       const itemsToSave = processedItems.map(item => ({
         ...item,
+        userId: user.uid,
         receiptId: receipt.receiptId,
       }));
       
@@ -278,14 +282,13 @@ export function AddItemPage() {
   };
 
   const handleSave = async () => {
-    if (!itemName.trim()) {
+    if (!itemName.trim() || !user) {
       alert('Please enter an item name');
       return;
     }
 
     setProcessing(true);
     try {
-      const sessionId = getOrCreateSessionId();
       const purchaseDateISO = new Date(purchaseDate).toISOString();
       const expirationDateISO = expirationDate ? new Date(expirationDate).toISOString() : null;
 
@@ -306,12 +309,14 @@ export function AddItemPage() {
       } else {
         // Create new item
         const receipt = await saveReceipt({
-          sessionId,
+          userId: user.uid,
+          sessionId: `session_${Date.now()}`,
           purchaseDate: purchaseDateISO,
           createdAt: getCurrentDateISO(),
         });
 
         const itemToSave: Omit<Item, 'itemId'> = {
+          userId: user.uid,
           receiptId: receipt.receiptId,
           name: itemName,
           quantity: quantity || null,
