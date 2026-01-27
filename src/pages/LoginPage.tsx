@@ -31,16 +31,16 @@ export function LoginPage() {
       display: 'flex',
       flexDirection: 'column',
       alignItems: 'center',
-      position: 'relative',
+      justifyContent: 'center',
       padding: '0 24px',
+      paddingBottom: '140px', // Space for bottom section (button + terms + indicator)
     }}>
-      {/* Main Content */}
+      {/* Main Content - Centered */}
       <div style={{
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
         gap: '24px',
-        marginTop: '178px',
         maxWidth: '327px',
         width: '100%',
       }}>
@@ -113,7 +113,7 @@ export function LoginPage() {
 
       {/* Bottom Section */}
       <div style={{
-        position: 'absolute',
+        position: 'fixed',
         bottom: 0,
         left: 0,
         right: 0,
@@ -122,6 +122,8 @@ export function LoginPage() {
         alignItems: 'center',
         gap: '24px',
         paddingBottom: '34px',
+        paddingTop: '24px',
+        backgroundColor: '#f7f6ef',
       }}>
         {/* Google Sign In Button */}
         <button
