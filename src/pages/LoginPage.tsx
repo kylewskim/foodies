@@ -1,9 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-
-// Broccoli image - local file
-const broccoliImage = '/images/broccoli.png';
+import broccoliImage from '../assets/broccoli.png';
 
 export function LoginPage() {
   const { signInWithGoogle } = useAuth();
