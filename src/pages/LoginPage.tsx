@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
-// Broccoli image - using a placeholder or you can add actual image
-const broccoliImage = 'https://images.unsplash.com/photo-1459411552884-841db9b3cc2a?w=400&h=400&fit=crop';
+// Broccoli image - transparent background
+const broccoliImage = 'https://purepng.com/public/uploads/large/purepng.com-broccolivegetaborccolicabbloflowergreen-1411527234.png';
 
 export function LoginPage() {
   const { signInWithGoogle } = useAuth();
