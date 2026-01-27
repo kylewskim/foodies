@@ -24,23 +24,28 @@ export function LoginPage() {
 
   return (
     <div style={{
-      minHeight: '100vh',
+      height: '100vh',
       backgroundColor: '#f7f6ef',
       display: 'flex',
       flexDirection: 'column',
       alignItems: 'center',
-      justifyContent: 'center',
+      justifyContent: 'space-between',
       padding: '0 24px',
-      paddingBottom: '140px', // Space for bottom section (button + terms + indicator)
+      paddingTop: '60px',
+      paddingBottom: '40px',
+      boxSizing: 'border-box',
+      overflow: 'hidden',
     }}>
       {/* Main Content - Centered */}
       <div style={{
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
+        justifyContent: 'center',
         gap: '24px',
         maxWidth: '327px',
         width: '100%',
+        flex: 1,
       }}>
         {/* Broccoli Image */}
         <div style={{
@@ -54,7 +59,7 @@ export function LoginPage() {
             style={{
               width: '100%',
               height: '100%',
-              objectFit: 'cover',
+              objectFit: 'contain',
             }}
           />
         </div>
@@ -91,37 +96,30 @@ export function LoginPage() {
             and personalized recipe.
           </p>
         </div>
-      </div>
 
-      {/* Error Message */}
-      {error && (
-        <div style={{
-          backgroundColor: '#fee2e2',
-          color: '#dc2626',
-          padding: '12px 16px',
-          borderRadius: '8px',
-          marginTop: '24px',
-          fontSize: '14px',
-          maxWidth: '300px',
-          textAlign: 'center',
-        }}>
-          {error}
-        </div>
-      )}
+        {/* Error Message */}
+        {error && (
+          <div style={{
+            backgroundColor: '#fee2e2',
+            color: '#dc2626',
+            padding: '12px 16px',
+            borderRadius: '8px',
+            fontSize: '14px',
+            maxWidth: '300px',
+            textAlign: 'center',
+          }}>
+            {error}
+          </div>
+        )}
+      </div>
 
       {/* Bottom Section */}
       <div style={{
-        position: 'fixed',
-        bottom: 0,
-        left: 0,
-        right: 0,
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
-        gap: '24px',
-        paddingBottom: '34px',
-        paddingTop: '24px',
-        backgroundColor: '#f7f6ef',
+        gap: '16px',
+        width: '100%',
       }}>
         {/* Google Sign In Button */}
         <button
@@ -207,7 +205,7 @@ export function LoginPage() {
           margin: 0,
           maxWidth: '229px',
         }}>
-          By continuing, you agree to Still's{' '}
+          By continuing, you agree to Freshli's{' '}
           <span style={{ color: '#073d35', textDecoration: 'underline' }}>
             Terms & Conditions
           </span>{' '}
@@ -216,15 +214,6 @@ export function LoginPage() {
             Privacy Policy
           </span>
         </p>
-
-        {/* Home Indicator */}
-        <div style={{
-          width: '134px',
-          height: '5px',
-          backgroundColor: 'black',
-          borderRadius: '100px',
-          marginTop: '-16px',
-        }} />
       </div>
     </div>
   );
