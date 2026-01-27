@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
-// Broccoli image - transparent background
-const broccoliImage = 'https://purepng.com/public/uploads/large/purepng.com-broccolivegetaborccolicabbloflowergreen-1411527234.png';
+// Broccoli image - local file
+const broccoliImage = '/images/broccoli.png';
 
 export function LoginPage() {
   const { signInWithGoogle } = useAuth();
