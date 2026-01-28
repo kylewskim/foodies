@@ -8,12 +8,15 @@ import {
   onAuthStateChanged
 } from 'firebase/auth';
 import { auth, googleProvider } from '../firebase/firebaseConfig';
+import { getUserPreferences } from '../firebase/saveReceipt';
 
 interface AuthContextType {
   user: User | null;
   loading: boolean;
+  onboardingCompleted: boolean | null; // null = not yet checked
   signInWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
+  checkOnboardingStatus: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -33,6 +36,22 @@ interface AuthProviderProps {
 export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [onboardingCompleted, setOnboardingCompleted] = useState<boolean | null>(null);
+
+  const checkOnboardingStatus = async () => {
+    if (!user) {
+      setOnboardingCompleted(null);
+      return;
+    }
+    
+    try {
+      const prefs = await getUserPreferences(user.uid);
+      setOnboardingCompleted(prefs?.onboardingCompleted ?? false);
+    } catch (error) {
+      console.error('Error checking onboarding status:', error);
+      setOnboardingCompleted(false);
+    }
+  };
 
   useEffect(() => {
     // Check for redirect result (for mobile browsers)
@@ -47,8 +66,22 @@ export function AuthProvider({ children }: AuthProviderProps) {
       });
 
     // Listen for auth state changes
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setUser(user);
+      
+      if (user) {
+        // Check onboarding status when user logs in
+        try {
+          const prefs = await getUserPreferences(user.uid);
+          setOnboardingCompleted(prefs?.onboardingCompleted ?? false);
+        } catch (error) {
+          console.error('Error checking onboarding status:', error);
+          setOnboardingCompleted(false);
+        }
+      } else {
+        setOnboardingCompleted(null);
+      }
+      
       setLoading(false);
     });
 
@@ -84,8 +117,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const value = {
     user,
     loading,
+    onboardingCompleted,
     signInWithGoogle,
     logout,
+    checkOnboardingStatus,
   };
 
   return (

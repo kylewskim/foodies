@@ -1,6 +1,6 @@
-import { collection, addDoc, doc, setDoc, query, where, getDocs } from 'firebase/firestore';
+import { collection, addDoc, doc, setDoc, getDoc, query, where, getDocs } from 'firebase/firestore';
 import { db } from './firebaseConfig';
-import type { Receipt, Item } from '../types';
+import type { Receipt, Item, UserPreferences } from '../types';
 
 /**
  * Save a receipt to Firestore
@@ -232,5 +232,67 @@ export async function getItemsByLocation(userId: string, location: 'fridge' | 'f
   } catch (error) {
     console.error('Error getting items by location:', error);
     throw new Error('Failed to get items by location');
+  }
+}
+
+/**
+ * Get user preferences
+ * 
+ * @param userId - User ID to query
+ * @returns User preferences or null if not found
+ */
+export async function getUserPreferences(userId: string): Promise<UserPreferences | null> {
+  try {
+    const docRef = doc(db, 'userPreferences', userId);
+    const docSnap = await getDoc(docRef);
+    
+    if (docSnap.exists()) {
+      return docSnap.data() as UserPreferences;
+    }
+    return null;
+  } catch (error) {
+    console.error('Error getting user preferences:', error);
+    return null;
+  }
+}
+
+/**
+ * Save or update user preferences
+ * 
+ * @param userId - User ID
+ * @param preferences - User preferences to save
+ */
+export async function saveUserPreferences(userId: string, preferences: Partial<UserPreferences>): Promise<void> {
+  try {
+    const docRef = doc(db, 'userPreferences', userId);
+    const existing = await getDoc(docRef);
+    
+    const now = new Date().toISOString();
+    
+    if (existing.exists()) {
+      // Update existing
+      await setDoc(docRef, {
+        ...existing.data(),
+        ...preferences,
+        updatedAt: now,
+      }, { merge: true });
+    } else {
+      // Create new
+      await setDoc(docRef, {
+        onboardingCompleted: false,
+        helpWith: null,
+        dietaryPreferences: [],
+        allergies: [],
+        ingredientExclusions: [],
+        notifyExpireIn: null,
+        notifyTimeOfDay: null,
+        createdAt: now,
+        updatedAt: now,
+        ...preferences,
+      });
+    }
+  } catch (error) {
+    console.error('Error saving user preferences:', error);
+    throw new Error('Failed to save user preferences');
   }
 }

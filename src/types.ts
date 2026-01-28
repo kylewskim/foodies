@@ -74,3 +74,17 @@ export interface ProcessedItem {
   expiration_days: number;
   confidence: 'high' | 'medium' | 'low';
 }
+
+// User preferences (onboarding)
+
+export interface UserPreferences {
+  onboardingCompleted: boolean;
+  helpWith: string | null; // 'using_what_i_have' | 'meal_ideas' | 'limiting_waste' | 'meal_variety'
+  dietaryPreferences: string[];
+  allergies: string[];
+  ingredientExclusions: string[];
+  notifyExpireIn: string | null; // '1_day' | '3_days' | '1_week'
+  notifyTimeOfDay: string | null; // 'morning' | 'afternoon' | 'evening'
+  createdAt: string;
+  updatedAt: string;
+}
