@@ -16,7 +16,7 @@ interface AuthContextType {
   onboardingCompleted: boolean | null; // null = not yet checked
   signInWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
-  checkOnboardingStatus: () => Promise<void>;
+  checkOnboardingStatus: (forceUserId?: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -38,14 +38,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [loading, setLoading] = useState(true);
   const [onboardingCompleted, setOnboardingCompleted] = useState<boolean | null>(null);
 
-  const checkOnboardingStatus = async () => {
-    if (!user) {
+  const checkOnboardingStatus = async (forceUserId?: string) => {
+    const userId = forceUserId || user?.uid;
+    if (!userId) {
       setOnboardingCompleted(null);
       return;
     }
     
     try {
-      const prefs = await getUserPreferences(user.uid);
+      const prefs = await getUserPreferences(userId);
+      console.log('Checking onboarding status for user:', userId, 'prefs:', prefs);
       setOnboardingCompleted(prefs?.onboardingCompleted ?? false);
     } catch (error) {
       console.error('Error checking onboarding status:', error);
@@ -66,14 +68,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
       });
 
     // Listen for auth state changes
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      setUser(user);
+    const unsubscribe = onAuthStateChanged(auth, async (authUser) => {
+      console.log('Auth state changed:', authUser?.uid);
+      setUser(authUser);
       
-      if (user) {
+      if (authUser) {
         // Check onboarding status when user logs in
         try {
-          const prefs = await getUserPreferences(user.uid);
-          setOnboardingCompleted(prefs?.onboardingCompleted ?? false);
+          const prefs = await getUserPreferences(authUser.uid);
+          console.log('User preferences loaded:', prefs);
+          const isCompleted = prefs?.onboardingCompleted ?? false;
+          setOnboardingCompleted(isCompleted);
+          console.log('Onboarding completed:', isCompleted);
         } catch (error) {
           console.error('Error checking onboarding status:', error);
           setOnboardingCompleted(false);

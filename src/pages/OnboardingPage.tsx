@@ -32,7 +32,7 @@ const timeOfDayOptions = [
 
 export function OnboardingPage() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, checkOnboardingStatus } = useAuth();
   const [step, setStep] = useState<OnboardingStep>(1);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -50,7 +50,9 @@ export function OnboardingPage() {
     setSaving(true);
     try {
       await saveUserPreferences(user.uid, { onboardingCompleted: true });
-      navigate('/');
+      // Refresh onboarding status in context before navigating
+      await checkOnboardingStatus();
+      navigate('/', { replace: true });
     } catch (error) {
       console.error('Error skipping onboarding:', error);
     } finally {
@@ -86,7 +88,9 @@ export function OnboardingPage() {
         notifyExpireIn,
         notifyTimeOfDay,
       });
-      navigate('/');
+      // Refresh onboarding status in context before navigating
+      await checkOnboardingStatus();
+      navigate('/', { replace: true });
     } catch (error) {
       console.error('Error saving preferences:', error);
     } finally {
