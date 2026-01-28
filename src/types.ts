@@ -78,6 +78,7 @@ export interface ProcessedItem {
 // User preferences (onboarding)
 
 export interface UserPreferences {
+  userId: string;  // User who owns these preferences
   onboardingCompleted: boolean;
   helpWith: string | null; // 'using_what_i_have' | 'meal_ideas' | 'limiting_waste' | 'meal_variety'
   dietaryPreferences: string[];

@@ -274,11 +274,13 @@ export async function saveUserPreferences(userId: string, preferences: Partial<U
       await setDoc(docRef, {
         ...existing.data(),
         ...preferences,
+        userId, // Ensure userId is always set
         updatedAt: now,
       }, { merge: true });
     } else {
       // Create new
       await setDoc(docRef, {
+        userId, // Store userId in the document
         onboardingCompleted: false,
         helpWith: null,
         dietaryPreferences: [],
