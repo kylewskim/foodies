@@ -296,8 +296,34 @@ export function RecipesPage() {
         )}
       </div>
 
+      {/* Floating Add Button */}
+      <button
+        onClick={() => setIsAddFoodModalOpen(true)}
+        style={{
+          position: 'fixed',
+          bottom: '80px',
+          right: '20px',
+          width: '56px',
+          height: '56px',
+          borderRadius: '50%',
+          backgroundColor: '#073d35',
+          border: 'none',
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+          zIndex: 99,
+        }}
+      >
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#f7f6ef" strokeWidth="2.5">
+          <line x1="12" y1="5" x2="12" y2="19" />
+          <line x1="5" y1="12" x2="19" y2="12" />
+        </svg>
+      </button>
+
       {/* Bottom Navigation */}
-      <BottomNavigation onAddClick={() => setIsAddFoodModalOpen(true)} />
+      <BottomNavigation />
 
       {/* Add Food Modal */}
       <AddFoodModal

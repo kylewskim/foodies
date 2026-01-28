@@ -9,6 +9,7 @@ import { EditItemPage } from './pages/EditItemPage';
 import { LoginPage } from './pages/LoginPage';
 import { SplashPage } from './pages/SplashPage';
 import { OnboardingPage } from './pages/OnboardingPage';
+import { SettingsPage } from './pages/SettingsPage';
 
 // Loading screen component
 function LoadingScreen() {
@@ -110,6 +111,7 @@ function App() {
       <Route path="/recipes" element={<ProtectedRoute><RecipesPage /></ProtectedRoute>} />
       <Route path="/item/:itemId" element={<ProtectedRoute><ItemDetailPage /></ProtectedRoute>} />
       <Route path="/edit-item" element={<ProtectedRoute><EditItemPage /></ProtectedRoute>} />
+      <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
       <Route path="*" element={<Navigate to="/splash" replace />} />
     </Routes>
   );
