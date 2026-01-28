@@ -3,8 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import broccoliImage from '../assets/broccoli.png';
 
+// Check if dev mode is available
+const isDev = import.meta.env.DEV;
+
 export function LoginPage() {
-  const { signInWithGoogle } = useAuth();
+  const { signInWithGoogle, signInAsDev } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -17,6 +20,19 @@ export function LoginPage() {
       navigate('/');
     } catch (err: any) {
       setError(err.message || 'Failed to sign in with Google');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDevSignIn = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      await signInAsDev();
+      navigate('/');
+    } catch (err: any) {
+      setError(err.message || 'Failed to sign in as dev');
     } finally {
       setLoading(false);
     }
@@ -215,6 +231,32 @@ export function LoginPage() {
             Privacy Policy
           </span>
         </p>
+
+        {/* Dev Mode Login - Only shown in development */}
+        {isDev && (
+          <button
+            onClick={handleDevSignIn}
+            disabled={loading}
+            style={{
+              marginTop: '16px',
+              padding: '8px 16px',
+              backgroundColor: '#fef3c7',
+              border: '2px dashed #f59e0b',
+              borderRadius: '8px',
+              cursor: loading ? 'not-allowed' : 'pointer',
+              opacity: loading ? 0.7 : 1,
+            }}
+          >
+            <span style={{
+              fontFamily: '"Poppins", sans-serif',
+              fontSize: '12px',
+              fontWeight: '500',
+              color: '#92400e',
+            }}>
+              🔧 Dev Mode Login
+            </span>
+          </button>
+        )}
       </div>
     </div>
   );

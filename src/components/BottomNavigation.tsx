@@ -41,10 +41,11 @@ export function BottomNavigation() {
       backgroundColor: '#f7f6ef',
       display: 'flex',
       justifyContent: 'space-around',
-      alignItems: 'center',
-      height: '60px',
+      alignItems: 'flex-start',
+      height: '72px',
       paddingBottom: 'env(safe-area-inset-bottom, 0px)',
       zIndex: 100,
+      borderTop: '1px solid #E3E2DC',
     }}>
       {navItems.map((item) => {
         const isActive = activeTab === item.id;
@@ -61,7 +62,7 @@ export function BottomNavigation() {
               justifyContent: 'center',
               gap: '4px',
               flex: 1,
-              height: '100%',
+              height: '72px',
               opacity: isActive ? 1 : 0.5,
             }}
           >

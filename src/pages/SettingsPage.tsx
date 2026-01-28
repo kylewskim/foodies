@@ -20,7 +20,7 @@ export function SettingsPage() {
     <div style={{
       minHeight: '100vh',
       backgroundColor: '#f7f6ef',
-      paddingBottom: '80px',
+      paddingBottom: '92px', // 72px nav + 20px spacing
     }}>
       {/* Header */}
       <div style={{

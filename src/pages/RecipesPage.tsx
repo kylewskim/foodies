@@ -301,7 +301,7 @@ export function RecipesPage() {
         onClick={() => setIsAddFoodModalOpen(true)}
         style={{
           position: 'fixed',
-          bottom: '80px',
+          bottom: '92px', // 72px nav + 20px spacing
           right: '20px',
           width: '56px',
           height: '56px',
