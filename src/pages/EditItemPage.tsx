@@ -8,6 +8,8 @@ export function EditItemPage() {
   const location = useLocation();
   const item = location.state?.item as Item | undefined;
   const isTemporary = location.state?.isTemporary as boolean | undefined;
+  const returnPath = location.state?.returnPath as string | undefined;
+  const processedItems = location.state?.processedItems as Item[] | undefined;
   
   const [itemName, setItemName] = useState(item?.name || '');
   const [quantity, setQuantity] = useState(item?.quantity || '');
@@ -72,13 +74,10 @@ export function EditItemPage() {
         expirationSource: expirationDateISO ? 'manual' : 'auto',
       };
 
-      // If it's a temporary item from ProcessedItemsList, pass updatedItem back via state
+      // If it's a temporary item from ProcessedItemsList/ScanResultPage, pass updatedItem back via state
       // Otherwise, update in Firebase
-      if (isTemporary) {
+      if (isTemporary || processedItems) {
         // Temporary item - pass updatedItem back via navigate state
-        const returnPath = location.state?.returnPath as string | undefined;
-        const processedItems = location.state?.processedItems as Item[] | undefined;
-        
         // Update the item in the list
         const updatedItems = processedItems?.map(i => 
           i.itemId === updatedItem.itemId ? updatedItem : i
@@ -118,7 +117,19 @@ export function EditItemPage() {
         borderBottom: '1px solid #e0e0e0'
       }}>
         <button
-          onClick={() => navigate(-1)}
+          onClick={() => {
+            // If we have processedItems, go back to scan result with the items intact
+            if (processedItems && returnPath) {
+              navigate(returnPath, { 
+                state: { 
+                  processedItems,
+                  // Don't include updatedItem - user cancelled
+                } 
+              });
+            } else {
+              navigate(-1);
+            }
+          }}
           style={{
             background: 'none',
             border: 'none',
