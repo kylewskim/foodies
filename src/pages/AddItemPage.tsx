@@ -3,7 +3,8 @@ import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { ImageUpload } from '../components/ImageUpload';
 import { ManualInput } from '../components/ManualInput';
-import { ProcessedItemsList } from '../components/ProcessedItemsList';
+import { ProcessingScreen } from '../components/ProcessingScreen';
+import { ScanResultPage } from '../components/ScanResultPage';
 import type { Item, StorageLocation, FoodCategory } from '../types';
 import { saveReceipt, saveItems } from '../firebase/saveReceipt';
 import { getCurrentDateISO, calculateExpirationDate } from '../utils/dateHelpers';
@@ -50,8 +51,9 @@ export function AddItemPage() {
   const [processing, setProcessing] = useState(false);
   const [processedItems, setProcessedItems] = useState<Item[]>(returningItems || []);
   const [saving, setSaving] = useState(false);
-  const [defaultLocation, setDefaultLocation] = useState<StorageLocation>('fridge');
+  const [defaultLocation] = useState<StorageLocation>('fridge');
   const [autoProcessStarted, setAutoProcessStarted] = useState(false);
+  const [receiptDate, setReceiptDate] = useState<string | undefined>(undefined);
 
   // Handle returning from EditItemPage with an updated item
   useEffect(() => {
@@ -134,6 +136,7 @@ export function AddItemPage() {
       
       const purchaseDateISO = normalized.purchase_date || getCurrentDateISO();
       const tempReceiptId = `temp_${Date.now()}`;
+      setReceiptDate(purchaseDateISO);
       
       // Process all items
       const items: Item[] = [];
@@ -185,6 +188,7 @@ export function AddItemPage() {
       
       const purchaseDateISO = normalized.purchase_date || getCurrentDateISO();
       const tempReceiptId = `temp_${Date.now()}`;
+      setReceiptDate(purchaseDateISO);
       
       // Process all items
       const items: Item[] = [];
@@ -227,6 +231,11 @@ export function AddItemPage() {
     }
   };
 
+  const handleAddNewItem = () => {
+    // Navigate to form view to add a new item manually
+    setInputMethod('form');
+  };
+
   const handleItemUpdate = (updatedItem: Item) => {
     setProcessedItems(prevItems =>
       prevItems.map(item =>
@@ -236,11 +245,13 @@ export function AddItemPage() {
   };
 
   const handleSaveAll = async () => {
-    if (processedItems.length === 0 || !user) return;
+    // Filter out deleted items before saving
+    const activeItems = processedItems.filter(item => !item.itemId.startsWith('deleted_'));
+    if (activeItems.length === 0 || !user) return;
     
     setSaving(true);
     try {
-      const purchaseDate = processedItems[0].purchaseDate;
+      const purchaseDate = activeItems[0].purchaseDate;
       
       const receipt = await saveReceipt({
         userId: user.uid,
@@ -249,7 +260,7 @@ export function AddItemPage() {
         createdAt: getCurrentDateISO(),
       });
       
-      const itemsToSave = processedItems.map(item => ({
+      const itemsToSave = activeItems.map(item => ({
         ...item,
         userId: user.uid,
         receiptId: receipt.receiptId,
@@ -266,19 +277,6 @@ export function AddItemPage() {
     } finally {
       setSaving(false);
     }
-  };
-
-  const handleChangeLocation = () => {
-    // Show location picker and update all items
-    const locations: StorageLocation[] = ['fridge', 'freezer', 'pantry'];
-    const currentIndex = locations.indexOf(defaultLocation);
-    const nextIndex = (currentIndex + 1) % locations.length;
-    const newLocation = locations[nextIndex];
-    
-    setDefaultLocation(newLocation);
-    setProcessedItems(prevItems =>
-      prevItems.map(item => ({ ...item, location: newLocation }))
-    );
   };
 
   const handleSave = async () => {
@@ -341,73 +339,71 @@ export function AddItemPage() {
     }
   };
 
+  // Show processing screen
+  if (processing) {
+    return <ProcessingScreen message="Processing Receipt..." />;
+  }
+
   if (inputMethod === 'image') {
     // methodParam이 'scan'이면 카메라, 'upload'면 앨범
     const useCamera = methodParam === 'scan';
     
     return (
-      <div style={{ minHeight: '100vh', backgroundColor: '#f5f5f5', padding: '20px' }}>
+      <div style={{ minHeight: '100vh', backgroundColor: '#f7f6ef', padding: '20px' }}>
         <button
           onClick={() => navigate('/')}
           style={{
             marginBottom: '20px',
             padding: '8px 16px',
             fontSize: '14px',
-            backgroundColor: '#6c757d',
-            color: 'white',
+            backgroundColor: 'transparent',
+            color: '#073d35',
             border: 'none',
-            borderRadius: '4px',
             cursor: 'pointer',
+            fontFamily: '"Poppins", sans-serif',
           }}
         >
           ← Back
         </button>
         <ImageUpload onTextExtracted={handleImageUpload} useCamera={useCamera} />
-        {processing && (
-          <div style={{ textAlign: 'center', marginTop: '20px' }}>
-            <div>Processing...</div>
-          </div>
-        )}
       </div>
     );
   }
 
   if (inputMethod === 'manual') {
     return (
-      <div style={{ minHeight: '100vh', backgroundColor: '#f5f5f5', padding: '20px' }}>
+      <div style={{ minHeight: '100vh', backgroundColor: '#f7f6ef', padding: '20px' }}>
         <button
           onClick={() => navigate('/')}
           style={{
             marginBottom: '20px',
             padding: '8px 16px',
             fontSize: '14px',
-            backgroundColor: '#6c757d',
-            color: 'white',
+            backgroundColor: 'transparent',
+            color: '#073d35',
             border: 'none',
-            borderRadius: '4px',
             cursor: 'pointer',
+            fontFamily: '"Poppins", sans-serif',
           }}
         >
           ← Back
         </button>
         <ManualInput onTextSubmitted={handleManualInput} />
-        {processing && (
-          <div style={{ textAlign: 'center', marginTop: '20px' }}>
-            <div>Processing...</div>
-          </div>
-        )}
       </div>
     );
   }
 
   if (inputMethod === 'review') {
+    // Filter out deleted items
+    const activeItems = processedItems.filter(item => !item.itemId.startsWith('deleted_'));
+    
     return (
-      <ProcessedItemsList
-        items={processedItems}
+      <ScanResultPage
+        items={activeItems}
+        receiptDate={receiptDate}
         onItemUpdate={handleItemUpdate}
         onSaveAll={handleSaveAll}
-        onChangeLocation={handleChangeLocation}
-        onManualEntry={() => setInputMethod('manual')}
+        onAddItem={handleAddNewItem}
         isSaving={saving}
       />
     );
