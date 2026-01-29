@@ -38,14 +38,17 @@ export function ScanResultPage({
   }, {} as Record<StorageLocation, Item[]>);
 
   const formatDate = (dateString?: string) => {
-    if (!dateString) return '';
-    const date = new Date(dateString);
+    // If no date, use today's date
+    const date = dateString ? new Date(dateString) : new Date();
     return date.toLocaleDateString('en-US', { 
       month: '2-digit', 
       day: '2-digit', 
       year: 'numeric' 
     });
   };
+  
+  // Display date: use receiptDate or today
+  const displayDate = formatDate(receiptDate);
 
   const getExpirationText = (item: Item) => {
     const expirationDate = item.manualExpirationDate || item.autoExpirationDate;
@@ -168,8 +171,8 @@ export function ScanResultPage({
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            {/* Receipt date */}
-            {receiptDate && !selectMode && (
+            {/* Receipt date - always show, use today if no receiptDate */}
+            {!selectMode && (
               <span style={{
                 fontFamily: '"Poppins", sans-serif',
                 fontSize: '16px',
@@ -177,7 +180,7 @@ export function ScanResultPage({
                 color: '#333',
                 opacity: 0.5,
               }}>
-                {formatDate(receiptDate)}
+                {displayDate}
               </span>
             )}
 
@@ -273,7 +276,7 @@ export function ScanResultPage({
                     </div>
                   </div>
 
-                  {/* Selection circle or edit arrow */}
+                  {/* Selection circle or edit button */}
                   {selectMode ? (
                     <div style={{
                       width: '40px',
@@ -296,13 +299,14 @@ export function ScanResultPage({
                       width: '40px',
                       height: '40px',
                       borderRadius: '50%',
-                      backgroundColor: '#f5f5f5',
+                      backgroundColor: '#d3e2d0',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
                     }}>
+                      {/* Pencil/Edit icon */}
                       <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                        <path d="M7 4L13 10L7 16" stroke="#073d35" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                        <path d="M14.166 2.5009C14.3849 2.28203 14.6447 2.10842 14.9307 1.98996C15.2167 1.87151 15.5232 1.81055 15.8327 1.81055C16.1422 1.81055 16.4487 1.87151 16.7347 1.98996C17.0206 2.10842 17.2805 2.28203 17.4993 2.5009C17.7182 2.71977 17.8918 2.97961 18.0103 3.26558C18.1287 3.55154 18.1897 3.85804 18.1897 4.16757C18.1897 4.4771 18.1287 4.7836 18.0103 5.06956C17.8918 5.35553 17.7182 5.61537 17.4993 5.83424L6.24935 17.0842L1.66602 18.3342L2.91602 13.7509L14.166 2.5009Z" stroke="#073d35" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
                       </svg>
                     </div>
                   )}
