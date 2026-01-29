@@ -1,39 +1,38 @@
-import { useEffect, useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { useEffect, useState, useRef } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { getItemsExpiringSoon, getItemsByUser } from '../firebase/saveReceipt';
 import type { Item } from '../types';
 import { getDaysUntilExpiration } from '../utils/dateHelpers';
-import { AddFoodModal } from '../components/AddFoodModal';
 import { BottomNavigation } from '../components/BottomNavigation';
+
+// Import icons
+import scanReceiptIcon from '../assets/scan_receipt.svg';
+import typeInIcon from '../assets/type_in.svg';
+import infoIcon from '../assets/info_icon.svg';
+import arrowRightIcon from '../assets/arrow_right.svg';
 
 interface MonthlyStats {
   itemsUsedJustInTime: number;
   estimatedValueSaved: number;
 }
 
-interface InventoryStats {
-  total: number;
-  usedThisWeek: number;
-  expiringSoon: number;
-}
-
 export function HomePage() {
   const location = useLocation();
-  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+  const { user } = useAuth();
   const [expiringItems, setExpiringItems] = useState<Item[]>([]);
   const [monthlyStats, setMonthlyStats] = useState<MonthlyStats>({
     itemsUsedJustInTime: 0,
     estimatedValueSaved: 0,
   });
-  const [inventoryStats, setInventoryStats] = useState<InventoryStats>({
-    total: 0,
-    usedThisWeek: 0,
-    expiringSoon: 0,
-  });
   const [loading, setLoading] = useState(true);
-  const [isAddFoodModalOpen, setIsAddFoodModalOpen] = useState(false);
-  const [showMenu, setShowMenu] = useState(false);
+  const [showScanOptions, setShowScanOptions] = useState(false);
+  
+  // File input refs
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const albumInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (user) {
@@ -50,7 +49,6 @@ export function HomePage() {
       setExpiringItems(expiring);
 
       const now = new Date();
-      const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
       
       const activeItems = allItems.filter(item => {
         const expirationDate = item.manualExpirationDate || item.autoExpirationDate;
@@ -65,19 +63,6 @@ export function HomePage() {
         itemsUsedJustInTime,
         estimatedValueSaved,
       });
-
-      const total = allItems.length;
-      const usedThisWeek = allItems.filter(item => {
-        const purchaseDate = new Date(item.purchaseDate);
-        return purchaseDate >= oneWeekAgo;
-      }).length;
-      const expiringSoon = expiring.length;
-
-      setInventoryStats({
-        total,
-        usedThisWeek,
-        expiringSoon,
-      });
     } catch (error) {
       console.error('Error loading home data:', error);
     } finally {
@@ -85,48 +70,22 @@ export function HomePage() {
     }
   };
 
-  const handleUseItem = async (item: Item) => {
-    try {
-      const { deleteDoc } = await import('firebase/firestore');
-      const { doc } = await import('firebase/firestore');
-      const { db } = await import('../firebase/firebaseConfig');
-      
-      await deleteDoc(doc(db, 'items', item.itemId));
-      await loadHomeData();
-    } catch (error) {
-      console.error('Error using item:', error);
-      alert('Failed to mark item as used');
-    }
-  };
-
-  const getCategoryIcon = (category: string) => {
-    const icons: Record<string, string> = {
-      'Produce': '🍓',
-      'Protein': '🥩',
-      'Grains': '🌾',
-      'Dairy': '🧀',
-      'Snacks': '🍪',
-      'Condiments': '🧂',
-      'Beverages': '🥤',
-      'Prepared': '🍱',
-    };
-    return icons[category] || '🍽️';
-  };
-
-  const getExpirationTag = (item: Item) => {
+  const getExpirationDays = (item: Item) => {
     const expirationDate = item.manualExpirationDate || item.autoExpirationDate;
-    const daysUntil = getDaysUntilExpiration(expirationDate);
-    
-    if (daysUntil < 0) {
-      return { text: 'Expired', color: '#dc3545', bgColor: '#ffebee' };
-    }
-    if (daysUntil === 0) {
-      return { text: 'Today', color: '#c62828', bgColor: '#ffcdd2' };
-    }
-    if (daysUntil <= 3) {
-      return { text: 'Soon', color: '#e65100', bgColor: '#fff3e0' };
-    }
-    return null;
+    const days = getDaysUntilExpiration(expirationDate);
+    if (days < 0) return 'Expired';
+    if (days === 0) return 'Expires today';
+    if (days === 1) return 'Expires in 1 d';
+    return `Expires in ${days} ds`;
+  };
+
+  const getLocationText = (loc: string) => {
+    const locations: Record<string, string> = {
+      'fridge': 'In fridge',
+      'freezer': 'In freezer',
+      'pantry': 'In pantry',
+    };
+    return locations[loc] || loc;
   };
 
   const getDaysSincePurchase = (item: Item) => {
@@ -140,13 +99,44 @@ export function HomePage() {
     return `Bought ${diffDays} days ago`;
   };
 
-  const getLocationText = (location: string) => {
-    const locations: Record<string, string> = {
-      'fridge': 'Refrigerator',
-      'freezer': 'Freezer',
-      'pantry': 'Pantry',
-    };
-    return locations[location] || location;
+  const getCurrentMonth = () => {
+    const months = ['January', 'February', 'March', 'April', 'May', 'June', 
+                    'July', 'August', 'September', 'October', 'November', 'December'];
+    return months[new Date().getMonth()];
+  };
+
+  // Handle scan receipt options
+  const handleScanReceiptClick = () => {
+    setShowScanOptions(!showScanOptions);
+  };
+
+  const handleCameraClick = () => {
+    setShowScanOptions(false);
+    cameraInputRef.current?.click();
+  };
+
+  const handleAlbumClick = () => {
+    setShowScanOptions(false);
+    albumInputRef.current?.click();
+  };
+
+  const handleFileClick = () => {
+    setShowScanOptions(false);
+    fileInputRef.current?.click();
+  };
+
+  const handleFileSelected = (event: React.ChangeEvent<HTMLInputElement>, method: 'scan' | 'upload') => {
+    const file = event.target.files?.[0];
+    if (file) {
+      navigate(`/add-item?method=${method}`, {
+        state: { selectedFile: file }
+      });
+    }
+    event.target.value = '';
+  };
+
+  const handleTypeItIn = () => {
+    navigate('/add-item?method=manual');
   };
 
   if (loading) {
@@ -156,7 +146,7 @@ export function HomePage() {
         display: 'flex', 
         alignItems: 'center', 
         justifyContent: 'center',
-        backgroundColor: '#fafaf8'
+        backgroundColor: '#f7f6ef'
       }}>
         <div style={{ fontSize: '18px', color: '#666' }}>Loading...</div>
       </div>
@@ -166,257 +156,326 @@ export function HomePage() {
   return (
     <div style={{ 
       minHeight: '100vh', 
-      backgroundColor: '#fafaf8',
+      backgroundColor: '#f7f6ef',
       paddingBottom: '100px'
     }}>
-      {/* Top Header */}
+      {/* Hidden file inputs */}
+      <input
+        ref={cameraInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        onChange={(e) => handleFileSelected(e, 'scan')}
+        style={{ display: 'none' }}
+      />
+      <input
+        ref={albumInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/gif,image/webp,image/heic"
+        onChange={(e) => handleFileSelected(e, 'upload')}
+        style={{ display: 'none' }}
+      />
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*,.pdf"
+        onChange={(e) => handleFileSelected(e, 'upload')}
+        style={{ display: 'none' }}
+      />
+
+      {/* Header - Hi, Name */}
       <div style={{
-        backgroundColor: '#fafaf8',
-        padding: '16px 20px',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        position: 'relative'
+        padding: '20px 24px 16px 24px',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <h1 style={{ 
+          margin: 0, 
+          fontSize: '28px', 
+          fontWeight: '400', 
+          color: '#1a1a1a',
+          fontFamily: '"Poppins", sans-serif',
+          letterSpacing: '-0.39px',
+          lineHeight: '48px',
+        }}>
+          Hi, {user?.displayName?.split(' ')[0] || 'there'}
+        </h1>
+      </div>
+
+      {/* Impact Card with Scan/Type buttons */}
+      <div style={{ padding: '0 20px 24px 20px' }}>
+        <div style={{
+          border: '1px solid #073d35',
+          borderRadius: '36px',
+          padding: '6px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '4px',
+        }}>
+          {/* Dark green impact section */}
           <div style={{
-            width: '44px',
-            height: '44px',
-            borderRadius: '50%',
-            backgroundColor: '#e8e8e8',
+            backgroundColor: '#073d35',
+            borderRadius: '32px',
+            padding: '20px 24px',
+          }}>
+            {/* Impact in Month header */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              marginBottom: '16px',
+            }}>
+              <span style={{
+                fontFamily: '"Poppins", sans-serif',
+                fontSize: '14px',
+                fontWeight: '500',
+                color: '#d3e2d0',
+              }}>
+                Impact in {getCurrentMonth()}
+              </span>
+              <img src={infoIcon} alt="info" style={{ width: '12px', height: '12px' }} />
+            </div>
+
+            {/* Stats row */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+            }}>
+              {/* Left stat - Items */}
+              <div style={{ flex: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'flex-end', gap: '8px' }}>
+                  <span style={{
+                    fontFamily: '"Poppins", sans-serif',
+                    fontSize: '48px',
+                    fontWeight: '300',
+                    color: '#f7f6ef',
+                    lineHeight: '1',
+                  }}>
+                    {monthlyStats.itemsUsedJustInTime}
+                  </span>
+                  <span style={{
+                    fontFamily: '"Poppins", sans-serif',
+                    fontSize: '12px',
+                    color: 'rgba(255,255,255,0.5)',
+                    marginBottom: '8px',
+                  }}>
+                    items
+                  </span>
+                </div>
+                <div style={{
+                  fontFamily: '"Poppins", sans-serif',
+                  fontSize: '12px',
+                  color: '#d3e2d0',
+                }}>
+                  Used just in time
+                </div>
+              </div>
+
+              {/* Divider */}
+              <div style={{
+                width: '1px',
+                height: '40px',
+                backgroundColor: 'rgba(255,255,255,0.2)',
+                margin: '0 20px',
+              }} />
+
+              {/* Right stat - USD */}
+              <div style={{ flex: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'flex-end', gap: '8px' }}>
+                  <span style={{
+                    fontFamily: '"Poppins", sans-serif',
+                    fontSize: '48px',
+                    fontWeight: '300',
+                    color: '#f7f6ef',
+                    lineHeight: '1',
+                  }}>
+                    {Math.round(monthlyStats.estimatedValueSaved)}
+                  </span>
+                  <span style={{
+                    fontFamily: '"Poppins", sans-serif',
+                    fontSize: '12px',
+                    color: 'rgba(255,255,255,0.5)',
+                    marginBottom: '8px',
+                  }}>
+                    USD
+                  </span>
+                </div>
+                <div style={{
+                  fontFamily: '"Poppins", sans-serif',
+                  fontSize: '12px',
+                  color: '#d3e2d0',
+                }}>
+                  Est. value saved
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Scan Receipt / Type it in buttons */}
+          <div style={{
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'center',
-            overflow: 'hidden'
           }}>
-            {user?.photoURL ? (
-              <img 
-                src={user.photoURL} 
-                alt="Profile" 
-                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-              />
-            ) : (
-              <span style={{ fontSize: '24px' }}>👤</span>
-            )}
-          </div>
-          <h1 style={{ 
-            margin: 0, 
-            fontSize: '20px', 
-            fontWeight: '600', 
-            color: '#1a1a1a',
-            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
-          }}>
-            Hi, {user?.displayName?.split(' ')[0] || 'there'}!
-          </h1>
-        </div>
-        <div 
-          onClick={() => setShowMenu(!showMenu)}
-          style={{
-            padding: '8px',
-            cursor: 'pointer',
-            color: '#1a1a1a'
-          }}
-        >
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <line x1="3" y1="6" x2="21" y2="6" />
-            <line x1="3" y1="12" x2="21" y2="12" />
-            <line x1="3" y1="18" x2="21" y2="18" />
-          </svg>
-        </div>
-
-        {/* Dropdown Menu */}
-        {showMenu && (
-          <>
-            <div 
-              onClick={() => setShowMenu(false)}
-              style={{
-                position: 'fixed',
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                zIndex: 999
-              }}
-            />
-            <div style={{
-              position: 'absolute',
-              top: '60px',
-              right: '20px',
-              backgroundColor: 'white',
-              borderRadius: '12px',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-              padding: '8px 0',
-              minWidth: '160px',
-              zIndex: 1000
-            }}>
-              <div style={{
-                padding: '12px 16px',
-                borderBottom: '1px solid #f0f0f0',
-                fontSize: '14px',
-                color: '#666'
-              }}>
-                {user?.email}
-              </div>
+            {/* Scan Receipt Button */}
+            <div style={{ flex: 1, position: 'relative' }}>
               <button
-                onClick={() => {
-                  setShowMenu(false);
-                  logout();
-                }}
+                onClick={handleScanReceiptClick}
                 style={{
                   width: '100%',
-                  padding: '12px 16px',
+                  padding: '12px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '4px',
+                  background: 'none',
                   border: 'none',
-                  backgroundColor: 'transparent',
-                  textAlign: 'left',
-                  fontSize: '14px',
-                  color: '#dc3545',
                   cursor: 'pointer',
-                  fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
                 }}
               >
-                Sign out
+                <img src={scanReceiptIcon} alt="Scan" style={{ width: '20px', height: '20px' }} />
+                <span style={{
+                  fontFamily: '"Poppins", sans-serif',
+                  fontSize: '12px',
+                  color: '#073d35',
+                  textTransform: 'capitalize',
+                }}>
+                  Scan Receipt
+                </span>
               </button>
-            </div>
-          </>
-        )}
-      </div>
 
-      {/* Monthly Impact Section */}
-      <div style={{ padding: '12px 20px 20px 20px' }}>
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '6px',
-          marginBottom: '12px'
-        }}>
-          <h2 style={{ 
-            fontSize: '16px', 
-            fontWeight: '600',
-            color: '#1a1a1a',
-            margin: 0,
-            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
-          }}>
-            Monthly impact
-          </h2>
-          <div style={{
-            width: '16px',
-            height: '16px',
-            borderRadius: '50%',
-            border: '1px solid #ccc',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: '10px',
-            color: '#999',
-            cursor: 'pointer'
-          }}>
-            ?
-          </div>
-        </div>
-        
-        <div style={{
-          backgroundColor: '#fff',
-          borderRadius: '16px',
-          padding: '24px',
-          display: 'flex',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
-        }}>
-          {/* Left Column */}
-          <div style={{
-            flex: 1,
-            borderRight: '1px solid #f0f0f0',
-            paddingRight: '24px'
-          }}>
-            <div style={{ 
-              fontSize: '36px', 
-              fontWeight: '600', 
-              color: '#1a1a1a', 
-              marginBottom: '2px',
-              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
-            }}>
-              {monthlyStats.itemsUsedJustInTime}
+              {/* Scan Options Dropdown */}
+              {showScanOptions && (
+                <>
+                  <div 
+                    onClick={() => setShowScanOptions(false)}
+                    style={{
+                      position: 'fixed',
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      zIndex: 999
+                    }}
+                  />
+                  <div style={{
+                    position: 'absolute',
+                    top: '100%',
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    backgroundColor: 'white',
+                    borderRadius: '12px',
+                    boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+                    padding: '8px 0',
+                    minWidth: '160px',
+                    zIndex: 1000,
+                  }}>
+                    <button
+                      onClick={handleCameraClick}
+                      style={{
+                        width: '100%',
+                        padding: '12px 16px',
+                        border: 'none',
+                        backgroundColor: 'transparent',
+                        textAlign: 'left',
+                        fontSize: '14px',
+                        color: '#1a1a1a',
+                        cursor: 'pointer',
+                        fontFamily: '"Poppins", sans-serif',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '12px',
+                      }}
+                    >
+                      📷 Take Photo
+                    </button>
+                    <button
+                      onClick={handleAlbumClick}
+                      style={{
+                        width: '100%',
+                        padding: '12px 16px',
+                        border: 'none',
+                        backgroundColor: 'transparent',
+                        textAlign: 'left',
+                        fontSize: '14px',
+                        color: '#1a1a1a',
+                        cursor: 'pointer',
+                        fontFamily: '"Poppins", sans-serif',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '12px',
+                      }}
+                    >
+                      🖼️ Photo Library
+                    </button>
+                    <button
+                      onClick={handleFileClick}
+                      style={{
+                        width: '100%',
+                        padding: '12px 16px',
+                        border: 'none',
+                        backgroundColor: 'transparent',
+                        textAlign: 'left',
+                        fontSize: '14px',
+                        color: '#1a1a1a',
+                        cursor: 'pointer',
+                        fontFamily: '"Poppins", sans-serif',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '12px',
+                      }}
+                    >
+                      📁 Upload File
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
-            <div style={{ 
-              fontSize: '14px', 
-              color: '#999', 
-              marginBottom: '4px',
-              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
-            }}>
-              items
-            </div>
-            <div style={{ 
-              fontSize: '13px', 
-              color: '#b0b0b0',
-              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
-            }}>
-              Used just in time
-            </div>
-          </div>
 
-          {/* Right Column */}
-          <div style={{
-            flex: 1,
-            paddingLeft: '24px'
-          }}>
-            <div style={{ 
-              fontSize: '36px', 
-              fontWeight: '600', 
-              color: '#1a1a1a', 
-              marginBottom: '2px',
-              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
-            }}>
-              {Math.round(monthlyStats.estimatedValueSaved)}
-            </div>
-            <div style={{ 
-              fontSize: '14px', 
-              color: '#999', 
-              marginBottom: '4px',
-              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
-            }}>
-              USD
-            </div>
-            <div style={{ 
-              fontSize: '13px', 
-              color: '#b0b0b0',
-              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
-            }}>
-              Est. value saved
-            </div>
-          </div>
-        </div>
-      </div>
+            {/* Divider */}
+            <div style={{
+              width: '1px',
+              height: '32px',
+              backgroundColor: '#e0e0e0',
+            }} />
 
-      {/* Eat Soon Section */}
-      <div style={{ padding: '0 20px 20px 20px' }}>
-        <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: '12px'
-        }}>
-          <h2 style={{ 
-            fontSize: '16px', 
-            fontWeight: '600',
-            color: '#1a1a1a',
-            margin: 0,
-            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
-          }}>
-            Eat Soon
-          </h2>
-          {expiringItems.length > 0 && (
-            <Link
-              to="/inventory"
+            {/* Type it in Button */}
+            <button
+              onClick={handleTypeItIn}
               style={{
-                fontSize: '14px',
-                color: '#999',
-                textDecoration: 'none',
-                fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+                flex: 1,
+                padding: '12px',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '4px',
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
               }}
             >
-              See All
-            </Link>
-          )}
+              <img src={typeInIcon} alt="Type" style={{ width: '20px', height: '20px' }} />
+              <span style={{
+                fontFamily: '"Poppins", sans-serif',
+                fontSize: '12px',
+                color: '#073d35',
+                textTransform: 'capitalize',
+              }}>
+                Type It In
+              </span>
+            </button>
+          </div>
         </div>
+      </div>
+
+      {/* Cook Before It's Expired Section */}
+      <div style={{ padding: '0 20px' }}>
+        <h2 style={{ 
+          fontSize: '20px', 
+          fontWeight: '400',
+          color: '#1a1a1a',
+          margin: '0 0 24px 0',
+          fontFamily: '"Poppins", sans-serif',
+        }}>
+          Cook Before It's Expired
+        </h2>
 
         {expiringItems.length === 0 ? (
           <div style={{
@@ -425,321 +484,98 @@ export function HomePage() {
             padding: '40px 30px',
             textAlign: 'center',
             color: '#999',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
           }}>
             <div style={{ fontSize: '32px', marginBottom: '12px' }}>✅</div>
             <div style={{ 
               fontSize: '14px',
-              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+              fontFamily: '"Poppins", sans-serif',
             }}>
               No items expiring soon!
             </div>
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            {expiringItems.slice(0, 3).map(item => {
-              const tag = getExpirationTag(item);
-              return (
-                <div
-                  key={item.itemId}
-                  style={{
-                    backgroundColor: '#fff',
-                    borderRadius: '16px',
-                    padding: '16px',
-                    boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
-                  }}
-                >
-                  {/* Top Row - Icon, Tag, Purchase Info, Arrow */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+            {expiringItems.map(item => (
+              <div
+                key={item.itemId}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}
+              >
+                {/* Left side - Image and Info */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  {/* Food Image Placeholder */}
                   <div style={{
+                    width: '60px',
+                    height: '60px',
+                    borderRadius: '8px',
+                    backgroundColor: '#e8e8e8',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '12px',
-                    marginBottom: '12px'
+                    justifyContent: 'center',
+                    fontSize: '28px',
+                    overflow: 'hidden',
                   }}>
-                    {/* Category Icon */}
-                    <div style={{ 
-                      width: '32px',
-                      height: '32px',
-                      borderRadius: '50%',
-                      backgroundColor: '#f5f5f5',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: '16px'
-                    }}>
-                      {getCategoryIcon(item.category)}
-                    </div>
-
-                    {/* Tag */}
-                    {tag && (
-                      <div style={{
-                        padding: '4px 12px',
-                        borderRadius: '12px',
-                        backgroundColor: tag.bgColor,
-                        color: tag.color,
-                        fontSize: '13px',
-                        fontWeight: '500',
-                        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
-                      }}>
-                        {tag.text}
-                      </div>
-                    )}
-
-                    {/* Spacer */}
-                    <div style={{ flex: 1 }} />
-
-                    {/* Purchase Info */}
-                    <div style={{ 
-                      display: 'flex', 
-                      alignItems: 'center', 
-                      gap: '4px',
-                      color: '#999',
-                      fontSize: '13px',
-                      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
-                    }}>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <circle cx="12" cy="12" r="10" />
-                        <polyline points="12,6 12,12 16,14" />
-                      </svg>
-                      <span>{getDaysSincePurchase(item)}</span>
-                    </div>
-
-                    {/* Arrow */}
-                    <Link
-                      to={`/item/${item.itemId}`}
-                      style={{ 
-                        color: '#ccc', 
-                        textDecoration: 'none',
-                        display: 'flex',
-                        alignItems: 'center'
-                      }}
-                    >
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <polyline points="9,18 15,12 9,6" />
-                      </svg>
-                    </Link>
+                    🥦
                   </div>
 
-                  {/* Bottom Row - Name, Location, Used Button */}
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'flex-end',
-                    justifyContent: 'space-between'
-                  }}>
+                  {/* Item Info */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     <div>
-                      <div style={{ 
-                        fontSize: '18px', 
-                        fontWeight: '600', 
-                        color: '#1a1a1a', 
+                      <div style={{
+                        fontFamily: '"Poppins", sans-serif',
+                        fontSize: '16px',
+                        color: '#000',
                         marginBottom: '4px',
-                        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
                       }}>
                         {item.name}
                       </div>
-                      <div style={{ 
-                        fontSize: '14px', 
-                        color: '#999',
-                        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+                      <div style={{
+                        fontFamily: '"Poppins", sans-serif',
+                        fontSize: '12px',
+                        color: 'rgba(0,0,0,0.4)',
                       }}>
-                        {getLocationText(item.location)}
+                        {getLocationText(item.location)} | {getDaysSincePurchase(item)}
                       </div>
                     </div>
                     
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleUseItem(item);
-                      }}
-                      style={{
-                        padding: '8px 20px',
-                        border: '1px solid #e0e0e0',
-                        borderRadius: '8px',
-                        backgroundColor: 'white',
-                        color: '#1a1a1a',
-                        fontSize: '14px',
-                        fontWeight: '500',
-                        cursor: 'pointer',
-                        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
-                      }}
-                    >
-                      Used
-                    </button>
+                    {/* Expiration Tag */}
+                    <div style={{
+                      display: 'inline-flex',
+                      backgroundColor: '#d3e2d0',
+                      borderRadius: '4px',
+                      padding: '4px 8px',
+                      alignSelf: 'flex-start',
+                    }}>
+                      <span style={{
+                        fontFamily: '"Poppins", sans-serif',
+                        fontSize: '10px',
+                        color: '#333',
+                        opacity: 0.5,
+                      }}>
+                        {getExpirationDays(item)}
+                      </span>
+                    </div>
                   </div>
                 </div>
-              );
-            })}
+
+                {/* Right side - Arrow button */}
+                <Link
+                  to={`/item/${item.itemId}`}
+                  style={{ textDecoration: 'none' }}
+                >
+                  <img src={arrowRightIcon} alt="View" style={{ width: '40px', height: '40px' }} />
+                </Link>
+              </div>
+            ))}
           </div>
         )}
       </div>
 
-      {/* Inventory Overview Section */}
-      <div style={{ padding: '0 20px 20px 20px' }}>
-        <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: '12px'
-        }}>
-          <h2 style={{ 
-            fontSize: '16px', 
-            fontWeight: '600',
-            color: '#1a1a1a',
-            margin: 0,
-            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
-          }}>
-            Inventory
-          </h2>
-          <Link
-            to="/inventory"
-            style={{
-              fontSize: '14px',
-              color: '#999',
-              textDecoration: 'none',
-              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
-            }}
-          >
-            See All
-          </Link>
-        </div>
-
-        <div style={{
-          backgroundColor: '#fff',
-          borderRadius: '16px',
-          padding: '24px 16px',
-          display: 'flex',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
-        }}>
-          {/* Total Column */}
-          <div style={{
-            flex: 1,
-            borderRight: '1px solid #f0f0f0',
-            textAlign: 'center'
-          }}>
-            <div style={{ 
-              fontSize: '13px', 
-              color: '#999', 
-              marginBottom: '8px',
-              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
-            }}>
-              Total
-            </div>
-            <div style={{ 
-              fontSize: '32px', 
-              fontWeight: '600', 
-              color: '#1a1a1a', 
-              marginBottom: '4px',
-              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
-            }}>
-              {inventoryStats.total}
-            </div>
-            <div style={{ 
-              fontSize: '13px', 
-              color: '#b0b0b0',
-              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
-            }}>
-              items
-            </div>
-          </div>
-
-          {/* Used Column */}
-          <div style={{
-            flex: 1,
-            borderRight: '1px solid #f0f0f0',
-            textAlign: 'center'
-          }}>
-            <div style={{ 
-              fontSize: '13px', 
-              color: '#999', 
-              marginBottom: '8px',
-              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
-            }}>
-              Used
-            </div>
-            <div style={{ 
-              fontSize: '32px', 
-              fontWeight: '600', 
-              color: '#4caf50', 
-              marginBottom: '4px',
-              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
-            }}>
-              {inventoryStats.usedThisWeek}
-            </div>
-            <div style={{ 
-              fontSize: '13px', 
-              color: '#b0b0b0',
-              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
-            }}>
-              this week
-            </div>
-          </div>
-
-          {/* Expiring Column */}
-          <div style={{
-            flex: 1,
-            textAlign: 'center'
-          }}>
-            <div style={{ 
-              fontSize: '13px', 
-              color: '#999', 
-              marginBottom: '8px',
-              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
-            }}>
-              Expiring
-            </div>
-            <div style={{ 
-              fontSize: '32px', 
-              fontWeight: '600', 
-              color: '#f44336', 
-              marginBottom: '4px',
-              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
-            }}>
-              {inventoryStats.expiringSoon}
-            </div>
-            <div style={{ 
-              fontSize: '13px', 
-              color: '#b0b0b0',
-              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
-            }}>
-              soon
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Floating Add Button */}
-      <button
-        onClick={() => setIsAddFoodModalOpen(true)}
-        style={{
-          position: 'fixed',
-          bottom: '92px', // 72px nav + 20px spacing
-          right: '20px',
-          width: '56px',
-          height: '56px',
-          borderRadius: '50%',
-          backgroundColor: '#073d35',
-          border: 'none',
-          cursor: 'pointer',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
-          zIndex: 99,
-        }}
-      >
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#f7f6ef" strokeWidth="2.5">
-          <line x1="12" y1="5" x2="12" y2="19" />
-          <line x1="5" y1="12" x2="19" y2="12" />
-        </svg>
-      </button>
-
       {/* Bottom Navigation */}
       <BottomNavigation />
-
-      {/* Add Food Modal */}
-      <AddFoodModal
-        isOpen={isAddFoodModalOpen}
-        onClose={() => setIsAddFoodModalOpen(false)}
-      />
     </div>
   );
 }
