@@ -7,6 +7,7 @@ interface ScanResultPageProps {
   items: Item[];
   receiptDate?: string;
   onItemUpdate: (item: Item) => void;
+  onDeleteItems: (itemIds: string[]) => void;
   onSaveAll: () => void;
   onAddItem: () => void;
   isSaving: boolean;
@@ -16,6 +17,7 @@ export function ScanResultPage({
   items, 
   receiptDate,
   onItemUpdate,
+  onDeleteItems,
   onSaveAll, 
   onAddItem,
   isSaving 
@@ -85,13 +87,8 @@ export function ScanResultPage({
   };
 
   const handleDeleteSelected = () => {
-    // Mark items as deleted by updating their itemId
-    selectedItems.forEach(itemId => {
-      const item = items.find(i => i.itemId === itemId);
-      if (item) {
-        onItemUpdate({ ...item, itemId: `deleted_${itemId}` });
-      }
-    });
+    // Actually delete items from the list
+    onDeleteItems(Array.from(selectedItems));
     setShowDeleteModal(false);
     setSelectedItems(new Set());
     setSelectMode(false);

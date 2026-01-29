@@ -236,6 +236,21 @@ export function AddItemPage() {
     setInputMethod('form');
   };
 
+  const handleCancelForm = () => {
+    // If we have processedItems, go back to review mode instead of navigating away
+    if (processedItems.length > 0) {
+      setInputMethod('review');
+    } else {
+      navigate('/');
+    }
+  };
+
+  const handleDeleteItems = (itemIds: string[]) => {
+    setProcessedItems(prevItems => 
+      prevItems.filter(item => !itemIds.includes(item.itemId))
+    );
+  };
+
   const handleItemUpdate = (updatedItem: Item) => {
     setProcessedItems(prevItems =>
       prevItems.map(item =>
@@ -245,13 +260,11 @@ export function AddItemPage() {
   };
 
   const handleSaveAll = async () => {
-    // Filter out deleted items before saving
-    const activeItems = processedItems.filter(item => !item.itemId.startsWith('deleted_'));
-    if (activeItems.length === 0 || !user) return;
+    if (processedItems.length === 0 || !user) return;
     
     setSaving(true);
     try {
-      const purchaseDate = activeItems[0].purchaseDate;
+      const purchaseDate = processedItems[0].purchaseDate;
       
       const receipt = await saveReceipt({
         userId: user.uid,
@@ -260,7 +273,7 @@ export function AddItemPage() {
         createdAt: getCurrentDateISO(),
       });
       
-      const itemsToSave = activeItems.map(item => ({
+      const itemsToSave = processedItems.map(item => ({
         ...item,
         userId: user.uid,
         receiptId: receipt.receiptId,
@@ -394,14 +407,12 @@ export function AddItemPage() {
   }
 
   if (inputMethod === 'review') {
-    // Filter out deleted items
-    const activeItems = processedItems.filter(item => !item.itemId.startsWith('deleted_'));
-    
     return (
       <ScanResultPage
-        items={activeItems}
+        items={processedItems}
         receiptDate={receiptDate}
         onItemUpdate={handleItemUpdate}
+        onDeleteItems={handleDeleteItems}
         onSaveAll={handleSaveAll}
         onAddItem={handleAddNewItem}
         isSaving={saving}
@@ -428,7 +439,7 @@ export function AddItemPage() {
           {editItem ? 'Edit Item' : 'Add New Item'}
         </h1>
         <button
-          onClick={() => navigate(-1)}
+          onClick={handleCancelForm}
           style={{
             padding: '8px 16px',
             fontSize: '14px',
