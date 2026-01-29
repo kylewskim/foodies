@@ -1,14 +1,14 @@
 import { Link, useLocation } from 'react-router-dom';
 
 // Import icons
-import homeIcon from '../assets/home.png';
-import homeFillIcon from '../assets/home_fill.png';
-import itemsIcon from '../assets/items.png';
-import itemsFillIcon from '../assets/items_fill.png';
-import recipesIcon from '../assets/recipes.svg';
-import recipesFillIcon from '../assets/recipes_fill.png';
-import settingsIcon from '../assets/settings.png';
-import settingsFillIcon from '../assets/settings_fill.png';
+import homeIcon from '../assets/icon/home.svg';
+import homeFillIcon from '../assets/icon/home_fill.svg';
+import itemsIcon from '../assets/icon/item.svg';
+import itemsFillIcon from '../assets/icon/items_fill.svg';
+import recipesIcon from '../assets/icon/recipes.svg';
+import recipesFillIcon from '../assets/icon/recipes_fill.svg';
+import settingsIcon from '../assets/icon/settings.svg';
+import settingsFillIcon from '../assets/icon/settings_fill.svg';
 
 type NavItem = 'home' | 'items' | 'recipes' | 'settings';
 

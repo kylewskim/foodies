@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import broccoliImage from '../assets/broccoli.png';
+import broccoliImage from '../assets/img/broccoli.png';
 
 // Check if dev mode is available
 const isDev = import.meta.env.DEV;

@@ -7,10 +7,10 @@ import { getDaysUntilExpiration } from '../utils/dateHelpers';
 import { BottomNavigation } from '../components/BottomNavigation';
 
 // Import icons
-import scanReceiptIcon from '../assets/scan_receipt.svg';
-import typeInIcon from '../assets/type_in.svg';
-import infoIcon from '../assets/info_icon.svg';
-import arrowRightIcon from '../assets/arrow_right.svg';
+import scanReceiptIcon from '../assets/icon/scan_receipt.svg';
+import typeInIcon from '../assets/icon/type_in.svg';
+import infoIcon from '../assets/icon/info_icon.svg';
+import arrowRightIcon from '../assets/icon/arrow_right.svg';
 
 interface MonthlyStats {
   itemsUsedJustInTime: number;
@@ -243,7 +243,7 @@ export function HomePage() {
               <div style={{ flex: 1 }}>
                 <div style={{ display: 'flex', alignItems: 'flex-end', gap: '8px' }}>
                   <span style={{
-                    fontFamily: '"Poppins", sans-serif',
+                    fontFamily: '"Canela", Georgia, serif',
                     fontSize: '48px',
                     fontWeight: '300',
                     color: '#f7f6ef',
@@ -281,7 +281,7 @@ export function HomePage() {
               <div style={{ flex: 1 }}>
                 <div style={{ display: 'flex', alignItems: 'flex-end', gap: '8px' }}>
                   <span style={{
-                    fontFamily: '"Poppins", sans-serif',
+                    fontFamily: '"Canela", Georgia, serif',
                     fontSize: '48px',
                     fontWeight: '300',
                     color: '#f7f6ef',
