@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { getItemsByUser } from '../firebase/saveReceipt';
 import type { Item, StoredRecipe } from '../types';
 import { BottomNavigation } from '../components/BottomNavigation';
-import { generateRecipes as generateAIRecipes, type AIRecipe } from '../llm/generateRecipes';
+import { generateRecipes as generateAIRecipes } from '../llm/generateRecipes';
 import { fetchRecipeImages } from '../utils/fetchRecipeImage';
 import { getDaysUntilExpiration } from '../utils/dateHelpers';
 import { generateRecipeId } from '../firebase/favoriteRecipes';
@@ -12,7 +12,6 @@ import {
   getUserRecipes,
   saveUserRecipes,
   shouldRegenerateRecipes,
-  clearUserRecipes,
 } from '../firebase/userRecipes';
 
 interface Recipe extends StoredRecipe {
@@ -406,9 +405,7 @@ export function RecipesPage() {
             overflowX: 'auto',
             paddingBottom: '8px',
           }}>
-            {userItems.slice(0, 12).map((item, idx) => {
-              const daysUntil = getDaysUntilExpiration(item.manualExpirationDate || item.autoExpirationDate);
-              const isExpiringSoon = daysUntil <= 3;
+            {userItems.slice(0, 12).map((item) => {
               const isSelected = selectedIngredient === item.itemId;
 
               return (
@@ -546,7 +543,7 @@ export function RecipesPage() {
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-            {filteredRecipes.map((recipe, idx) => (
+            {filteredRecipes.map((recipe) => (
               <div
                 key={recipe.id}
                 onClick={() => {

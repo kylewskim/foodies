@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { getItemsByLocation, getItemsByUser, deleteItem } from '../firebase/saveReceipt';
+import { getItemsByLocation, deleteItem } from '../firebase/saveReceipt';
 import type { Item, StorageLocation } from '../types';
 import { getDaysUntilExpiration } from '../utils/dateHelpers';
 import { BottomNavigation } from '../components/BottomNavigation';
@@ -78,7 +78,7 @@ export function InventoryPage() {
   const handleTrash = async (itemId: string) => {
     if (!user) return;
     try {
-      await deleteItem(user.uid, itemId);
+      await deleteItem(itemId);
       setSwipedItemId(null);
       await loadItems();
     } catch (error) {
@@ -89,7 +89,7 @@ export function InventoryPage() {
   const handleUsed = async (itemId: string) => {
     if (!user) return;
     try {
-      await deleteItem(user.uid, itemId);
+      await deleteItem(itemId);
       setSwipedItemId(null);
       await loadItems();
     } catch (error) {
@@ -129,7 +129,7 @@ export function InventoryPage() {
   };
 
   const getDaysSincePurchase = (item: Item) => {
-    const purchaseDate = new Date(item.boughtDate || item.createdAt);
+    const purchaseDate = new Date(item.purchaseDate);
     const today = new Date();
     const diffTime = Math.abs(today.getTime() - purchaseDate.getTime());
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));

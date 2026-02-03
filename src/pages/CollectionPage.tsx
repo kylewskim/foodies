@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { getFavoriteRecipesByUser, generateRecipeId } from '../firebase/favoriteRecipes';
+import { getFavoriteRecipesByUser } from '../firebase/favoriteRecipes';
 import type { FavoriteRecipe } from '../types';
 
 export function CollectionPage() {

@@ -21,7 +21,6 @@ export function EditItemPage() {
   );
   const [locationValue, setLocationValue] = useState<StorageLocation>(item?.location || 'fridge');
   const [category, setCategory] = useState<FoodCategory>(item?.category || 'Produce');
-  const [showMoreOptions, setShowMoreOptions] = useState(false);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -33,24 +32,6 @@ export function EditItemPage() {
   if (!item) {
     return null;
   }
-
-  const formatDateDisplay = (dateString: string) => {
-    const date = new Date(dateString);
-    const months = ['January', 'February', 'March', 'April', 'May', 'June', 
-                   'July', 'August', 'September', 'October', 'November', 'December'];
-    const month = months[date.getMonth()];
-    const day = date.getDate();
-    const year = date.getFullYear();
-    
-    // Add ordinal suffix
-    const getOrdinal = (n: number) => {
-      const s = ['th', 'st', 'nd', 'rd'];
-      const v = n % 100;
-      return n + (s[(v - 20) % 10] || s[v] || s[0]);
-    };
-    
-    return `${month} ${getOrdinal(day)}, ${year}`;
-  };
 
   const handleSave = async () => {
     if (!itemName.trim()) {

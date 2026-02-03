@@ -78,10 +78,9 @@ export async function updateItem(item: Item): Promise<void> {
 /**
  * Delete an item from Firestore
  *
- * @param userId - User ID who owns the item
  * @param itemId - Item ID to delete
  */
-export async function deleteItem(userId: string, itemId: string): Promise<void> {
+export async function deleteItem(itemId: string): Promise<void> {
   try {
     const itemRef = doc(db, 'items', itemId);
     await deleteDoc(itemRef);
