@@ -6,7 +6,6 @@ import type { Item, StoredRecipe } from '../types';
 import { BottomNavigation } from '../components/BottomNavigation';
 import { generateRecipes as generateAIRecipes } from '../llm/generateRecipes';
 import { fetchRecipeImages } from '../utils/fetchRecipeImage';
-import { getDaysUntilExpiration } from '../utils/dateHelpers';
 import { generateRecipeId } from '../firebase/favoriteRecipes';
 import {
   getUserRecipes,
