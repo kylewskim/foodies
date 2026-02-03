@@ -1,4 +1,4 @@
-import { collection, addDoc, doc, setDoc, getDoc, query, where, getDocs } from 'firebase/firestore';
+import { collection, addDoc, doc, setDoc, getDoc, query, where, getDocs, deleteDoc } from 'firebase/firestore';
 import { db } from './firebaseConfig';
 import type { Receipt, Item, UserPreferences } from '../types';
 
@@ -62,7 +62,7 @@ export async function saveItems(items: Omit<Item, 'itemId'>[]): Promise<Item[]> 
 
 /**
  * Update an existing item in Firestore
- * 
+ *
  * @param item - Item with updated data
  */
 export async function updateItem(item: Item): Promise<void> {
@@ -72,6 +72,22 @@ export async function updateItem(item: Item): Promise<void> {
   } catch (error) {
     console.error('Error updating item:', error);
     throw new Error('Failed to update item');
+  }
+}
+
+/**
+ * Delete an item from Firestore
+ *
+ * @param userId - User ID who owns the item
+ * @param itemId - Item ID to delete
+ */
+export async function deleteItem(userId: string, itemId: string): Promise<void> {
+  try {
+    const itemRef = doc(db, 'items', itemId);
+    await deleteDoc(itemRef);
+  } catch (error) {
+    console.error('Error deleting item:', error);
+    throw new Error('Failed to delete item');
   }
 }
 

@@ -89,3 +89,40 @@ export interface UserPreferences {
   createdAt: string;
   updatedAt: string;
 }
+
+// Recipe and favorites
+
+export interface FavoriteRecipe {
+  favoriteId: string;  // Document ID in Firestore
+  userId: string;  // User who favorited this recipe
+  recipeId: string;  // Unique identifier for the recipe (hash of name)
+  recipeName: string;
+  recipeDescription?: string;
+  recipeImage?: string;
+  ingredients: string[];
+  instructions?: string[];
+  prepTime?: string;
+  createdAt: string;
+}
+
+export interface StoredRecipe {
+  id: string;
+  name: string;
+  description: string;
+  image?: string;
+  ingredients: string[];
+  matchedIngredients: string[];
+  missingIngredients: string[];
+  prepTime: string;
+  calories: number;
+  difficulty: 'Easy' | 'Medium' | 'Hard';
+  instructions: string[];
+}
+
+export interface UserRecipes {
+  userId: string;
+  recipes: StoredRecipe[];
+  generatedAt: string;  // ISO timestamp
+  itemFingerprint: string;  // Hash of item names for quick comparison
+  itemIds: string[];  // Item IDs used to generate recipes
+}

@@ -27,3 +27,6 @@ dist-ssr
 .env
 .env.local
 .env.production
+
+# MCP configuration (local dev environment)
+.mcp.json

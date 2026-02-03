@@ -424,173 +424,238 @@ export function AddItemPage() {
   const categories: FoodCategory[] = ['Produce', 'Protein', 'Grains', 'Dairy', 'Snacks', 'Condiments', 'Beverages', 'Prepared'];
   const locations: StorageLocation[] = ['fridge', 'freezer', 'pantry'];
 
+  // Shared style objects
+  const labelStyle = {
+    display: 'block',
+    fontSize: '13px',
+    color: '#666',
+    marginBottom: '8px',
+    fontFamily: '"Poppins", sans-serif',
+  };
+
+  const bottomBorderInputStyle = {
+    width: '100%',
+    padding: '12px 4px',
+    fontSize: '16px',
+    border: 'none',
+    borderBottom: '0.8px solid #d0d0ca',
+    backgroundColor: 'transparent',
+    color: '#1a1a1a',
+    outline: 'none',
+    fontFamily: '"Poppins", sans-serif',
+  };
+
+  const pillButtonStyle = (isSelected: boolean) => ({
+    flex: 1,
+    padding: '8px 12px',
+    backgroundColor: isSelected ? '#073d35' : '#efeee7',
+    color: isSelected ? '#fff' : '#11130b',
+    border: 'none',
+    borderRadius: '16px',
+    fontSize: '14px',
+    fontFamily: '"Poppins", sans-serif',
+    cursor: 'pointer',
+  });
+
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#f5f5f5' }}>
+    <div style={{ minHeight: '100vh', backgroundColor: '#f8f7f1', paddingBottom: '180px' }}>
       {/* Header */}
       <div style={{
-        backgroundColor: 'white',
-        padding: '20px',
-        borderBottom: '1px solid #e0e0e0',
+        padding: '16px',
+        borderBottom: '0.707px solid #e5e5e0',
         display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center'
+        alignItems: 'center',
+        gap: '8px',
       }}>
-        <h1 style={{ margin: 0, fontSize: '20px', fontWeight: 'bold' }}>
-          {editItem ? 'Edit Item' : 'Add New Item'}
-        </h1>
         <button
           onClick={handleCancelForm}
           style={{
-            padding: '8px 16px',
-            fontSize: '14px',
+            width: '40px',
+            height: '40px',
+            borderRadius: '50%',
             backgroundColor: 'transparent',
-            color: '#007bff',
             border: 'none',
             cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '20px',
           }}
         >
-          Cancel
+          ←
         </button>
+        <h1 style={{
+          margin: 0,
+          fontSize: '28px',
+          fontWeight: '400',
+          color: '#1a1a1a',
+          fontFamily: '"Poppins", sans-serif',
+          letterSpacing: '-0.3172px',
+        }}>
+          Add an item
+        </h1>
       </div>
 
       {/* Form */}
-      <div style={{ padding: '20px' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+      <div style={{ padding: '32px 24px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+          {/* Item Name */}
           <div>
-            <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold', fontSize: '14px' }}>
-              Item name *
+            <label style={labelStyle}>
+              Item Name
             </label>
             <input
               type="text"
               value={itemName}
               onChange={(e) => setItemName(e.target.value)}
-              placeholder="e.g., Banana"
-              style={{
-                width: '100%',
-                padding: '12px',
-                fontSize: '16px',
-                border: '1px solid #ddd',
-                borderRadius: '8px',
-              }}
+              placeholder=""
+              style={bottomBorderInputStyle}
             />
           </div>
 
+          {/* Location - Pill Buttons */}
           <div>
-            <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold', fontSize: '14px' }}>
+            <label style={labelStyle}>
+              Location
+            </label>
+            <div style={{ display: 'flex', gap: '12px' }}>
+              {locations.map(loc => (
+                <button
+                  key={loc}
+                  onClick={() => setLocationValue(loc)}
+                  style={pillButtonStyle(locationValue === loc)}
+                >
+                  {loc.charAt(0).toUpperCase() + loc.slice(1)}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Category */}
+          <div>
+            <label style={labelStyle}>
+              Category
+            </label>
+            <div style={{ position: 'relative' }}>
+              <select
+                value={category}
+                onChange={(e) => setCategory(e.target.value as FoodCategory)}
+                style={{
+                  ...bottomBorderInputStyle,
+                  appearance: 'none',
+                  paddingRight: '32px',
+                }}
+              >
+                {categories.map(cat => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
+              </select>
+              <div style={{
+                position: 'absolute',
+                right: '4px',
+                bottom: '12px',
+                pointerEvents: 'none',
+                fontSize: '12px',
+                color: '#666',
+              }}>
+                ▼
+              </div>
+            </div>
+          </div>
+
+          {/* Bought Date */}
+          <div>
+            <label style={labelStyle}>
+              Bought Date
+            </label>
+            <input
+              type="date"
+              value={purchaseDate}
+              onChange={(e) => setPurchaseDate(e.target.value)}
+              style={bottomBorderInputStyle}
+            />
+          </div>
+
+          {/* Quantity */}
+          <div>
+            <label style={labelStyle}>
               Quantity
             </label>
             <input
               type="text"
               value={quantity}
               onChange={(e) => setQuantity(e.target.value)}
-              placeholder="e.g., 3"
-              style={{
-                width: '100%',
-                padding: '12px',
-                fontSize: '16px',
-                border: '1px solid #ddd',
-                borderRadius: '8px',
-              }}
+              placeholder=""
+              style={bottomBorderInputStyle}
             />
           </div>
 
+          {/* Expiration Date */}
           <div>
-            <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold', fontSize: '14px' }}>
-              Purchase date
-            </label>
-            <input
-              type="date"
-              value={purchaseDate}
-              onChange={(e) => setPurchaseDate(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '12px',
-                fontSize: '16px',
-                border: '1px solid #ddd',
-                borderRadius: '8px',
-              }}
-            />
-          </div>
-
-          <div>
-            <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold', fontSize: '14px' }}>
+            <label style={labelStyle}>
               Expiration date
             </label>
             <input
               type="date"
               value={expirationDate ? new Date(expirationDate).toISOString().split('T')[0] : ''}
               onChange={(e) => setExpirationDate(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '12px',
-                fontSize: '16px',
-                border: '1px solid #ddd',
-                borderRadius: '8px',
-              }}
+              style={bottomBorderInputStyle}
             />
           </div>
-
-          <div>
-            <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold', fontSize: '14px' }}>
-              Location
-            </label>
-            <select
-              value={locationValue}
-              onChange={(e) => setLocationValue(e.target.value as StorageLocation)}
-              style={{
-                width: '100%',
-                padding: '12px',
-                fontSize: '16px',
-                border: '1px solid #ddd',
-                borderRadius: '8px',
-              }}
-            >
-              {locations.map(loc => (
-                <option key={loc} value={loc}>{loc.charAt(0).toUpperCase() + loc.slice(1)}</option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold', fontSize: '14px' }}>
-              Category
-            </label>
-            <select
-              value={category}
-              onChange={(e) => setCategory(e.target.value as FoodCategory)}
-              style={{
-                width: '100%',
-                padding: '12px',
-                fontSize: '16px',
-                border: '1px solid #ddd',
-                borderRadius: '8px',
-              }}
-            >
-              {categories.map(cat => (
-                <option key={cat} value={cat}>{cat}</option>
-              ))}
-            </select>
-          </div>
-
-          <button
-            onClick={handleSave}
-            disabled={processing || !itemName.trim()}
-            style={{
-              width: '100%',
-              padding: '15px',
-              fontSize: '16px',
-              fontWeight: 'bold',
-              backgroundColor: processing || !itemName.trim() ? '#ccc' : '#007bff',
-              color: 'white',
-              border: 'none',
-              borderRadius: '8px',
-              cursor: processing || !itemName.trim() ? 'not-allowed' : 'pointer',
-              marginTop: '10px',
-            }}
-          >
-            {processing ? 'Saving...' : (editItem ? 'Update Item' : 'Add Item')}
-          </button>
         </div>
+      </div>
+
+      {/* Fixed Bottom Buttons */}
+      <div style={{
+        position: 'fixed',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        backgroundColor: '#f7f6ef',
+        borderTop: '1px solid #c6c6c6',
+        padding: '12px 20px',
+        paddingBottom: 'max(12px, env(safe-area-inset-bottom))',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '10px',
+        zIndex: 1000,
+      }}>
+        <button
+          onClick={handleSave}
+          disabled={processing || !itemName.trim()}
+          style={{
+            width: '100%',
+            padding: '15px',
+            backgroundColor: (processing || !itemName.trim()) ? '#ccc' : '#073d35',
+            color: '#f7f6ef',
+            border: 'none',
+            borderRadius: '23726400px',
+            fontSize: '16px',
+            fontWeight: '500',
+            fontFamily: '"Poppins", sans-serif',
+            cursor: (processing || !itemName.trim()) ? 'not-allowed' : 'pointer',
+            textTransform: 'capitalize',
+          }}
+        >
+          {processing ? 'Saving...' : 'Add To Items'}
+        </button>
+        <button
+          onClick={handleCancelForm}
+          style={{
+            width: '100%',
+            padding: '15px',
+            backgroundColor: 'transparent',
+            color: '#073d35',
+            border: '1.5px solid #073d35',
+            borderRadius: '23726400px',
+            fontSize: '16px',
+            fontFamily: '"Poppins", sans-serif',
+            cursor: 'pointer',
+            textTransform: 'capitalize',
+          }}
+        >
+          Cancel
+        </button>
       </div>
     </div>
   );

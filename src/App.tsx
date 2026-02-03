@@ -4,6 +4,8 @@ import { HomePage } from './pages/HomePage';
 import { InventoryPage } from './pages/InventoryPage';
 import { AddItemPage } from './pages/AddItemPage';
 import { RecipesPage } from './pages/RecipesPage';
+import { RecipeDetailPage } from './pages/RecipeDetailPage';
+import { CollectionPage } from './pages/CollectionPage';
 import { ItemDetailPage } from './pages/ItemDetailPage';
 import { EditItemPage } from './pages/EditItemPage';
 import { LoginPage } from './pages/LoginPage';
@@ -109,6 +111,8 @@ function App() {
       <Route path="/inventory" element={<ProtectedRoute><InventoryPage /></ProtectedRoute>} />
       <Route path="/add-item" element={<ProtectedRoute><AddItemPage /></ProtectedRoute>} />
       <Route path="/recipes" element={<ProtectedRoute><RecipesPage /></ProtectedRoute>} />
+      <Route path="/recipes/:recipeId" element={<ProtectedRoute><RecipeDetailPage /></ProtectedRoute>} />
+      <Route path="/collection" element={<ProtectedRoute><CollectionPage /></ProtectedRoute>} />
       <Route path="/item/:itemId" element={<ProtectedRoute><ItemDetailPage /></ProtectedRoute>} />
       <Route path="/edit-item" element={<ProtectedRoute><EditItemPage /></ProtectedRoute>} />
       <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />

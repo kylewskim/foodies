@@ -103,336 +103,244 @@ export function EditItemPage() {
   };
 
   const categories: FoodCategory[] = ['Produce', 'Protein', 'Grains', 'Dairy', 'Snacks', 'Condiments', 'Beverages', 'Prepared'];
-  const locations: StorageLocation[] = ['pantry', 'fridge', 'freezer'];
+  const locations: StorageLocation[] = ['fridge', 'freezer', 'pantry'];
+
+  // Shared style objects
+  const labelStyle = {
+    display: 'block',
+    fontSize: '13px',
+    color: '#666',
+    marginBottom: '8px',
+    fontFamily: '"Poppins", sans-serif',
+  };
+
+  const bottomBorderInputStyle = {
+    width: '100%',
+    padding: '12px 4px',
+    fontSize: '16px',
+    border: 'none',
+    borderBottom: '0.8px solid #d0d0ca',
+    backgroundColor: 'transparent',
+    color: '#1a1a1a',
+    outline: 'none',
+    fontFamily: '"Poppins", sans-serif',
+  };
+
+  const pillButtonStyle = (isSelected: boolean) => ({
+    flex: 1,
+    padding: '8px 12px',
+    backgroundColor: isSelected ? '#073d35' : '#efeee7',
+    color: isSelected ? '#fff' : '#11130b',
+    border: 'none',
+    borderRadius: '16px',
+    fontSize: '14px',
+    fontFamily: '"Poppins", sans-serif',
+    cursor: 'pointer',
+  });
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#fafafa' }}>
+    <div style={{ minHeight: '100vh', backgroundColor: '#f8f7f1', paddingBottom: '180px' }}>
       {/* Header */}
       <div style={{
-        backgroundColor: 'white',
-        padding: '16px 20px',
+        padding: '16px',
+        borderBottom: '0.707px solid #e5e5e0',
         display: 'flex',
-        justifyContent: 'space-between',
         alignItems: 'center',
-        borderBottom: '1px solid #e0e0e0'
+        gap: '8px',
       }}>
         <button
           onClick={() => {
             // If we have processedItems, go back to scan result with the items intact
             if (processedItems && returnPath) {
-              navigate(returnPath, { 
-                state: { 
+              navigate(returnPath, {
+                state: {
                   processedItems,
                   // Don't include updatedItem - user cancelled
-                } 
+                }
               });
             } else {
               navigate(-1);
             }
           }}
           style={{
-            background: 'none',
+            width: '40px',
+            height: '40px',
+            borderRadius: '50%',
+            backgroundColor: 'transparent',
             border: 'none',
-            fontSize: '20px',
             cursor: 'pointer',
-            padding: '4px',
             display: 'flex',
-            alignItems: 'center'
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '20px',
           }}
         >
           ←
         </button>
-        <h1 style={{ margin: 0, fontSize: '18px', fontWeight: 'bold', color: '#000' }}>
-          Edit item
+        <h1 style={{
+          margin: 0,
+          fontSize: '28px',
+          fontWeight: '400',
+          color: '#1a1a1a',
+          fontFamily: '"Poppins", sans-serif',
+          letterSpacing: '-0.3172px',
+        }}>
+          Edit an item
         </h1>
-        <button
-          onClick={handleSave}
-          disabled={saving || !itemName.trim()}
-          style={{
-            background: 'none',
-            border: 'none',
-            fontSize: '16px',
-            color: saving || !itemName.trim() ? '#999' : '#007bff',
-            cursor: saving || !itemName.trim() ? 'not-allowed' : 'pointer',
-            fontWeight: '500',
-            padding: '4px 8px'
-          }}
-        >
-          Save
-        </button>
       </div>
 
       {/* Form */}
-      <div style={{ padding: '20px' }}>
-        {/* Item name */}
-        <div style={{ marginBottom: '24px' }}>
-          <label style={{
-            display: 'block',
-            fontSize: '14px',
-            fontWeight: 'bold',
-            color: '#000',
-            marginBottom: '8px'
-          }}>
-            Item name
-          </label>
-          <input
-            type="text"
-            value={itemName}
-            onChange={(e) => setItemName(e.target.value)}
-            placeholder="Item name"
-            style={{
-              width: '100%',
-              padding: '12px',
-              fontSize: '16px',
-              backgroundColor: 'white',
-              border: 'none',
-              borderRadius: '8px',
-              color: '#000'
-            }}
-          />
-        </div>
+      <div style={{ padding: '32px 24px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+          {/* Item Name */}
+          <div>
+            <label style={labelStyle}>
+              Item Name
+            </label>
+            <input
+              type="text"
+              value={itemName}
+              onChange={(e) => setItemName(e.target.value)}
+              placeholder=""
+              style={bottomBorderInputStyle}
+            />
+          </div>
 
-        {/* Location - Segmented Control */}
-        <div style={{ marginBottom: '24px' }}>
-          <label style={{
-            display: 'block',
-            fontSize: '14px',
-            fontWeight: 'bold',
-            color: '#000',
-            marginBottom: '12px'
-          }}>
-            Location
-          </label>
-          <div style={{
-            display: 'flex',
-            gap: '8px'
-          }}>
-            {locations.map(loc => (
-              <button
-                key={loc}
-                onClick={() => setLocationValue(loc)}
+          {/* Location - Pill Buttons */}
+          <div>
+            <label style={labelStyle}>
+              Location
+            </label>
+            <div style={{ display: 'flex', gap: '12px' }}>
+              {locations.map(loc => (
+                <button
+                  key={loc}
+                  onClick={() => setLocationValue(loc)}
+                  style={pillButtonStyle(locationValue === loc)}
+                >
+                  {loc.charAt(0).toUpperCase() + loc.slice(1)}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Category */}
+          <div>
+            <label style={labelStyle}>
+              Category
+            </label>
+            <div style={{ position: 'relative' }}>
+              <select
+                value={category}
+                onChange={(e) => setCategory(e.target.value as FoodCategory)}
                 style={{
-                  flex: 1,
-                  padding: '12px',
-                  fontSize: '14px',
-                  fontWeight: '500',
-                  border: 'none',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  backgroundColor: locationValue === loc ? '#333' : 'white',
-                  color: locationValue === loc ? '#fff' : '#000',
-                  textTransform: 'capitalize'
+                  ...bottomBorderInputStyle,
+                  appearance: 'none',
+                  paddingRight: '32px',
                 }}
               >
-                {loc === 'fridge' ? 'Fridge' : loc === 'freezer' ? 'Freezer' : 'Pantry'}
-              </button>
-            ))}
+                {categories.map(cat => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
+              </select>
+              <div style={{
+                position: 'absolute',
+                right: '4px',
+                bottom: '12px',
+                pointerEvents: 'none',
+                fontSize: '12px',
+                color: '#666',
+              }}>
+                ▼
+              </div>
+            </div>
           </div>
-        </div>
 
-        {/* Category */}
-        <div style={{ marginBottom: '24px' }}>
-          <label style={{
-            display: 'block',
-            fontSize: '14px',
-            fontWeight: 'bold',
-            color: '#000',
-            marginBottom: '8px'
-          }}>
-            Category
-          </label>
-          <div style={{
-            position: 'relative',
-            backgroundColor: 'white',
-            borderRadius: '8px',
-            padding: '12px',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center'
-          }}>
-            <select
-              value={category}
-              onChange={(e) => setCategory(e.target.value as FoodCategory)}
-              style={{
-                width: '100%',
-                fontSize: '16px',
-                border: 'none',
-                backgroundColor: 'transparent',
-                color: '#000',
-                appearance: 'none',
-                outline: 'none',
-                cursor: 'pointer'
-              }}
-            >
-              {categories.map(cat => (
-                <option key={cat} value={cat}>{cat}</option>
-              ))}
-            </select>
-            <span style={{ fontSize: '12px', color: '#999' }}>▼</span>
+          {/* Quantity */}
+          <div>
+            <label style={labelStyle}>
+              Quantity
+            </label>
+            <input
+              type="text"
+              value={quantity}
+              onChange={(e) => setQuantity(e.target.value)}
+              placeholder=""
+              style={bottomBorderInputStyle}
+            />
           </div>
-        </div>
 
-        {/* Container or quantity */}
-        <div style={{ marginBottom: '24px' }}>
-          <label style={{
-            display: 'block',
-            fontSize: '14px',
-            fontWeight: 'bold',
-            color: '#000',
-            marginBottom: '8px'
-          }}>
-            Container or quantity
-          </label>
-          <input
-            type="text"
-            value={quantity}
-            onChange={(e) => setQuantity(e.target.value)}
-            placeholder="e.g., 1 bag"
-            style={{
-              width: '100%',
-              padding: '12px',
-              fontSize: '16px',
-              backgroundColor: 'white',
-              border: 'none',
-              borderRadius: '8px',
-              color: '#000'
-            }}
-          />
-        </div>
-
-        {/* Bought date */}
-        <div style={{ marginBottom: '24px' }}>
-          <label style={{
-            display: 'block',
-            fontSize: '14px',
-            fontWeight: 'bold',
-            color: '#000',
-            marginBottom: '8px'
-          }}>
-            Bought date
-          </label>
-          <div style={{
-            position: 'relative',
-            backgroundColor: 'white',
-            borderRadius: '8px',
-            padding: '12px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '12px'
-          }}>
-            <span style={{ fontSize: '16px' }}>📅</span>
+          {/* Bought Date */}
+          <div>
+            <label style={labelStyle}>
+              Bought Date
+            </label>
             <input
               type="date"
               value={purchaseDate}
               onChange={(e) => setPurchaseDate(e.target.value)}
-              style={{
-                flex: 1,
-                fontSize: '16px',
-                border: 'none',
-                backgroundColor: 'transparent',
-                color: '#000',
-                outline: 'none'
-              }}
+              style={bottomBorderInputStyle}
             />
-            <span style={{ fontSize: '14px', color: '#666' }}>
-              {formatDateDisplay(purchaseDate)}
-            </span>
           </div>
-        </div>
 
-        {/* Expiration date */}
-        <div style={{ marginBottom: '24px' }}>
-          <label style={{
-            display: 'block',
-            fontSize: '14px',
-            fontWeight: 'bold',
-            color: '#000',
-            marginBottom: '8px'
-          }}>
-            Expiration date
-          </label>
-          <div style={{
-            position: 'relative',
-            backgroundColor: 'white',
-            borderRadius: '8px',
-            padding: '12px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '12px'
-          }}>
-            <span style={{ fontSize: '16px' }}>📅</span>
+          {/* Expiration Date */}
+          <div>
+            <label style={labelStyle}>
+              Expiration date
+            </label>
             <input
               type="date"
               value={expirationDate ? new Date(expirationDate).toISOString().split('T')[0] : ''}
               onChange={(e) => setExpirationDate(e.target.value)}
-              style={{
-                flex: 1,
-                fontSize: '16px',
-                border: 'none',
-                backgroundColor: 'transparent',
-                color: '#000',
-                outline: 'none'
-              }}
+              style={bottomBorderInputStyle}
             />
-            <span style={{ fontSize: '14px', color: '#666' }}>
-              {expirationDate ? formatDateDisplay(expirationDate) : ''}
-            </span>
-          </div>
-          <div style={{
-            fontSize: '12px',
-            color: '#999',
-            marginTop: '6px',
-            paddingLeft: '4px'
-          }}>
-            Used to calculate reminders and impact.
-          </div>
-        </div>
-
-        {/* More options */}
-        <div>
-          <button
-            onClick={() => setShowMoreOptions(!showMoreOptions)}
-            style={{
-              width: '100%',
-              padding: '12px',
-              backgroundColor: 'transparent',
-              border: 'none',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              cursor: 'pointer'
-            }}
-          >
-            <span style={{
-              fontSize: '14px',
-              fontWeight: 'bold',
-              color: '#000'
-            }}>
-              More options
-            </span>
-            <span style={{
+            <div style={{
               fontSize: '12px',
               color: '#999',
-              transform: showMoreOptions ? 'rotate(180deg)' : 'rotate(0deg)',
-              transition: 'transform 0.2s'
+              marginTop: '6px',
+              paddingLeft: '4px',
+              fontFamily: '"Poppins", sans-serif',
             }}>
-              ▼
-            </span>
-          </button>
-          {showMoreOptions && (
-            <div style={{
-              padding: '12px',
-              backgroundColor: 'white',
-              borderRadius: '8px',
-              marginTop: '8px'
-            }}>
-              {/* Additional options can be added here */}
-              <div style={{ fontSize: '14px', color: '#666' }}>
-                Additional options coming soon...
-              </div>
+              Used to calculate reminders and impact.
             </div>
-          )}
+          </div>
         </div>
+      </div>
+
+      {/* Fixed Bottom Button */}
+      <div style={{
+        position: 'fixed',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        backgroundColor: '#f7f6ef',
+        borderTop: '1px solid #c6c6c6',
+        padding: '12px 20px',
+        paddingBottom: 'max(12px, env(safe-area-inset-bottom))',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '10px',
+        zIndex: 1000,
+      }}>
+        <button
+          onClick={handleSave}
+          disabled={saving || !itemName.trim()}
+          style={{
+            width: '100%',
+            padding: '15px',
+            backgroundColor: (saving || !itemName.trim()) ? '#ccc' : '#073d35',
+            color: '#f7f6ef',
+            border: 'none',
+            borderRadius: '23726400px',
+            fontSize: '16px',
+            fontWeight: '500',
+            fontFamily: '"Poppins", sans-serif',
+            cursor: (saving || !itemName.trim()) ? 'not-allowed' : 'pointer',
+            textTransform: 'capitalize',
+          }}
+        >
+          {saving ? 'Saving...' : 'Save'}
+        </button>
       </div>
     </div>
   );
