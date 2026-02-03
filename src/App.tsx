@@ -12,6 +12,8 @@ import { LoginPage } from './pages/LoginPage';
 import { SplashPage } from './pages/SplashPage';
 import { OnboardingPage } from './pages/OnboardingPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { MagicKitchenStartPage } from './pages/MagicKitchenStartPage';
+import { MagicKitchenResultPage } from './pages/MagicKitchenResultPage';
 
 // Loading screen component
 function LoadingScreen() {
@@ -112,6 +114,8 @@ function App() {
       <Route path="/add-item" element={<ProtectedRoute><AddItemPage /></ProtectedRoute>} />
       <Route path="/recipes" element={<ProtectedRoute><RecipesPage /></ProtectedRoute>} />
       <Route path="/recipes/:recipeId" element={<ProtectedRoute><RecipeDetailPage /></ProtectedRoute>} />
+      <Route path="/magic-kitchen" element={<ProtectedRoute><MagicKitchenStartPage /></ProtectedRoute>} />
+      <Route path="/magic-kitchen/result" element={<ProtectedRoute><MagicKitchenResultPage /></ProtectedRoute>} />
       <Route path="/collection" element={<ProtectedRoute><CollectionPage /></ProtectedRoute>} />
       <Route path="/item/:itemId" element={<ProtectedRoute><ItemDetailPage /></ProtectedRoute>} />
       <Route path="/edit-item" element={<ProtectedRoute><EditItemPage /></ProtectedRoute>} />

@@ -269,21 +269,24 @@ export function RecipesPage() {
         gap: '12px',
       }}>
         {/* Magic Kitchen Button */}
-        <div style={{
-          flex: 1,
-          background: 'linear-gradient(90deg, #b8f3d8 0%, #f3f5b8 100%)',
-          borderRadius: '16px',
-          padding: '8px',
-          height: '66px',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: '4px',
-          position: 'relative',
-          overflow: 'hidden',
-          cursor: 'pointer',
-        }}>
+        <div
+          onClick={() => navigate('/magic-kitchen')}
+          style={{
+            flex: 1,
+            background: 'linear-gradient(90deg, #b8f3d8 0%, #f3f5b8 100%)',
+            borderRadius: '16px',
+            padding: '8px',
+            height: '66px',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '4px',
+            position: 'relative',
+            overflow: 'hidden',
+            cursor: 'pointer',
+          }}
+        >
           {/* Magic Wand Icon */}
           <svg
             width="24"
