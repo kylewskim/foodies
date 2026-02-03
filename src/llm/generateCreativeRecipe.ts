@@ -100,8 +100,10 @@ Return ONLY valid JSON, no markdown or extra text.`;
         n: 1,
       });
 
-      recipe.imageUrl = imageResponse.data[0]?.url;
-      console.log('✅ Image generated successfully');
+      if (imageResponse.data && imageResponse.data[0]?.url) {
+        recipe.imageUrl = imageResponse.data[0].url;
+        console.log('✅ Image generated successfully');
+      }
     } catch (imageError) {
       console.warn('Failed to generate image with DALL-E:', imageError);
       // Image will be undefined, we'll handle this in the UI
@@ -116,19 +118,6 @@ Return ONLY valid JSON, no markdown or extra text.`;
 
 // Fallback creative recipe when AI is not available
 function getFallbackCreativeRecipe(items: Item[]): CreativeRecipe {
-  const itemNames = items.map(item => item.name.toLowerCase());
-
-  // Try to match some ingredients from inventory
-  const hasProtein = itemNames.some(name =>
-    name.includes('chicken') || name.includes('beef') || name.includes('pork') || name.includes('tofu')
-  );
-  const hasDairy = itemNames.some(name =>
-    name.includes('yogurt') || name.includes('cream') || name.includes('cheese')
-  );
-  const hasFruit = itemNames.some(name =>
-    name.includes('pineapple') || name.includes('mango') || name.includes('apple')
-  );
-
   return {
     name: 'Pineapple Yogurt Chili Beef',
     description: 'Beef stir-fried with onion, chili, ginger, and garlic, then tossed with pineapple and finished with a cold spoon of yogurt. Sweet, spicy, tangy, creamy - confusing on paper, chaotic in theory, and somehow… not illegal.',
