@@ -295,6 +295,7 @@ export async function getItemsExpiringSoon(userId: string, days: number = 7): Pr
   try {
     const allItems = await getItemsByUser(userId);
     const now = new Date();
+    now.setHours(0, 0, 0, 0);  // Reset to start of day to include items expiring today
     const futureDate = new Date();
     futureDate.setDate(now.getDate() + days);
     
