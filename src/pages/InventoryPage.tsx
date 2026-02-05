@@ -23,6 +23,9 @@ export function InventoryPage() {
   const [touchStart, setTouchStart] = useState<number>(0);
   const [touchCurrent, setTouchCurrent] = useState<number>(0);
   const [isDragging, setIsDragging] = useState(false);
+  const [touchedItemId, setTouchedItemId] = useState<string | null>(null);
+  const [isSwipeActive, setIsSwipeActive] = useState(false);
+  const SWIPE_THRESHOLD = 15; // Minimum px to move before activating swipe
 
   useEffect(() => {
     if (user) {
@@ -65,29 +68,46 @@ export function InventoryPage() {
 
   const handleTouchStart = (e: React.TouchEvent, itemId: string) => {
     setTouchStart(e.touches[0].clientX);
-    setSwipedItemId(itemId);
+    setTouchCurrent(e.touches[0].clientX);
+    setTouchedItemId(itemId);
     setIsDragging(true);
+    setIsSwipeActive(false); // Don't activate swipe until threshold is exceeded
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
     if (!isDragging) return;
-    setTouchCurrent(e.touches[0].clientX);
+
+    const currentX = e.touches[0].clientX;
+    setTouchCurrent(currentX);
+
+    // Check if we've exceeded the swipe threshold
+    const moveDistance = Math.abs(touchStart - currentX);
+    if (moveDistance > SWIPE_THRESHOLD && !isSwipeActive) {
+      setIsSwipeActive(true);
+      setSwipedItemId(touchedItemId);
+    }
   };
 
-  const handleTouchEnd = () => {
+  const handleTouchEnd = (itemId: string) => {
     const swipeDistance = touchStart - touchCurrent;
 
-    if (swipeDistance > 60) {
-      // Swiped left, keep it open
-      setSwipedItemId(swipedItemId);
-    } else {
-      // Close it
-      setSwipedItemId(null);
+    // Only process as swipe if swipe was activated
+    if (isSwipeActive) {
+      if (swipeDistance > 60) {
+        // Swiped left enough, keep it open
+        setSwipedItemId(itemId);
+      } else {
+        // Not enough swipe, close it
+        setSwipedItemId(null);
+      }
     }
+    // If swipe wasn't activated, the onClick handler will handle navigation
 
     setIsDragging(false);
     setTouchStart(0);
     setTouchCurrent(0);
+    setTouchedItemId(null);
+    setIsSwipeActive(false);
   };
 
   const handleTrash = async (itemId: string) => {
@@ -582,7 +602,8 @@ export function InventoryPage() {
               const statusBadge = getStatusBadge(item);
               const daysSince = getDaysSincePurchase(item);
               const isSwipedOpen = swipedItemId === item.itemId;
-              const swipeOffset = isDragging && swipedItemId === item.itemId
+              const isCurrentlyDragging = isDragging && touchedItemId === item.itemId && isSwipeActive;
+              const swipeOffset = isCurrentlyDragging
                 ? Math.min(0, touchCurrent - touchStart)
                 : isSwipedOpen ? -176 : 0;
 
@@ -658,13 +679,21 @@ export function InventoryPage() {
                   <div
                     onTouchStart={(e) => handleTouchStart(e, item.itemId)}
                     onTouchMove={handleTouchMove}
-                    onTouchEnd={handleTouchEnd}
+                    onTouchEnd={() => handleTouchEnd(item.itemId)}
                     onClick={(e) => {
-                      if (!isSwipedOpen) {
-                        navigate(`/item/${item.itemId}`);
-                      } else {
+                      // Only navigate if swipe wasn't activated and item isn't swiped open
+                      if (isSwipeActive) {
+                        // Swipe was activated, don't navigate
+                        e.preventDefault();
+                        return;
+                      }
+                      if (isSwipedOpen) {
+                        // Item is swiped open, close it instead of navigating
                         e.preventDefault();
                         setSwipedItemId(null);
+                      } else {
+                        // Normal tap, navigate to detail
+                        navigate(`/item/${item.itemId}`);
                       }
                     }}
                     style={{
@@ -684,7 +713,7 @@ export function InventoryPage() {
                       paddingRight: '20px',
                       cursor: 'pointer',
                       transform: `translateX(${swipeOffset}px)`,
-                      transition: isDragging ? 'none' : 'transform 0.3s ease',
+                      transition: isCurrentlyDragging ? 'none' : 'transform 0.3s ease',
                       boxSizing: 'border-box',
                     }}
                   >
