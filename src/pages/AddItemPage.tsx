@@ -11,6 +11,7 @@ import { getCurrentDateISO, calculateExpirationDate } from '../utils/dateHelpers
 import { normalizeInputText } from '../llm/normalizeInputText';
 import { classifyItems } from '../llm/classifyItems';
 import { estimateExpirationDays } from '../llm/estimateExpirationDays';
+import { markRecipesNeedRefresh } from '../firebase/userRecipes';
 
 type InputMethod = 'image' | 'manual' | 'form' | 'review';
 
@@ -303,7 +304,10 @@ export function AddItemPage() {
       
       const itemsWithoutIds = itemsToSave.map(({ itemId, ...rest }) => rest);
       await saveItems(itemsWithoutIds);
-      
+
+      // Mark recipes for refresh since new items were added
+      markRecipesNeedRefresh();
+
       // Navigate to home page to show updated inventory
       navigate('/');
     } catch (error) {

@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { getItemsByLocation, getItemsByUser, markItemAsTrashed, markItemAsUsed } from '../firebase/saveReceipt';
-import { markRecipesNeedRefresh } from '../firebase/userRecipes';
 import type { Item, StorageLocation } from '../types';
 import { getDaysUntilExpiration } from '../utils/dateHelpers';
 import { BottomNavigation } from '../components/BottomNavigation';
@@ -115,7 +114,6 @@ export function InventoryPage() {
     if (!user) return;
     try {
       await markItemAsTrashed(itemId);
-      markRecipesNeedRefresh(); // Mark recipes for background refresh
       setSwipedItemId(null);
       await loadItems();
       await loadAllItems();
@@ -128,7 +126,6 @@ export function InventoryPage() {
     if (!user) return;
     try {
       await markItemAsUsed(itemId);
-      markRecipesNeedRefresh(); // Mark recipes for background refresh
       setSwipedItemId(null);
       await loadItems();
       await loadAllItems();

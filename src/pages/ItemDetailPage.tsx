@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase/firebaseConfig';
 import { markItemAsTrashed, markItemAsUsed } from '../firebase/saveReceipt';
-import { getUserRecipes, markRecipesNeedRefresh } from '../firebase/userRecipes';
+import { getUserRecipes } from '../firebase/userRecipes';
 import type { Item, StoredRecipe } from '../types';
 import { getDaysUntilExpiration } from '../utils/dateHelpers';
 import { useAuth } from '../contexts/AuthContext';
@@ -87,7 +87,6 @@ export function ItemDetailPage() {
 
     try {
       await markItemAsTrashed(item.itemId);
-      markRecipesNeedRefresh(); // Mark recipes for background refresh
       navigate('/inventory');
     } catch (error) {
       console.error('Error trashing item:', error);
@@ -100,7 +99,6 @@ export function ItemDetailPage() {
 
     try {
       await markItemAsUsed(item.itemId);
-      markRecipesNeedRefresh(); // Mark recipes for background refresh
       navigate('/inventory');
     } catch (error) {
       console.error('Error marking item as used:', error);

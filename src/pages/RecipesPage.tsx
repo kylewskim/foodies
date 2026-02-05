@@ -102,7 +102,9 @@ export function RecipesPage() {
       if (needsBackgroundRefresh && firebaseRecipes && !forceRegenerate) {
         console.log('📦 Showing cached recipes while refreshing in background');
         const recipesWithUserItems = mapRecipesToUI(firebaseRecipes.recipes);
-        setRecipes(recipesWithUserItems);
+        // Filter out recipes with no matching items in current inventory
+        const visibleRecipes = recipesWithUserItems.filter(r => r.userItems.length > 0);
+        setRecipes(visibleRecipes);
         setLoading(false);
         // Continue to background refresh below
       }
@@ -111,7 +113,9 @@ export function RecipesPage() {
         // Use Firebase recipes
         console.log(`✅ Using Firebase recipes: ${regenerationReason || 'No changes'}`);
         const recipesWithUserItems = mapRecipesToUI(firebaseRecipes.recipes);
-        setRecipes(recipesWithUserItems);
+        // Filter out recipes with no matching items in current inventory
+        const visibleRecipes = recipesWithUserItems.filter(r => r.userItems.length > 0);
+        setRecipes(visibleRecipes);
         setLoading(false);
         setIsRefreshing(false);
         clearRecipesRefreshFlag();
@@ -166,7 +170,9 @@ export function RecipesPage() {
         };
       });
 
-      setRecipes(recipesWithImages);
+      // Filter out recipes with no matching items
+      const visibleRecipes = recipesWithImages.filter(r => r.userItems.length > 0);
+      setRecipes(visibleRecipes);
 
       // Save to Firebase
       const storedRecipes: StoredRecipe[] = recipesWithImages.map(recipe => ({
