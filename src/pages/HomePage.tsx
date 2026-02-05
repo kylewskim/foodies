@@ -28,7 +28,6 @@ export function HomePage() {
   });
   const [loading, setLoading] = useState(true);
   const [showScanOptions, setShowScanOptions] = useState(false);
-  const [categoryFilter, setCategoryFilter] = useState<string>('All');
   
   // File input refs
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -73,13 +72,39 @@ export function HomePage() {
     }
   };
 
-  const getExpirationDays = (item: Item) => {
+  const getStatusBadge = (item: Item) => {
     const expirationDate = item.manualExpirationDate || item.autoExpirationDate;
-    const days = getDaysUntilExpiration(expirationDate);
-    if (days < 0) return 'Expired';
-    if (days === 0) return 'Expires today';
-    if (days === 1) return 'Expires in 1 d';
-    return `Expires in ${days} ds`;
+    const daysUntil = getDaysUntilExpiration(expirationDate);
+
+    if (daysUntil < 0) {
+      return {
+        text: 'Expired',
+        bgColor: 'rgba(17,19,11,0.2)',
+        textColor: '#333',
+      };
+    }
+
+    if (daysUntil === 0) {
+      return {
+        text: 'Expires today',
+        bgColor: 'rgba(252,238,117,0.75)',
+        textColor: '#756900',
+      };
+    }
+
+    if (daysUntil <= 5) {
+      return {
+        text: `Eat within ${daysUntil} day${daysUntil === 1 ? '' : 's'}`,
+        bgColor: 'rgba(215,237,100,0.75)',
+        textColor: '#516c00',
+      };
+    }
+
+    return {
+      text: `Expires in ${daysUntil} days`,
+      bgColor: '#d3e2d0',
+      textColor: '#333',
+    };
   };
 
   const getLocationText = (loc: string) => {
@@ -474,43 +499,11 @@ export function HomePage() {
           fontSize: '20px',
           fontWeight: '400',
           color: '#1a1a1a',
-          margin: '0 0 16px 0',
+          margin: '0 0 24px 0',
           fontFamily: '"Poppins", sans-serif',
         }}>
           Cook Before It's Expired
         </h2>
-
-        {/* Category Filter Chips */}
-        {expiringItems.length > 0 && (
-          <div style={{
-            display: 'flex',
-            gap: '8px',
-            marginBottom: '24px',
-            overflowX: 'auto',
-            paddingBottom: '4px',
-          }}>
-            {['All', 'Produce', 'Dairy', 'Protein', 'Grains', 'Beverages'].map(cat => (
-              <button
-                key={cat}
-                onClick={() => setCategoryFilter(cat)}
-                style={{
-                  padding: '6px 12px',
-                  borderRadius: '16px',
-                  border: 'none',
-                  backgroundColor: categoryFilter === cat ? '#e3e9e3' : '#efeee7',
-                  color: categoryFilter === cat ? '#073d35' : '#11130b',
-                  fontSize: '12px',
-                  fontWeight: '400',
-                  cursor: 'pointer',
-                  whiteSpace: 'nowrap',
-                  fontFamily: '"Poppins", sans-serif',
-                }}
-              >
-                {cat}
-              </button>
-            ))}
-          </div>
-        )}
 
         {expiringItems.length === 0 ? (
           <div style={{
@@ -528,27 +521,11 @@ export function HomePage() {
               No items expiring soon!
             </div>
           </div>
-        ) : expiringItems.filter(item => categoryFilter === 'All' || item.category === categoryFilter).length === 0 ? (
-          <div style={{
-            backgroundColor: '#fff',
-            borderRadius: '16px',
-            padding: '40px 30px',
-            textAlign: 'center',
-            color: '#999',
-          }}>
-            <div style={{ fontSize: '32px', marginBottom: '12px' }}>🔍</div>
-            <div style={{
-              fontSize: '14px',
-              fontFamily: '"Poppins", sans-serif',
-            }}>
-              No {categoryFilter.toLowerCase()} items expiring soon
-            </div>
-          </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
-            {expiringItems
-              .filter(item => categoryFilter === 'All' || item.category === categoryFilter)
-              .map(item => (
+            {expiringItems.map(item => {
+              const statusBadge = getStatusBadge(item);
+              return (
               <div
                 key={item.itemId}
                 style={{
@@ -599,21 +576,22 @@ export function HomePage() {
                       </div>
                     </div>
                     
-                    {/* Expiration Tag */}
+                    {/* Expiration Badge */}
                     <div style={{
                       display: 'inline-flex',
-                      backgroundColor: '#d3e2d0',
-                      borderRadius: '4px',
-                      padding: '4px 8px',
+                      backgroundColor: statusBadge.bgColor,
+                      borderRadius: '8px',
+                      padding: '0 8px',
+                      height: '20px',
+                      alignItems: 'center',
                       alignSelf: 'flex-start',
                     }}>
                       <span style={{
                         fontFamily: '"Poppins", sans-serif',
                         fontSize: '10px',
-                        color: '#333',
-                        opacity: 0.5,
+                        color: statusBadge.textColor,
                       }}>
-                        {getExpirationDays(item)}
+                        {statusBadge.text}
                       </span>
                     </div>
                   </div>
@@ -627,7 +605,8 @@ export function HomePage() {
                   <img src={arrowRightIcon} alt="View" style={{ width: '40px', height: '40px' }} />
                 </Link>
               </div>
-            ))}
+            );
+            })}
           </div>
         )}
       </div>
