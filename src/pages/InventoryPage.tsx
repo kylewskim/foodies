@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { getItemsByLocation, deleteItem } from '../firebase/saveReceipt';
+import { getItemsByLocation, getItemsByUser, deleteItem } from '../firebase/saveReceipt';
 import type { Item, StorageLocation } from '../types';
 import { getDaysUntilExpiration } from '../utils/dateHelpers';
 import { BottomNavigation } from '../components/BottomNavigation';
@@ -12,8 +12,11 @@ export function InventoryPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const locationFilter = (searchParams.get('location') as StorageLocation) || 'fridge';
   const [items, setItems] = useState<Item[]>([]);
+  const [allItems, setAllItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
   const [categoryFilter, setCategoryFilter] = useState<string>('All');
+  const [showSearch, setShowSearch] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Swipe state
   const [swipedItemId, setSwipedItemId] = useState<string | null>(null);
@@ -24,6 +27,7 @@ export function InventoryPage() {
   useEffect(() => {
     if (user) {
       loadItems();
+      loadAllItems();
     }
   }, [locationFilter, user]);
 
@@ -31,20 +35,31 @@ export function InventoryPage() {
     if (!user) return;
 
     try {
-      const allItems = await getItemsByLocation(user.uid, locationFilter);
+      const locationItems = await getItemsByLocation(user.uid, locationFilter);
 
       // Sort by expiration date
-      allItems.sort((a, b) => {
+      locationItems.sort((a, b) => {
         const expA = new Date(a.manualExpirationDate || a.autoExpirationDate);
         const expB = new Date(b.manualExpirationDate || b.autoExpirationDate);
         return expA.getTime() - expB.getTime();
       });
 
-      setItems(allItems);
+      setItems(locationItems);
     } catch (error) {
       console.error('Error loading items:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadAllItems = async () => {
+    if (!user) return;
+
+    try {
+      const userItems = await getItemsByUser(user.uid);
+      setAllItems(userItems);
+    } catch (error) {
+      console.error('Error loading all items:', error);
     }
   };
 
@@ -112,15 +127,15 @@ export function InventoryPage() {
     if (daysUntil === 0) {
       return {
         text: 'Expires today',
-        bgColor: '#fcee75',
+        bgColor: 'rgba(252,238,117,0.75)',
         textColor: '#756900',
       };
     }
 
-    if (daysUntil <= 3) {
+    if (daysUntil <= 5) {
       return {
-        text: 'Eat within 3 days',
-        bgColor: '#d7ed64',
+        text: `Eat within ${daysUntil} day${daysUntil === 1 ? '' : 's'}`,
+        bgColor: 'rgba(215,237,100,0.75)',
         textColor: '#516c00',
       };
     }
@@ -148,6 +163,22 @@ export function InventoryPage() {
     ? items
     : items.filter(item => item.category === categoryFilter);
 
+  // Search results - search across all locations
+  const getSearchResults = () => {
+    if (!searchQuery.trim()) return { fridge: [], freezer: [], pantry: [] };
+
+    const query = searchQuery.toLowerCase();
+    const results: Record<StorageLocation, Item[]> = { fridge: [], freezer: [], pantry: [] };
+
+    allItems.forEach(item => {
+      if (item.name.toLowerCase().includes(query)) {
+        results[item.location].push(item);
+      }
+    });
+
+    return results;
+  };
+
   if (loading) {
     return (
       <div style={{
@@ -164,6 +195,211 @@ export function InventoryPage() {
     );
   }
 
+  // Search View
+  if (showSearch) {
+    const searchResults = getSearchResults();
+    const hasQuery = searchQuery.trim().length > 0;
+
+    return (
+      <div style={{
+        minHeight: '100vh',
+        backgroundColor: '#f7f6ef',
+        paddingBottom: '100px'
+      }}>
+        {/* Search Header */}
+        <div style={{
+          padding: '14px 20px',
+        }}>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            backgroundColor: '#efeee7',
+            borderRadius: '16px',
+            padding: '12px 16px',
+            gap: '16px',
+          }}>
+            {/* Search Icon */}
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+              <circle cx="11" cy="11" r="7" stroke="#11130b" strokeWidth="1.5"/>
+              <path d="M16 16L20 20" stroke="#11130b" strokeWidth="1.5" strokeLinecap="round"/>
+            </svg>
+
+            {/* Input */}
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search..."
+              autoFocus
+              style={{
+                flex: 1,
+                border: 'none',
+                backgroundColor: 'transparent',
+                fontSize: '14px',
+                fontFamily: '"Poppins", sans-serif',
+                color: '#11130b',
+                outline: 'none',
+              }}
+            />
+
+            {/* Clear/Close Button */}
+            <button
+              onClick={() => {
+                if (searchQuery) {
+                  setSearchQuery('');
+                } else {
+                  setShowSearch(false);
+                }
+              }}
+              style={{
+                width: '16px',
+                height: '16px',
+                borderRadius: '50%',
+                backgroundColor: '#11130b',
+                border: 'none',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: 0,
+              }}
+            >
+              <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
+                <path d="M1 1L7 7M7 1L1 7" stroke="white" strokeWidth="1.5" strokeLinecap="round"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        {/* Search Results */}
+        {hasQuery && (
+          <div style={{ padding: '0 20px' }}>
+            {(['fridge', 'freezer', 'pantry'] as StorageLocation[]).map(loc => {
+              const locItems = searchResults[loc];
+              return (
+                <div key={loc} style={{ marginBottom: '24px' }}>
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    marginBottom: '8px',
+                  }}>
+                    <p style={{
+                      fontSize: '14px',
+                      fontFamily: '"Poppins", sans-serif',
+                      color: '#11130b',
+                      margin: 0,
+                      textTransform: 'capitalize',
+                    }}>
+                      {loc}
+                    </p>
+                    <p style={{
+                      fontSize: '10px',
+                      fontFamily: '"Poppins", sans-serif',
+                      color: '#11130b',
+                      opacity: 0.4,
+                      margin: 0,
+                    }}>
+                      {locItems.length > 0 ? `${locItems.length} Found` : 'None Found'}
+                    </p>
+                  </div>
+
+                  {locItems.map(item => {
+                    const statusBadge = getStatusBadge(item);
+                    const daysSince = getDaysSincePurchase(item);
+
+                    return (
+                      <div
+                        key={item.itemId}
+                        onClick={() => navigate(`/item/${item.itemId}`)}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '16px 0',
+                          borderBottom: '1px solid rgba(51,51,51,0.1)',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                          {/* Item Image */}
+                          <div style={{
+                            width: '40px',
+                            height: '40px',
+                            borderRadius: '8px',
+                            backgroundColor: '#f5f5f5',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: '20px',
+                          }}>
+                            {item.category === 'Produce' && '🥬'}
+                            {item.category === 'Protein' && '🍖'}
+                            {item.category === 'Dairy' && '🥛'}
+                            {item.category === 'Grains' && '🌾'}
+                            {item.category === 'Beverages' && '🥤'}
+                            {!['Produce', 'Protein', 'Dairy', 'Grains', 'Beverages'].includes(item.category) && '🍽️'}
+                          </div>
+
+                          {/* Item Info */}
+                          <div>
+                            <p style={{
+                              fontSize: '12px',
+                              fontFamily: '"Poppins", sans-serif',
+                              color: '#11130b',
+                              margin: 0,
+                              textTransform: 'capitalize',
+                            }}>
+                              {item.name}
+                            </p>
+                            <p style={{
+                              fontSize: '10px',
+                              fontFamily: '"Poppins", sans-serif',
+                              color: '#11130b',
+                              opacity: 0.5,
+                              margin: 0,
+                            }}>
+                              Bought {daysSince} days ago
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Status Badge */}
+                        {statusBadge && (
+                          <div style={{
+                            backgroundColor: statusBadge.bgColor,
+                            height: '20px',
+                            padding: '0 8px',
+                            borderRadius: '8px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}>
+                            <p style={{
+                              fontSize: '10px',
+                              fontFamily: '"Poppins", sans-serif',
+                              color: statusBadge.textColor,
+                              margin: 0,
+                            }}>
+                              {statusBadge.text}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Bottom Navigation */}
+        <BottomNavigation />
+      </div>
+    );
+  }
+
   return (
     <div style={{
       minHeight: '100vh',
@@ -172,7 +408,7 @@ export function InventoryPage() {
     }}>
       {/* Header */}
       <div style={{
-        padding: '16px 20px',
+        padding: '14px 20px',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
@@ -186,21 +422,62 @@ export function InventoryPage() {
         }}>
           My Food
         </h1>
-        <div
-          onClick={() => navigate('/add-item')}
-          style={{
-            width: '32px',
-            height: '32px',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
-            <circle cx="16" cy="16" r="16" fill="#11130b"/>
-            <path d="M16 10V22M10 16H22" stroke="white" strokeWidth="2" strokeLinecap="round"/>
-          </svg>
+        <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+          {/* Search Icon */}
+          <div
+            onClick={() => setShowSearch(true)}
+            style={{
+              width: '32px',
+              height: '32px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+              <circle cx="11" cy="11" r="7" stroke="#11130b" strokeWidth="1.5"/>
+              <path d="M16 16L20 20" stroke="#11130b" strokeWidth="1.5" strokeLinecap="round"/>
+            </svg>
+          </div>
+
+          {/* Add Icon */}
+          <div
+            onClick={() => navigate('/add-item')}
+            style={{
+              width: '32px',
+              height: '32px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <path d="M7 1V13M1 7H13" stroke="#11130b" strokeWidth="1.5" strokeLinecap="round"/>
+            </svg>
+          </div>
+
+          {/* List Icon */}
+          <div
+            style={{
+              width: '32px',
+              height: '32px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+              <circle cx="5" cy="6" r="2" fill="#11130b"/>
+              <circle cx="5" cy="12" r="2" fill="#11130b"/>
+              <circle cx="5" cy="18" r="2" fill="#11130b"/>
+              <path d="M10 6H20" stroke="#11130b" strokeWidth="1.5" strokeLinecap="round"/>
+              <path d="M10 12H20" stroke="#11130b" strokeWidth="1.5" strokeLinecap="round"/>
+              <path d="M10 18H20" stroke="#11130b" strokeWidth="1.5" strokeLinecap="round"/>
+            </svg>
+          </div>
         </div>
       </div>
 
@@ -276,8 +553,8 @@ export function InventoryPage() {
         ))}
       </div>
 
-      {/* Items List */}
-      <div style={{ padding: '0 20px' }}>
+      {/* Items List - Full Width Swipe */}
+      <div>
         {filteredItems.length === 0 ? (
           <div style={{
             textAlign: 'center',
@@ -300,7 +577,7 @@ export function InventoryPage() {
             </div>
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
             {filteredItems.map(item => {
               const statusBadge = getStatusBadge(item);
               const daysSince = getDaysSincePurchase(item);
@@ -377,7 +654,7 @@ export function InventoryPage() {
                     </div>
                   </div>
 
-                  {/* Item Row (Swipeable) */}
+                  {/* Item Row (Swipeable) - Full Width */}
                   <div
                     onTouchStart={(e) => handleTouchStart(e, item.itemId)}
                     onTouchMove={handleTouchMove}
@@ -403,9 +680,12 @@ export function InventoryPage() {
                       gap: '12px',
                       paddingTop: '16px',
                       paddingBottom: '16px',
+                      paddingLeft: '20px',
+                      paddingRight: '20px',
                       cursor: 'pointer',
                       transform: `translateX(${swipeOffset}px)`,
                       transition: isDragging ? 'none' : 'transform 0.3s ease',
+                      boxSizing: 'border-box',
                     }}
                   >
                     {/* Item Image */}

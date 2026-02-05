@@ -27,7 +27,7 @@ export function BottomNavigation() {
 
   const navItems: { id: NavItem; label: string; path: string; icon: string; iconFill: string }[] = [
     { id: 'home', label: 'Home', path: '/', icon: homeIcon, iconFill: homeFillIcon },
-    { id: 'items', label: 'Items', path: '/inventory', icon: itemsIcon, iconFill: itemsFillIcon },
+    { id: 'items', label: 'Food', path: '/inventory', icon: itemsIcon, iconFill: itemsFillIcon },
     { id: 'recipes', label: 'Recipes', path: '/recipes', icon: recipesIcon, iconFill: recipesFillIcon },
     { id: 'settings', label: 'Settings', path: '/settings', icon: settingsIcon, iconFill: settingsFillIcon },
   ];
