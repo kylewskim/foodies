@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase/firebaseConfig';
-import { deleteItem } from '../firebase/saveReceipt';
-import { getUserRecipes } from '../firebase/userRecipes';
+import { markItemAsTrashed, markItemAsUsed } from '../firebase/saveReceipt';
+import { getUserRecipes, markRecipesNeedRefresh } from '../firebase/userRecipes';
 import type { Item, StoredRecipe } from '../types';
 import { getDaysUntilExpiration } from '../utils/dateHelpers';
 import { useAuth } from '../contexts/AuthContext';
@@ -86,11 +86,12 @@ export function ItemDetailPage() {
     if (!item) return;
 
     try {
-      await deleteItem(item.itemId);
+      await markItemAsTrashed(item.itemId);
+      markRecipesNeedRefresh(); // Mark recipes for background refresh
       navigate('/inventory');
     } catch (error) {
-      console.error('Error deleting item:', error);
-      alert('Failed to delete item');
+      console.error('Error trashing item:', error);
+      alert('Failed to trash item');
     }
   };
 
@@ -98,7 +99,8 @@ export function ItemDetailPage() {
     if (!item) return;
 
     try {
-      await deleteItem(item.itemId);
+      await markItemAsUsed(item.itemId);
+      markRecipesNeedRefresh(); // Mark recipes for background refresh
       navigate('/inventory');
     } catch (error) {
       console.error('Error marking item as used:', error);

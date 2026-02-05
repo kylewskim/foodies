@@ -180,3 +180,28 @@ export async function clearUserRecipes(userId: string): Promise<void> {
     throw new Error('Failed to clear recipes');
   }
 }
+
+/**
+ * Mark recipes as needing refresh (called when items change)
+ * Uses localStorage for simple flag storage
+ */
+export function markRecipesNeedRefresh(): void {
+  localStorage.setItem('recipesNeedRefresh', 'true');
+  localStorage.setItem('recipesRefreshTimestamp', Date.now().toString());
+  console.log('🔄 Recipes marked for refresh');
+}
+
+/**
+ * Check if recipes need refresh
+ */
+export function checkRecipesNeedRefresh(): boolean {
+  return localStorage.getItem('recipesNeedRefresh') === 'true';
+}
+
+/**
+ * Clear the recipes refresh flag
+ */
+export function clearRecipesRefreshFlag(): void {
+  localStorage.removeItem('recipesNeedRefresh');
+  localStorage.removeItem('recipesRefreshTimestamp');
+}

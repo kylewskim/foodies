@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { getItemsByUser } from '../firebase/saveReceipt';
 import type { Item, StoredRecipe } from '../types';
 import { BottomNavigation } from '../components/BottomNavigation';
+import { RecipeCardSkeleton } from '../components/RecipeCardSkeleton';
 import { generateRecipes as generateAIRecipes } from '../llm/generateRecipes';
 import { fetchRecipeImages } from '../utils/fetchRecipeImage';
 import { generateRecipeId } from '../firebase/favoriteRecipes';
@@ -11,6 +12,8 @@ import {
   getUserRecipes,
   saveUserRecipes,
   shouldRegenerateRecipes,
+  checkRecipesNeedRefresh,
+  clearRecipesRefreshFlag,
 } from '../firebase/userRecipes';
 
 interface Recipe extends StoredRecipe {
@@ -36,6 +39,9 @@ export function RecipesPage() {
     if (!user) return;
 
     try {
+      // Check if recipes need background refresh (from item changes)
+      const needsBackgroundRefresh = checkRecipesNeedRefresh();
+
       // Fetch user's current inventory
       const items = await getItemsByUser(user.uid);
 
@@ -52,52 +58,67 @@ export function RecipesPage() {
         setRecipes([]);
         setLoading(false);
         setIsRefreshing(false);
+        clearRecipesRefreshFlag();
         return;
       }
 
       // Try to load from Firebase
       const firebaseRecipes = await getUserRecipes(user.uid);
 
-      // Check if we should regenerate
-      let shouldRegenerate = forceRegenerate;
-      let regenerationReason = forceRegenerate ? 'Manual refresh' : '';
+      // Helper function to map recipes to UI format
+      const mapRecipesToUI = (storedRecipes: StoredRecipe[]) => {
+        return storedRecipes.map(stored => {
+          const matchedUserItems = items.filter(item =>
+            stored.matchedIngredients.some(ing =>
+              item.name.toLowerCase().includes(ing.toLowerCase()) ||
+              ing.toLowerCase().includes(item.name.toLowerCase())
+            )
+          );
 
-      if (!forceRegenerate && firebaseRecipes) {
+          matchedUserItems.sort((a, b) => {
+            const expA = new Date(a.manualExpirationDate || a.autoExpirationDate);
+            const expB = new Date(b.manualExpirationDate || b.autoExpirationDate);
+            return expA.getTime() - expB.getTime();
+          });
+
+          return {
+            ...stored,
+            userItems: matchedUserItems,
+          };
+        });
+      };
+
+      // Check if we should regenerate
+      let shouldRegenerate = forceRegenerate || needsBackgroundRefresh;
+      let regenerationReason = forceRegenerate ? 'Manual refresh' : needsBackgroundRefresh ? 'Items changed' : '';
+
+      if (!forceRegenerate && !needsBackgroundRefresh && firebaseRecipes) {
         const check = shouldRegenerateRecipes(items, firebaseRecipes);
         shouldRegenerate = check.shouldRegenerate;
         regenerationReason = check.reason;
+      }
 
-        if (!shouldRegenerate) {
-          // Use Firebase recipes
-          console.log(`✅ Using Firebase recipes: ${check.reason}`);
+      // If we have cached recipes and need background refresh, show cached first
+      if (needsBackgroundRefresh && firebaseRecipes && !forceRegenerate) {
+        console.log('📦 Showing cached recipes while refreshing in background');
+        const recipesWithUserItems = mapRecipesToUI(firebaseRecipes.recipes);
+        setRecipes(recipesWithUserItems);
+        setLoading(false);
+        // Continue to background refresh below
+      }
 
-          // Map Firebase recipes to Recipe interface with user items
-          const recipesWithUserItems: Recipe[] = firebaseRecipes.recipes.map(stored => {
-            const matchedUserItems = items.filter(item =>
-              stored.matchedIngredients.some(ing =>
-                item.name.toLowerCase().includes(ing.toLowerCase()) ||
-                ing.toLowerCase().includes(item.name.toLowerCase())
-              )
-            );
+      if (!shouldRegenerate && firebaseRecipes) {
+        // Use Firebase recipes
+        console.log(`✅ Using Firebase recipes: ${regenerationReason || 'No changes'}`);
+        const recipesWithUserItems = mapRecipesToUI(firebaseRecipes.recipes);
+        setRecipes(recipesWithUserItems);
+        setLoading(false);
+        setIsRefreshing(false);
+        clearRecipesRefreshFlag();
+        return;
+      }
 
-            matchedUserItems.sort((a, b) => {
-              const expA = new Date(a.manualExpirationDate || a.autoExpirationDate);
-              const expB = new Date(b.manualExpirationDate || b.autoExpirationDate);
-              return expA.getTime() - expB.getTime();
-            });
-
-            return {
-              ...stored,
-              userItems: matchedUserItems,
-            };
-          });
-
-          setRecipes(recipesWithUserItems);
-          setLoading(false);
-          setIsRefreshing(false);
-          return;
-        }
-      } else if (!forceRegenerate) {
+      if (!firebaseRecipes && !forceRegenerate) {
         regenerationReason = 'No saved recipes';
       }
 
@@ -163,6 +184,7 @@ export function RecipesPage() {
       }));
 
       await saveUserRecipes(user.uid, storedRecipes, items);
+      clearRecipesRefreshFlag(); // Clear the flag after successful refresh
     } catch (error) {
       console.error('Error loading recipes:', error);
     } finally {
@@ -170,22 +192,6 @@ export function RecipesPage() {
       setIsRefreshing(false);
     }
   };
-
-  if (loading) {
-    return (
-      <div style={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: '#f7f6ef'
-      }}>
-        <div style={{ fontSize: '18px', color: '#666', fontFamily: '"Poppins", sans-serif' }}>
-          Generating personalized recipes...
-        </div>
-      </div>
-    );
-  }
 
   // Filter recipes based on selected ingredient
   const filteredRecipes = selectedIngredient
@@ -198,12 +204,20 @@ export function RecipesPage() {
     ? userItems.find(item => item.itemId === selectedIngredient)
     : null;
 
+  const pulseKeyframes = `
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+  `;
+
   return (
     <div style={{
       minHeight: '100vh',
       backgroundColor: '#f7f6ef',
       paddingBottom: '100px'
     }}>
+      <style>{pulseKeyframes}</style>
       {/* Header */}
       <div style={{
         padding: '16px 20px',
@@ -367,7 +381,7 @@ export function RecipesPage() {
       </div>
 
       {/* Based on what you have */}
-      {userItems.length > 0 && (
+      {(userItems.length > 0 || loading) && (
         <div style={{ padding: '0 20px', marginBottom: '32px' }}>
           <div style={{
             display: 'flex',
@@ -407,19 +421,16 @@ export function RecipesPage() {
             overflowX: 'auto',
             paddingBottom: '8px',
           }}>
-            {userItems.slice(0, 12).map((item) => {
-              const isSelected = selectedIngredient === item.itemId;
-
-              return (
+            {loading ? (
+              // Skeleton for ingredient chips
+              Array.from({ length: 4 }).map((_, index) => (
                 <div
-                  key={item.itemId}
-                  onClick={() => setSelectedIngredient(isSelected ? null : item.itemId)}
+                  key={index}
                   style={{
                     minWidth: '96px',
                     width: '96px',
                     height: '93px',
-                    backgroundColor: isSelected ? '#d3e2d0' : 'white',
-                    border: isSelected ? '1px solid #073d35' : 'none',
+                    backgroundColor: 'white',
                     borderRadius: '16px',
                     padding: '8px',
                     display: 'flex',
@@ -427,45 +438,85 @@ export function RecipesPage() {
                     alignItems: 'center',
                     justifyContent: 'center',
                     gap: '4px',
-                    cursor: 'pointer',
                   }}
                 >
                   <div style={{
                     width: '60px',
                     height: '60px',
                     borderRadius: '8px',
-                    backgroundColor: '#f5f5f5',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '32px',
-                    overflow: 'hidden',
-                  }}>
-                    {/* Placeholder for ingredient image */}
-                    {item.category === 'Produce' && '🥬'}
-                    {item.category === 'Protein' && '🍖'}
-                    {item.category === 'Dairy' && '🥛'}
-                    {item.category === 'Grains' && '🌾'}
-                    {item.category === 'Beverages' && '🥤'}
-                    {!['Produce', 'Protein', 'Dairy', 'Grains', 'Beverages'].includes(item.category) && '🍽️'}
-                  </div>
-                  <p style={{
-                    fontSize: '10px',
-                    fontWeight: isSelected ? '600' : '400',
-                    fontFamily: '"Sora", sans-serif',
-                    color: 'black',
-                    margin: 0,
-                    textAlign: 'center',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                    maxWidth: '100%',
-                  }}>
-                    {item.name}
-                  </p>
+                    backgroundColor: '#e0e0e0',
+                    animation: 'pulse 1.5s ease-in-out infinite',
+                  }} />
+                  <div style={{
+                    width: '50px',
+                    height: '12px',
+                    borderRadius: '4px',
+                    backgroundColor: '#e0e0e0',
+                    animation: 'pulse 1.5s ease-in-out infinite',
+                  }} />
                 </div>
-              );
-            })}
+              ))
+            ) : (
+              userItems.slice(0, 12).map((item) => {
+                const isSelected = selectedIngredient === item.itemId;
+
+                return (
+                  <div
+                    key={item.itemId}
+                    onClick={() => setSelectedIngredient(isSelected ? null : item.itemId)}
+                    style={{
+                      minWidth: '96px',
+                      width: '96px',
+                      height: '93px',
+                      backgroundColor: isSelected ? '#d3e2d0' : 'white',
+                      border: isSelected ? '1px solid #073d35' : 'none',
+                      borderRadius: '16px',
+                      padding: '8px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '4px',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <div style={{
+                      width: '60px',
+                      height: '60px',
+                      borderRadius: '8px',
+                      backgroundColor: '#f5f5f5',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '32px',
+                      overflow: 'hidden',
+                    }}>
+                      {/* Placeholder for ingredient image */}
+                      {item.category === 'Produce' && '🥬'}
+                      {item.category === 'Protein' && '🍖'}
+                      {item.category === 'Dairy' && '🥛'}
+                      {item.category === 'Grains' && '🌾'}
+                      {item.category === 'Beverages' && '🥤'}
+                      {!['Produce', 'Protein', 'Dairy', 'Grains', 'Beverages'].includes(item.category) && '🍽️'}
+                    </div>
+                    <p style={{
+                      fontSize: '10px',
+                      fontWeight: isSelected ? '600' : '400',
+                      fontFamily: '"Sora", sans-serif',
+                      color: 'black',
+                      margin: 0,
+                      textAlign: 'center',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      maxWidth: '100%',
+                    }}>
+                      {item.name}
+                    </p>
+                  </div>
+                );
+              })
+            )}
           </div>
         </div>
       )}
@@ -497,7 +548,9 @@ export function RecipesPage() {
 
       {/* Recipe Cards */}
       <div style={{ padding: '0 20px' }}>
-        {filteredRecipes.length === 0 && selectedIngredient ? (
+        {loading ? (
+          <RecipeCardSkeleton count={3} />
+        ) : filteredRecipes.length === 0 && selectedIngredient ? (
           <div style={{
             backgroundColor: '#fff',
             borderRadius: '16px',

@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { getItemsByLocation, getItemsByUser, deleteItem } from '../firebase/saveReceipt';
+import { getItemsByLocation, getItemsByUser, markItemAsTrashed, markItemAsUsed } from '../firebase/saveReceipt';
+import { markRecipesNeedRefresh } from '../firebase/userRecipes';
 import type { Item, StorageLocation } from '../types';
 import { getDaysUntilExpiration } from '../utils/dateHelpers';
 import { BottomNavigation } from '../components/BottomNavigation';
@@ -113,20 +114,24 @@ export function InventoryPage() {
   const handleTrash = async (itemId: string) => {
     if (!user) return;
     try {
-      await deleteItem(itemId);
+      await markItemAsTrashed(itemId);
+      markRecipesNeedRefresh(); // Mark recipes for background refresh
       setSwipedItemId(null);
       await loadItems();
+      await loadAllItems();
     } catch (error) {
-      console.error('Error deleting item:', error);
+      console.error('Error trashing item:', error);
     }
   };
 
   const handleUsed = async (itemId: string) => {
     if (!user) return;
     try {
-      await deleteItem(itemId);
+      await markItemAsUsed(itemId);
+      markRecipesNeedRefresh(); // Mark recipes for background refresh
       setSwipedItemId(null);
       await loadItems();
+      await loadAllItems();
     } catch (error) {
       console.error('Error marking item as used:', error);
     }

@@ -1,6 +1,6 @@
 import { collection, addDoc, doc, setDoc, getDoc, query, where, getDocs, deleteDoc } from 'firebase/firestore';
 import { db } from './firebaseConfig';
-import type { Receipt, Item, UserPreferences } from '../types';
+import type { Receipt, Item, UserPreferences, ItemStatus } from '../types';
 
 /**
  * Save a receipt to Firestore
@@ -91,6 +91,54 @@ export async function deleteItem(itemId: string): Promise<void> {
 }
 
 /**
+ * Mark an item as used (for savings tracking)
+ *
+ * @param itemId - Item ID to mark as used
+ */
+export async function markItemAsUsed(itemId: string): Promise<void> {
+  try {
+    const itemRef = doc(db, 'items', itemId);
+    const docSnap = await getDoc(itemRef);
+
+    if (docSnap.exists()) {
+      const item = docSnap.data() as Item;
+      await setDoc(itemRef, {
+        ...item,
+        status: 'used' as ItemStatus,
+        usedAt: new Date().toISOString(),
+      });
+    }
+  } catch (error) {
+    console.error('Error marking item as used:', error);
+    throw new Error('Failed to mark item as used');
+  }
+}
+
+/**
+ * Mark an item as trashed
+ *
+ * @param itemId - Item ID to mark as trashed
+ */
+export async function markItemAsTrashed(itemId: string): Promise<void> {
+  try {
+    const itemRef = doc(db, 'items', itemId);
+    const docSnap = await getDoc(itemRef);
+
+    if (docSnap.exists()) {
+      const item = docSnap.data() as Item;
+      await setDoc(itemRef, {
+        ...item,
+        status: 'trashed' as ItemStatus,
+        trashedAt: new Date().toISOString(),
+      });
+    }
+  } catch (error) {
+    console.error('Error marking item as trashed:', error);
+    throw new Error('Failed to mark item as trashed');
+  }
+}
+
+/**
  * Get all receipts for a user
  * 
  * @param userId - User ID to query
@@ -158,10 +206,10 @@ export async function getItemsByReceipt(receiptId: string): Promise<Item[]> {
 }
 
 /**
- * Get all items for a user
- * 
+ * Get all active items for a user (excludes used/trashed items)
+ *
  * @param userId - User ID to query
- * @returns Array of items
+ * @returns Array of active items
  */
 export async function getItemsByUser(userId: string): Promise<Item[]> {
   try {
@@ -169,23 +217,70 @@ export async function getItemsByUser(userId: string): Promise<Item[]> {
       collection(db, 'items'),
       where('userId', '==', userId)
     );
-    
+
     const querySnapshot = await getDocs(q);
     const items: Item[] = [];
-    
+
     querySnapshot.forEach((doc) => {
       const data = doc.data();
-      items.push({
-        itemId: doc.id,
-        location: data.location || 'fridge', // Default location for old data
-        ...data,
-      } as Item);
+      // Only include active items (or items without status for backwards compatibility)
+      if (!data.status || data.status === 'active') {
+        items.push({
+          itemId: doc.id,
+          location: data.location || 'fridge', // Default location for old data
+          status: data.status || 'active',
+          ...data,
+        } as Item);
+      }
     });
-    
+
     return items;
   } catch (error) {
     console.error('Error getting items by user:', error);
     throw new Error('Failed to get items by user');
+  }
+}
+
+/**
+ * Get used items for a user (for savings calculation)
+ *
+ * @param userId - User ID to query
+ * @param month - Optional: filter by month (1-12)
+ * @param year - Optional: filter by year
+ * @returns Array of used items
+ */
+export async function getUsedItems(userId: string, month?: number, year?: number): Promise<Item[]> {
+  try {
+    const q = query(
+      collection(db, 'items'),
+      where('userId', '==', userId)
+    );
+
+    const querySnapshot = await getDocs(q);
+    const items: Item[] = [];
+
+    querySnapshot.forEach((doc) => {
+      const data = doc.data();
+      if (data.status === 'used') {
+        // Filter by month/year if provided
+        if (month !== undefined && year !== undefined && data.usedAt) {
+          const usedDate = new Date(data.usedAt);
+          if (usedDate.getMonth() + 1 !== month || usedDate.getFullYear() !== year) {
+            return; // Skip this item
+          }
+        }
+        items.push({
+          itemId: doc.id,
+          location: data.location || 'fridge',
+          ...data,
+        } as Item);
+      }
+    });
+
+    return items;
+  } catch (error) {
+    console.error('Error getting used items:', error);
+    throw new Error('Failed to get used items');
   }
 }
 

@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { getItemsExpiringSoon, getItemsByUser } from '../firebase/saveReceipt';
+import { getItemsExpiringSoon, getUsedItems } from '../firebase/saveReceipt';
 import type { Item } from '../types';
 import { getDaysUntilExpiration } from '../utils/dateHelpers';
 import { BottomNavigation } from '../components/BottomNavigation';
@@ -42,23 +42,25 @@ export function HomePage() {
 
   const loadHomeData = async () => {
     if (!user) return;
-    
+
     try {
-      const allItems = await getItemsByUser(user.uid);
       const expiring = await getItemsExpiringSoon(user.uid, 7);
       setExpiringItems(expiring);
 
+      // Get used items for current month
       const now = new Date();
-      
-      const activeItems = allItems.filter(item => {
-        const expirationDate = item.manualExpirationDate || item.autoExpirationDate;
-        const expDate = new Date(expirationDate);
-        return expDate >= now;
-      });
-      
-      const itemsUsedJustInTime = activeItems.length;
-      const estimatedValueSaved = itemsUsedJustInTime * 2.5;
-      
+      const currentMonth = now.getMonth() + 1;
+      const currentYear = now.getFullYear();
+      const usedItems = await getUsedItems(user.uid, currentMonth, currentYear);
+
+      // Calculate actual savings from items with prices
+      const itemsUsedJustInTime = usedItems.length;
+      const estimatedValueSaved = usedItems.reduce((total, item) => {
+        // Price is stored in cents, convert to dollars
+        const itemPrice = item.price ? item.price / 100 : 2.5; // Default $2.50 if no price
+        return total + itemPrice;
+      }, 0);
+
       setMonthlyStats({
         itemsUsedJustInTime,
         estimatedValueSaved,

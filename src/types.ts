@@ -28,6 +28,9 @@ export type StorageLocation = 'fridge' | 'freezer' | 'pantry';
 
 export type ExpirationSource = 'auto' | 'manual';
 
+// Item status for tracking used/trashed items
+export type ItemStatus = 'active' | 'used' | 'trashed';
+
 export interface Item {
   itemId: string;
   userId: string;  // User who owns this item
@@ -40,6 +43,8 @@ export interface Item {
   autoExpirationDate: string;
   manualExpirationDate: string | null;
   expirationSource: ExpirationSource;
+  price?: number | null;  // Price in cents (optional)
+  status?: ItemStatus;  // 'active' | 'used' | 'trashed' (default: 'active')
 }
 
 // LLM function input/output types

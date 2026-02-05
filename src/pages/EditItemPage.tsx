@@ -17,6 +17,7 @@ export function EditItemPage() {
   );
   const [locationValue, setLocationValue] = useState<StorageLocation>(item?.location || 'fridge');
   const [category, setCategory] = useState<FoodCategory>(item?.category || 'Produce');
+  const [price, setPrice] = useState<string>(item?.price ? String(item.price / 100) : '');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -51,12 +52,16 @@ export function EditItemPage() {
     try {
       const purchaseDateISO = new Date(purchaseDate).toISOString();
 
+      // Convert price string to cents (number), or null if empty
+      const priceInCents = price.trim() ? Math.round(parseFloat(price) * 100) : null;
+
       const updatedItem: Item = {
         ...item,
         name: itemName,
         category,
         location: locationValue,
         purchaseDate: purchaseDateISO,
+        price: priceInCents,
       };
 
       // If it's a temporary item from ProcessedItemsList/ScanResultPage, pass updatedItem back via state
@@ -246,6 +251,38 @@ export function EditItemPage() {
               onChange={(e) => setPurchaseDate(e.target.value)}
               style={bottomBorderInputStyle}
             />
+          </div>
+
+          {/* Price (optional) */}
+          <div>
+            <label style={labelStyle}>
+              Price (optional)
+            </label>
+            <div style={{ position: 'relative' }}>
+              <span style={{
+                position: 'absolute',
+                left: 0,
+                top: '50%',
+                transform: 'translateY(-50%)',
+                fontSize: '18px',
+                color: '#1a1a1a',
+                fontFamily: '"Poppins", sans-serif',
+              }}>
+                $
+              </span>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={price}
+                onChange={(e) => setPrice(e.target.value)}
+                placeholder="0.00"
+                style={{
+                  ...bottomBorderInputStyle,
+                  paddingLeft: '16px',
+                }}
+              />
+            </div>
           </div>
         </div>
       </div>
