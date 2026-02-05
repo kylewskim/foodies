@@ -10,17 +10,19 @@ interface ScanResultPageProps {
   onDeleteItems: (itemIds: string[]) => void;
   onSaveAll: () => void;
   onAddItem: () => void;
+  onDateChange?: (newDate: string) => void;
   isSaving: boolean;
 }
 
-export function ScanResultPage({ 
-  items, 
+export function ScanResultPage({
+  items,
   receiptDate,
   onItemUpdate,
   onDeleteItems,
-  onSaveAll, 
+  onSaveAll,
   onAddItem,
-  isSaving 
+  onDateChange,
+  isSaving
 }: ScanResultPageProps) {
   const navigate = useNavigate();
   const [showMoreModal, setShowMoreModal] = useState(false);
@@ -28,6 +30,10 @@ export function ScanResultPage({
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const [showMoveToModal, setShowMoveToModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [editableDate, setEditableDate] = useState<string>(
+    receiptDate ? new Date(receiptDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]
+  );
 
   // Group items by location
   const groupedItems = items.reduce((acc, item) => {
@@ -42,15 +48,15 @@ export function ScanResultPage({
   const formatDate = (dateString?: string) => {
     // If no date, use today's date
     const date = dateString ? new Date(dateString) : new Date();
-    return date.toLocaleDateString('en-US', { 
-      month: '2-digit', 
-      day: '2-digit', 
-      year: 'numeric' 
+    return date.toLocaleDateString('en-US', {
+      month: '2-digit',
+      day: '2-digit',
+      year: 'numeric'
     });
   };
-  
-  // Display date: use receiptDate or today
-  const displayDate = formatDate(receiptDate);
+
+  // Display date: use editableDate (which is kept in sync with receiptDate)
+  const displayDate = formatDate(editableDate);
 
   const getExpirationText = (item: Item) => {
     const expirationDate = item.manualExpirationDate || item.autoExpirationDate;
@@ -168,17 +174,31 @@ export function ScanResultPage({
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            {/* Receipt date - always show, use today if no receiptDate */}
+            {/* Receipt date - clickable to edit */}
             {!selectMode && (
-              <span style={{
-                fontFamily: '"Poppins", sans-serif',
-                fontSize: '16px',
-                fontStyle: 'italic',
-                color: '#333',
-                opacity: 0.5,
-              }}>
+              <button
+                onClick={() => setShowDatePicker(true)}
+                style={{
+                  fontFamily: '"Poppins", sans-serif',
+                  fontSize: '16px',
+                  fontStyle: 'italic',
+                  color: '#333',
+                  opacity: 0.5,
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: '4px 8px',
+                  borderRadius: '8px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                }}
+              >
                 {displayDate}
-              </span>
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                  <path d="M9 1.5L10.5 3L4.5 9H3V7.5L9 1.5Z" stroke="#333" strokeOpacity="0.5" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </button>
             )}
 
             {/* 3-dot menu button */}
@@ -734,6 +754,141 @@ export function ScanResultPage({
               </button>
               <button
                 onClick={() => setShowDeleteModal(false)}
+                style={{
+                  width: '100%',
+                  padding: '15px 50px',
+                  backgroundColor: '#d3e2d0',
+                  color: '#484f46',
+                  border: '1.5px solid #073d35',
+                  borderRadius: '9999px',
+                  fontFamily: '"Poppins", sans-serif',
+                  fontSize: '16px',
+                  cursor: 'pointer',
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Date Picker Modal */}
+      {showDatePicker && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0,0,0,0.5)',
+            zIndex: 1000,
+          }}
+          onClick={() => setShowDatePicker(false)}
+        >
+          <div
+            style={{
+              position: 'absolute',
+              bottom: 0,
+              left: 0,
+              right: 0,
+              backgroundColor: '#f7f6ef',
+              borderTopLeftRadius: '20px',
+              borderTopRightRadius: '20px',
+              paddingBottom: 'env(safe-area-inset-bottom)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal header */}
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: '20px',
+              borderBottom: '1px solid #ccc',
+            }}>
+              <span style={{
+                fontFamily: '"Poppins", sans-serif',
+                fontSize: '20px',
+                color: '#1a1a1a',
+              }}>
+                Purchase Date
+              </span>
+              <button
+                onClick={() => setShowDatePicker(false)}
+                style={{
+                  width: '32px',
+                  height: '32px',
+                  border: 'none',
+                  background: 'none',
+                  cursor: 'pointer',
+                }}
+              >
+                <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+                  <path d="M10 10L22 22M22 10L10 22" stroke="#073d35" strokeWidth="2" strokeLinecap="round"/>
+                </svg>
+              </button>
+            </div>
+
+            {/* Date picker */}
+            <div style={{ padding: '20px' }}>
+              <p style={{
+                fontFamily: '"Poppins", sans-serif',
+                fontSize: '14px',
+                color: '#666',
+                margin: '0 0 12px 0',
+              }}>
+                Edit the purchase date for all items
+              </p>
+              <input
+                type="date"
+                value={editableDate}
+                onChange={(e) => setEditableDate(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '14px 16px',
+                  fontSize: '16px',
+                  fontFamily: '"Poppins", sans-serif',
+                  border: '1px solid #ccc',
+                  borderRadius: '12px',
+                  backgroundColor: 'white',
+                  boxSizing: 'border-box',
+                }}
+              />
+            </div>
+
+            {/* Action buttons */}
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '12px',
+              padding: '12px 20px 20px',
+            }}>
+              <button
+                onClick={() => {
+                  if (onDateChange) {
+                    onDateChange(new Date(editableDate).toISOString());
+                  }
+                  setShowDatePicker(false);
+                }}
+                style={{
+                  width: '100%',
+                  padding: '15px',
+                  backgroundColor: '#073d35',
+                  color: '#f7f6ef',
+                  border: 'none',
+                  borderRadius: '9999px',
+                  fontFamily: '"Poppins", sans-serif',
+                  fontSize: '16px',
+                  fontWeight: '500',
+                  cursor: 'pointer',
+                }}
+              >
+                Update Date
+              </button>
+              <button
+                onClick={() => setShowDatePicker(false)}
                 style={{
                   width: '100%',
                   padding: '15px 50px',

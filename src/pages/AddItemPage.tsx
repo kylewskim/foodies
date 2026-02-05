@@ -259,6 +259,28 @@ export function AddItemPage() {
     );
   };
 
+  const handleDateChange = async (newDateISO: string) => {
+    // Update receiptDate state
+    setReceiptDate(newDateISO);
+
+    // Update all items' purchase dates and recalculate expiration dates
+    const updatedItems = await Promise.all(
+      processedItems.map(async (item) => {
+        // Recalculate expiration date based on new purchase date
+        const expiration = await estimateExpirationDays(item.name, item.category);
+        const autoExpirationDate = calculateExpirationDate(newDateISO, expiration.expiration_days);
+
+        return {
+          ...item,
+          purchaseDate: newDateISO,
+          autoExpirationDate,
+        };
+      })
+    );
+
+    setProcessedItems(updatedItems);
+  };
+
   const handleSaveAll = async () => {
     if (processedItems.length === 0 || !user) return;
     
@@ -415,6 +437,7 @@ export function AddItemPage() {
         onDeleteItems={handleDeleteItems}
         onSaveAll={handleSaveAll}
         onAddItem={handleAddNewItem}
+        onDateChange={handleDateChange}
         isSaving={saving}
       />
     );

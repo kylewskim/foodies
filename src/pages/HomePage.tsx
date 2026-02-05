@@ -28,6 +28,7 @@ export function HomePage() {
   });
   const [loading, setLoading] = useState(true);
   const [showScanOptions, setShowScanOptions] = useState(false);
+  const [categoryFilter, setCategoryFilter] = useState<string>('All');
   
   // File input refs
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -469,15 +470,47 @@ export function HomePage() {
 
       {/* Cook Before It's Expired Section */}
       <div style={{ padding: '0 20px' }}>
-        <h2 style={{ 
-          fontSize: '20px', 
+        <h2 style={{
+          fontSize: '20px',
           fontWeight: '400',
           color: '#1a1a1a',
-          margin: '0 0 24px 0',
+          margin: '0 0 16px 0',
           fontFamily: '"Poppins", sans-serif',
         }}>
           Cook Before It's Expired
         </h2>
+
+        {/* Category Filter Chips */}
+        {expiringItems.length > 0 && (
+          <div style={{
+            display: 'flex',
+            gap: '8px',
+            marginBottom: '24px',
+            overflowX: 'auto',
+            paddingBottom: '4px',
+          }}>
+            {['All', 'Produce', 'Dairy', 'Protein', 'Grains', 'Beverages'].map(cat => (
+              <button
+                key={cat}
+                onClick={() => setCategoryFilter(cat)}
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: '16px',
+                  border: 'none',
+                  backgroundColor: categoryFilter === cat ? '#e3e9e3' : '#efeee7',
+                  color: categoryFilter === cat ? '#073d35' : '#11130b',
+                  fontSize: '12px',
+                  fontWeight: '400',
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                  fontFamily: '"Poppins", sans-serif',
+                }}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
+        )}
 
         {expiringItems.length === 0 ? (
           <div style={{
@@ -488,16 +521,34 @@ export function HomePage() {
             color: '#999',
           }}>
             <div style={{ fontSize: '32px', marginBottom: '12px' }}>✅</div>
-            <div style={{ 
+            <div style={{
               fontSize: '14px',
               fontFamily: '"Poppins", sans-serif',
             }}>
               No items expiring soon!
             </div>
           </div>
+        ) : expiringItems.filter(item => categoryFilter === 'All' || item.category === categoryFilter).length === 0 ? (
+          <div style={{
+            backgroundColor: '#fff',
+            borderRadius: '16px',
+            padding: '40px 30px',
+            textAlign: 'center',
+            color: '#999',
+          }}>
+            <div style={{ fontSize: '32px', marginBottom: '12px' }}>🔍</div>
+            <div style={{
+              fontSize: '14px',
+              fontFamily: '"Poppins", sans-serif',
+            }}>
+              No {categoryFilter.toLowerCase()} items expiring soon
+            </div>
+          </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
-            {expiringItems.map(item => (
+            {expiringItems
+              .filter(item => categoryFilter === 'All' || item.category === categoryFilter)
+              .map(item => (
               <div
                 key={item.itemId}
                 style={{
@@ -508,19 +559,24 @@ export function HomePage() {
               >
                 {/* Left side - Image and Info */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  {/* Food Image Placeholder */}
+                  {/* Food Image */}
                   <div style={{
                     width: '60px',
                     height: '60px',
                     borderRadius: '8px',
-                    backgroundColor: '#e8e8e8',
+                    backgroundColor: '#f5f5f5',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     fontSize: '28px',
                     overflow: 'hidden',
                   }}>
-                    🥦
+                    {item.category === 'Produce' && '🥬'}
+                    {item.category === 'Protein' && '🍖'}
+                    {item.category === 'Dairy' && '🥛'}
+                    {item.category === 'Grains' && '🌾'}
+                    {item.category === 'Beverages' && '🥤'}
+                    {!['Produce', 'Protein', 'Dairy', 'Grains', 'Beverages'].includes(item.category) && '🍽️'}
                   </div>
 
                   {/* Item Info */}
