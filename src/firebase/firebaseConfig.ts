@@ -6,7 +6,7 @@ import { getMessaging, isSupported, type Messaging } from 'firebase/messaging';
 // Firebase configuration
 const firebaseConfig = {
   apiKey: "AIzaSyCbi--OGrmvk34vLR21Coco5DJZDv6W_fQ",
-  authDomain: "foodies-d91fa.firebaseapp.com",
+  authDomain: "foodies-dusky-pi.vercel.app",
   projectId: "foodies-d91fa",
   storageBucket: "foodies-d91fa.firebasestorage.app",
   messagingSenderId: "397694091110",
