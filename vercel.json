@@ -1,0 +1,12 @@
+{
+  "rewrites": [
+    {
+      "source": "/__/auth/:path*",
+      "destination": "https://foodies-d91fa.firebaseapp.com/__/auth/:path*"
+    },
+    {
+      "source": "/((?!assets|icons|firebase-messaging-sw\\.js|manifest\\.webmanifest|sw\\.js|workbox-.*\\.js|registerSW\\.js|apple-touch-icon\\.png).*)",
+      "destination": "/index.html"
+    }
+  ]
+}
