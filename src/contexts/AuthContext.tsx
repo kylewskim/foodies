@@ -108,18 +108,27 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, []);
 
   const signInWithGoogle = async () => {
-    try {
-      // Try popup first (works on desktop)
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches
+      || (window.navigator as { standalone?: boolean }).standalone === true;
+
+    if (isStandalone) {
+      // Standalone PWA: signInWithRedirect opens Safari instead of returning to PWA
+      // Use signInWithPopup only (supported in iOS 16.4+)
       await signInWithPopup(auth, googleProvider);
-    } catch (error: any) {
-      // If popup is blocked or fails, try redirect (better for mobile)
-      if (error.code === 'auth/popup-blocked' || 
-          error.code === 'auth/popup-closed-by-user' ||
-          error.code === 'auth/cancelled-popup-request') {
-        await signInWithRedirect(auth, googleProvider);
-      } else {
-        console.error('Google sign-in error:', error);
-        throw error;
+    } else {
+      try {
+        // Try popup first (works on desktop)
+        await signInWithPopup(auth, googleProvider);
+      } catch (error: any) {
+        // If popup is blocked or fails, try redirect (better for mobile browsers)
+        if (error.code === 'auth/popup-blocked' ||
+            error.code === 'auth/popup-closed-by-user' ||
+            error.code === 'auth/cancelled-popup-request') {
+          await signInWithRedirect(auth, googleProvider);
+        } else {
+          console.error('Google sign-in error:', error);
+          throw error;
+        }
       }
     }
   };
