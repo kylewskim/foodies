@@ -91,6 +91,7 @@ export interface UserPreferences {
   ingredientExclusions: string[];
   notifyExpireIn: string | null; // '1_day' | '3_days' | '1_week'
   notifyTimeOfDay: string | null; // 'morning' | 'afternoon' | 'evening'
+  pushEnabled?: boolean;
   createdAt: string;
   updatedAt: string;
 }

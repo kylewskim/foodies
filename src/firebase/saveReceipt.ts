@@ -406,6 +406,7 @@ export async function saveUserPreferences(userId: string, preferences: Partial<U
         ingredientExclusions: [],
         notifyExpireIn: null,
         notifyTimeOfDay: null,
+        pushEnabled: false,
         createdAt: now,
         updatedAt: now,
         ...preferences,

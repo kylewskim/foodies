@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { saveUserPreferences } from '../firebase/saveReceipt';
+import { requestNotificationPermission } from '../firebase/notifications';
 
 type OnboardingStep = 1 | 2 | 3;
 
@@ -79,6 +80,12 @@ export function OnboardingPage() {
     if (!user) return;
     setSaving(true);
     try {
+      // If user set notification preferences, request permission + register token
+      const pushEnabled = !!(notifyExpireIn && notifyTimeOfDay);
+      if (pushEnabled) {
+        await requestNotificationPermission(user.uid);
+      }
+
       await saveUserPreferences(user.uid, {
         onboardingCompleted: true,
         helpWith,
@@ -87,6 +94,7 @@ export function OnboardingPage() {
         ingredientExclusions,
         notifyExpireIn,
         notifyTimeOfDay,
+        pushEnabled,
       });
       // Refresh onboarding status in context before navigating
       await checkOnboardingStatus();

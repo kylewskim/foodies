@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { BottomNavigation } from '../components/BottomNavigation';
+import { NotificationSettings } from '../components/NotificationSettings';
 
 export function SettingsPage() {
   const { user, logout } = useAuth();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
 
   const handleLogout = async () => {
     setIsLoggingOut(true);
@@ -110,10 +112,10 @@ export function SettingsPage() {
           overflow: 'hidden',
           marginBottom: '16px',
         }}>
-          <SettingsItem 
-            icon="🔔" 
-            label="Notifications" 
-            onClick={() => {}}
+          <SettingsItem
+            icon="🔔"
+            label="Notifications"
+            onClick={() => setShowNotifications(true)}
           />
           <SettingsItem 
             icon="🏠" 
@@ -196,6 +198,13 @@ export function SettingsPage() {
 
       {/* Bottom Navigation */}
       <BottomNavigation />
+
+      {/* Notification Settings Overlay */}
+      {showNotifications && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 100 }}>
+          <NotificationSettings onBack={() => setShowNotifications(false)} />
+        </div>
+      )}
     </div>
   );
 }

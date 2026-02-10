@@ -1,4 +1,5 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { useState, useEffect, useCallback } from 'react';
+import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from './contexts/AuthContext';
 import { HomePage } from './pages/HomePage';
 import { InventoryPage } from './pages/InventoryPage';
@@ -14,6 +15,9 @@ import { OnboardingPage } from './pages/OnboardingPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { MagicKitchenStartPage } from './pages/MagicKitchenStartPage';
 import { MagicKitchenResultPage } from './pages/MagicKitchenResultPage';
+import { setupForegroundHandler } from './firebase/notifications';
+import { NotificationToast } from './components/NotificationToast';
+import type { MessagePayload } from 'firebase/messaging';
 
 // Loading screen component
 function LoadingScreen() {
@@ -104,7 +108,35 @@ function OnboardingRoute({ children }: { children: React.ReactNode }) {
 }
 
 function App() {
+  const navigate = useNavigate();
+  const [toast, setToast] = useState<{ title: string; body: string; url?: string } | null>(null);
+
+  const handleForegroundMessage = useCallback((payload: MessagePayload) => {
+    setToast({
+      title: payload.notification?.title || 'Freshli',
+      body: payload.notification?.body || 'Check your food items!',
+      url: payload.data?.url,
+    });
+  }, []);
+
+  useEffect(() => {
+    const unsubscribe = setupForegroundHandler(handleForegroundMessage);
+    return unsubscribe;
+  }, [handleForegroundMessage]);
+
   return (
+    <>
+    {toast && (
+      <NotificationToast
+        title={toast.title}
+        body={toast.body}
+        onClose={() => setToast(null)}
+        onClick={() => {
+          if (toast.url) navigate(toast.url);
+          setToast(null);
+        }}
+      />
+    )}
     <Routes>
       <Route path="/splash" element={<SplashPage />} />
       <Route path="/login" element={<AuthRoute><LoginPage /></AuthRoute>} />
@@ -122,6 +154,7 @@ function App() {
       <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
       <Route path="*" element={<Navigate to="/splash" replace />} />
     </Routes>
+    </>
   );
 }
 
