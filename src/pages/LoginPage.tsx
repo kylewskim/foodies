@@ -14,6 +14,7 @@ export function LoginPage() {
   const [error, setError] = useState<string | null>(null);
 
   const handleGoogleSuccess = async (credentialResponse: { credential?: string }) => {
+    alert('1. onSuccess called, credential: ' + (credentialResponse.credential ? 'YES' : 'NO'));
     if (!credentialResponse.credential) {
       setError('No credential received from Google');
       return;
@@ -22,8 +23,10 @@ export function LoginPage() {
     setError(null);
     try {
       await signInWithGoogleCredential(credentialResponse.credential);
+      alert('2. signInWithCredential SUCCESS');
       navigate('/');
     } catch (err: any) {
+      alert('3. signInWithCredential FAILED: ' + err.message);
       setError(err.message || 'Failed to sign in with Google');
     } finally {
       setLoading(false);
