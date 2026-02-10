@@ -1,12 +1,12 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import {
   User,
-  signInWithPopup,
-  getRedirectResult,
+  GoogleAuthProvider,
+  signInWithCredential,
   signOut,
   onAuthStateChanged
 } from 'firebase/auth';
-import { auth, googleProvider } from '../firebase/firebaseConfig';
+import { auth } from '../firebase/firebaseConfig';
 import { getUserPreferences } from '../firebase/saveReceipt';
 
 // Dev mode check - only enabled in development
@@ -24,7 +24,7 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   onboardingCompleted: boolean | null; // null = not yet checked
-  signInWithGoogle: () => Promise<void>;
+  signInWithGoogleCredential: (idToken: string) => Promise<void>;
   signInAsDev: () => Promise<void>; // Dev mode login
   logout: () => Promise<void>;
   checkOnboardingStatus: (forceUserId?: string) => Promise<void>;
@@ -56,7 +56,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setOnboardingCompleted(null);
       return;
     }
-    
+
     try {
       const prefs = await getUserPreferences(userId);
       console.log('Checking onboarding status for user:', userId, 'prefs:', prefs);
@@ -68,22 +68,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
   };
 
   useEffect(() => {
-    // Check for redirect result (for mobile browsers)
-    getRedirectResult(auth)
-      .then((result) => {
-        if (result?.user) {
-          setUser(result.user);
-        }
-      })
-      .catch((error) => {
-        console.error('Redirect sign-in error:', error);
-      });
-
     // Listen for auth state changes
     const unsubscribe = onAuthStateChanged(auth, async (authUser) => {
       console.log('Auth state changed:', authUser?.uid);
       setUser(authUser);
-      
+
       if (authUser) {
         // Check onboarding status when user logs in
         try {
@@ -99,16 +88,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
       } else {
         setOnboardingCompleted(null);
       }
-      
+
       setLoading(false);
     });
 
     return () => unsubscribe();
   }, []);
 
-  const signInWithGoogle = async () => {
-    // Always use popup - redirect doesn't return to standalone PWA on iOS
-    await signInWithPopup(auth, googleProvider);
+  // Google sign-in via GIS credential (iframe-based, no popup/redirect needed)
+  const signInWithGoogleCredential = async (idToken: string) => {
+    const credential = GoogleAuthProvider.credential(idToken);
+    await signInWithCredential(auth, credential);
   };
 
   const logout = async () => {
@@ -135,7 +125,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     console.log('🔧 Dev mode login activated');
     setIsDevMode(true);
     setUser(DEV_USER);
-    
+
     // Check onboarding status for dev user
     try {
       const prefs = await getUserPreferences(DEV_USER.uid);
@@ -151,7 +141,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     user,
     loading,
     onboardingCompleted,
-    signInWithGoogle,
+    signInWithGoogleCredential,
     signInAsDev,
     logout,
     checkOnboardingStatus,
