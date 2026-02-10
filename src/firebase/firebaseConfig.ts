@@ -2,8 +2,8 @@ import { initializeApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
 import {
   initializeAuth,
+  indexedDBLocalPersistence,
   browserLocalPersistence,
-  inMemoryPersistence,
   GoogleAuthProvider,
 } from 'firebase/auth';
 import { getMessaging, isSupported, type Messaging } from 'firebase/messaging';
@@ -25,13 +25,17 @@ const app = initializeApp(firebaseConfig);
 // Initialize Firestore
 export const db = getFirestore(app);
 
-// Initialize Auth with explicit persistence.
-// iOS standalone PWA / ITP 환경에서의 인증 이슈를 줄이기 위해
-// 가능한 경우 브라우저 영구 저장소를 사용하고, 그렇지 않으면 in-memory 로 fallback 합니다.
+// Initialize Auth with explicit persistence and NO popupRedirectResolver.
+//
+// Why:
+// - getAuth() internally creates a hidden iframe to authDomain for popup/redirect flows.
+// - iOS ITP blocks this third-party iframe, breaking the entire auth instance
+//   (causing auth/network-request-failed even for signInWithCredential).
+// - Since we use GIS (Google Identity Services) for sign-in, we don't need
+//   popup/redirect at all. By omitting popupRedirectResolver, no iframe is created.
+// - indexedDBLocalPersistence is the most reliable option across Safari & iOS PWA.
 export const auth = initializeAuth(app, {
-  persistence: typeof window !== 'undefined'
-    ? [browserLocalPersistence, inMemoryPersistence]
-    : [inMemoryPersistence],
+  persistence: [indexedDBLocalPersistence, browserLocalPersistence],
 });
 export const googleProvider = new GoogleAuthProvider();
 

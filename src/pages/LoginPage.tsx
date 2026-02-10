@@ -7,21 +7,11 @@ import broccoliImage from '../assets/img/broccoli.png';
 // Check if dev mode is available
 const isDev = import.meta.env.DEV;
 
-// Check if running as iOS standalone PWA
-function isIOSStandalonePWA(): boolean {
-  if (typeof window === 'undefined') return false;
-  return (
-    ('standalone' in window.navigator && (window.navigator as { standalone?: boolean }).standalone === true) ||
-    window.matchMedia('(display-mode: standalone)').matches
-  ) && /iPhone|iPad|iPod/.test(navigator.userAgent);
-}
-
 export function LoginPage() {
   const { signInWithGoogleCredential, signInAsDev } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const isIOSPWA = isIOSStandalonePWA();
 
   const handleGoogleSuccess = async (credentialResponse: { credential?: string }) => {
     if (!credentialResponse.credential) {
@@ -155,35 +145,8 @@ export function LoginPage() {
         width: '100%',
         flexShrink: 0,
       }}>
-        {/* iOS PWA 안내 메시지 */}
-        {isIOSPWA ? (
-          <div style={{
-            padding: '16px',
-            backgroundColor: '#fff3cd',
-            border: '1px solid #ffc107',
-            borderRadius: '8px',
-            maxWidth: '300px',
-            textAlign: 'center',
-          }}>
-            <p style={{
-              fontFamily: '"Poppins", sans-serif',
-              fontSize: '14px',
-              fontWeight: '500',
-              color: '#856404',
-              margin: '0 0 8px 0',
-            }}>
-              iOS PWA에서는 로그인이 제한됩니다
-            </p>
-            <p style={{
-              fontFamily: '"Poppins", sans-serif',
-              fontSize: '12px',
-              color: '#856404',
-              margin: 0,
-            }}>
-              Safari에서 앱을 열어 로그인해 주세요
-            </p>
-          </div>
-        ) : loading ? (
+        {/* Google Sign In Button */}
+        {loading ? (
           <div style={{
             padding: '12px 32px',
             fontFamily: '"Poppins", sans-serif',

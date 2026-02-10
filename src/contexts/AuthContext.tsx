@@ -95,22 +95,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
     return () => unsubscribe();
   }, []);
 
-  // Google sign-in via GIS credential.
-  // For demo: Use signInWithCredential directly (works in regular browsers/Safari).
-  // iOS standalone PWA may fail due to ITP, but for demo purposes we'll try it.
+  // Google sign-in via GIS credential → signInWithCredential.
+  // Works in both Safari and iOS PWA because we initialize Auth without
+  // popupRedirectResolver (no authDomain iframe that iOS ITP would block).
   const signInWithGoogleCredential = async (idToken: string) => {
-    try {
-      const credential = GoogleAuthProvider.credential(idToken);
-      await signInWithCredential(auth, credential);
-      console.log('signInWithCredential SUCCESS');
-    } catch (error: any) {
-      console.error('Error in signInWithGoogleCredential:', error);
-      // If network error in iOS PWA, provide helpful message
-      if (error.code === 'auth/network-request-failed') {
-        throw new Error('로그인에 실패했습니다. Safari에서 앱을 열어 로그인해 주세요.');
-      }
-      throw error;
-    }
+    const credential = GoogleAuthProvider.credential(idToken);
+    await signInWithCredential(auth, credential);
   };
 
   const logout = async () => {
