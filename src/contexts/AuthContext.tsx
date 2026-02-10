@@ -25,6 +25,7 @@ interface AuthContextType {
   loading: boolean;
   onboardingCompleted: boolean | null; // null = not yet checked
   signInWithGoogleCredential: (idToken: string) => Promise<void>;
+  signInWithGoogleAccessToken: (accessToken: string) => Promise<void>;
   signInAsDev: () => Promise<void>; // Dev mode login
   logout: () => Promise<void>;
   checkOnboardingStatus: (forceUserId?: string) => Promise<void>;
@@ -95,11 +96,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
     return () => unsubscribe();
   }, []);
 
-  // Google sign-in via GIS credential → signInWithCredential.
-  // Works in both Safari and iOS PWA because we initialize Auth without
-  // popupRedirectResolver (no authDomain iframe that iOS ITP would block).
+  // Google sign-in via GIS id_token (used by GoogleLogin button in regular browsers).
   const signInWithGoogleCredential = async (idToken: string) => {
     const credential = GoogleAuthProvider.credential(idToken);
+    await signInWithCredential(auth, credential);
+  };
+
+  // Google sign-in via OAuth access_token (used by redirect flow in standalone PWA).
+  const signInWithGoogleAccessToken = async (accessToken: string) => {
+    const credential = GoogleAuthProvider.credential(null, accessToken);
     await signInWithCredential(auth, credential);
   };
 
@@ -144,6 +149,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     loading,
     onboardingCompleted,
     signInWithGoogleCredential,
+    signInWithGoogleAccessToken,
     signInAsDev,
     logout,
     checkOnboardingStatus,
