@@ -1,6 +1,11 @@
 import { initializeApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
-import { getAuth, GoogleAuthProvider } from 'firebase/auth';
+import {
+  initializeAuth,
+  browserLocalPersistence,
+  inMemoryPersistence,
+  GoogleAuthProvider,
+} from 'firebase/auth';
 import { getMessaging, isSupported, type Messaging } from 'firebase/messaging';
 
 // Firebase configuration
@@ -20,8 +25,14 @@ const app = initializeApp(firebaseConfig);
 // Initialize Firestore
 export const db = getFirestore(app);
 
-// Initialize Auth
-export const auth = getAuth(app);
+// Initialize Auth with explicit persistence.
+// iOS standalone PWA / ITP 환경에서의 인증 이슈를 줄이기 위해
+// 가능한 경우 브라우저 영구 저장소를 사용하고, 그렇지 않으면 in-memory 로 fallback 합니다.
+export const auth = initializeAuth(app, {
+  persistence: typeof window !== 'undefined'
+    ? [browserLocalPersistence, inMemoryPersistence]
+    : [inMemoryPersistence],
+});
 export const googleProvider = new GoogleAuthProvider();
 
 // Messaging - lazy init because not all browsers support it
