@@ -3,7 +3,6 @@ import {
   User,
   GoogleAuthProvider,
   signInWithCredential,
-  signInWithCustomToken,
   signOut,
   onAuthStateChanged
 } from 'firebase/auth';
