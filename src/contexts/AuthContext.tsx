@@ -1,8 +1,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import {
   User,
-  GoogleAuthProvider,
-  signInWithCredential,
+  signInWithCustomToken,
   signOut,
   onAuthStateChanged
 } from 'firebase/auth';
@@ -95,10 +94,36 @@ export function AuthProvider({ children }: AuthProviderProps) {
     return () => unsubscribe();
   }, []);
 
-  // Google sign-in via GIS credential (iframe-based, no popup/redirect needed)
+  // Google sign-in via GIS credential.
+  // In iOS PWA we avoid signInWithCredential (authDomain/iframe) and instead:
+  // 1) send the Google ID token to a Cloud Function
+  // 2) receive a Firebase Custom Token
+  // 3) signInWithCustomToken(auth, customToken)
   const signInWithGoogleCredential = async (idToken: string) => {
-    const credential = GoogleAuthProvider.credential(idToken);
-    await signInWithCredential(auth, credential);
+    // Prefer env-based base URL, fallback to default region/project URL.
+    const functionsBase =
+      import.meta.env.VITE_FUNCTIONS_BASE_URL ||
+      'https://us-central1-foodies-d91fa.cloudfunctions.net';
+
+    const response = await fetch(`${functionsBase}/createCustomToken`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ idToken }),
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`Custom token request failed: ${response.status} ${text}`);
+    }
+
+    const data = (await response.json()) as { customToken?: string; error?: string };
+    if (!data.customToken) {
+      throw new Error(data.error || 'No custom token returned from server');
+    }
+
+    await signInWithCustomToken(auth, data.customToken);
   };
 
   const logout = async () => {

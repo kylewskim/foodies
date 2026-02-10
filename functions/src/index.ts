@@ -1,5 +1,6 @@
 import * as admin from 'firebase-admin';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
+import { onRequest } from 'firebase-functions/v2/https';
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -135,5 +136,49 @@ export const sendExpirationNotifications = onSchedule(
     });
 
     await Promise.all(promises);
+  }
+);
+
+// Exchange Google ID token (from GIS) for a Firebase Custom Token.
+// This avoids authDomain/iframe flows that can break in iOS standalone PWA.
+export const createCustomToken = onRequest(
+  { region: 'us-central1', cors: true },
+  async (req, res) => {
+    // CORS preflight
+    if (req.method === 'OPTIONS') {
+      res.set('Access-Control-Allow-Origin', '*');
+      res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+      res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+      res.status(204).send('');
+      return;
+    }
+
+    if (req.method !== 'POST') {
+      res.set('Access-Control-Allow-Origin', '*');
+      res.status(405).send('Method Not Allowed');
+      return;
+    }
+
+    res.set('Access-Control-Allow-Origin', '*');
+
+    try {
+      const idToken = (req.body && (req.body.idToken || req.body.token)) as string | undefined;
+      if (!idToken) {
+        res.status(400).json({ error: 'Missing idToken' });
+        return;
+      }
+
+      // Verify the Google ID token
+      const decoded = await admin.auth().verifyIdToken(idToken);
+      const uid = decoded.uid;
+
+      // Create a Firebase custom token for this user
+      const customToken = await admin.auth().createCustomToken(uid);
+
+      res.status(200).json({ customToken });
+    } catch (error) {
+      console.error('Error creating custom token', error);
+      res.status(500).json({ error: 'Failed to create custom token' });
+    }
   }
 );
