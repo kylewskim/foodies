@@ -109,7 +109,7 @@ EXAMPLES:
 /**
  * 규칙 기반 유통기한 추정 (폴백)
  */
-function estimateWithRules(
+export function estimateWithRules(
   normalizedName: string,
   category: FoodCategory
 ): EstimateExpirationDaysOutput {

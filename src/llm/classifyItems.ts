@@ -111,7 +111,7 @@ OUTPUT FORMAT (JSON array):
 /**
  * 키워드 매칭을 사용한 아이템 분류 (폴백)
  */
-function classifyWithKeywords(rawNames: string[]): ClassifyItemOutput[] {
+export function classifyWithKeywords(rawNames: string[]): ClassifyItemOutput[] {
   return rawNames.map(rawName => {
     const nameLower = rawName.toLowerCase();
     
@@ -171,7 +171,7 @@ function classifyWithKeywords(rawNames: string[]): ClassifyItemOutput[] {
 /**
  * 단어 첫 글자 대문자화
  */
-function capitalizeWords(str: string): string {
+export function capitalizeWords(str: string): string {
   return str
     .split(' ')
     .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())

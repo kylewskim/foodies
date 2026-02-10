@@ -9,8 +9,7 @@ import type { Item, StorageLocation, FoodCategory } from '../types';
 import { saveReceipt, saveItems } from '../firebase/saveReceipt';
 import { getCurrentDateISO, calculateExpirationDate } from '../utils/dateHelpers';
 import { normalizeInputText } from '../llm/normalizeInputText';
-import { classifyItems } from '../llm/classifyItems';
-import { estimateExpirationDays } from '../llm/estimateExpirationDays';
+import { classifyAndEstimate } from '../llm/classifyAndEstimate';
 import { markRecipesNeedRefresh } from '../firebase/userRecipes';
 
 type InputMethod = 'image' | 'manual' | 'form' | 'review';
@@ -55,6 +54,7 @@ export function AddItemPage() {
   const [defaultLocation] = useState<StorageLocation>('fridge');
   const [autoProcessStarted, setAutoProcessStarted] = useState(false);
   const [receiptDate, setReceiptDate] = useState<string | undefined>(undefined);
+  const [cachedExpirations, setCachedExpirations] = useState<{ expiration_days: number; confidence: 'high' | 'medium' | 'low' }[]>([]);
 
   // Handle returning from EditItemPage with an updated item
   useEffect(() => {
@@ -128,109 +128,51 @@ export function AddItemPage() {
   const [locationValue, setLocationValue] = useState<StorageLocation>(editItem?.location || 'fridge');
   const [category, setCategory] = useState<FoodCategory>(editItem?.category || 'Produce');
 
-  const handleImageUpload = async (extractedText: string) => {
+  const processExtractedText = async (extractedText: string) => {
     setProcessing(true);
     try {
       const normalized = await normalizeInputText(extractedText);
       const rawNames = normalized.items.map(item => item.raw_name);
-      const classified = await classifyItems(rawNames);
-      
-      const purchaseDateISO = normalized.purchase_date || getCurrentDateISO();
-      const tempReceiptId = `temp_${Date.now()}`;
-      setReceiptDate(purchaseDateISO);
-      
-      // Process all items
-      const items: Item[] = [];
-      for (let i = 0; i < classified.length; i++) {
-        const classifiedItem = classified[i];
-        const normalizedItem = normalized.items[i];
-        
-        const expiration = await estimateExpirationDays(
-          classifiedItem.normalized_name,
-          classifiedItem.category
-        );
-        
-        const autoExpirationDate = calculateExpirationDate(
-          purchaseDateISO,
-          expiration.expiration_days
-        );
-        
-        items.push({
-          itemId: `temp_${i}_${Date.now()}`,
-          userId: user?.uid || '',
-          receiptId: tempReceiptId,
-          name: classifiedItem.normalized_name,
-          quantity: normalizedItem.quantity,
-          category: classifiedItem.category,
-          location: defaultLocation,
-          purchaseDate: purchaseDateISO,
-          autoExpirationDate,
-          manualExpirationDate: null,
-          expirationSource: 'auto',
-        });
-      }
-      
-      setProcessedItems(items);
-      setInputMethod('review');
-    } catch (error) {
-      console.error('Error processing image:', error);
-      alert('Failed to process image. Please try again.');
-    } finally {
-      setProcessing(false);
-    }
-  };
 
-  const handleManualInput = async (text: string) => {
-    setProcessing(true);
-    try {
-      const normalized = await normalizeInputText(text);
-      const rawNames = normalized.items.map(item => item.raw_name);
-      const classified = await classifyItems(rawNames);
-      
+      // Classify items and estimate expiration days in a single API call
+      const results = await classifyAndEstimate(rawNames);
+
       const purchaseDateISO = normalized.purchase_date || getCurrentDateISO();
       const tempReceiptId = `temp_${Date.now()}`;
       setReceiptDate(purchaseDateISO);
-      
-      // Process all items
-      const items: Item[] = [];
-      for (let i = 0; i < classified.length; i++) {
-        const classifiedItem = classified[i];
-        const normalizedItem = normalized.items[i];
-        
-        const expiration = await estimateExpirationDays(
-          classifiedItem.normalized_name,
-          classifiedItem.category
-        );
-        
-        const autoExpirationDate = calculateExpirationDate(
-          purchaseDateISO,
-          expiration.expiration_days
-        );
-        
-        items.push({
-          itemId: `temp_${i}_${Date.now()}`,
-          userId: user?.uid || '',
-          receiptId: tempReceiptId,
-          name: classifiedItem.normalized_name,
-          quantity: normalizedItem.quantity,
-          category: classifiedItem.category,
-          location: defaultLocation,
-          purchaseDate: purchaseDateISO,
-          autoExpirationDate,
-          manualExpirationDate: null,
-          expirationSource: 'auto',
-        });
-      }
-      
+
+      // Cache expirations so date changes don't need API calls
+      setCachedExpirations(results.map(r => ({
+        expiration_days: r.expiration_days,
+        confidence: r.confidence,
+      })));
+
+      const items: Item[] = results.map((result, i) => ({
+        itemId: `temp_${i}_${Date.now()}`,
+        userId: user?.uid || '',
+        receiptId: tempReceiptId,
+        name: result.normalized_name,
+        quantity: normalized.items[i].quantity,
+        category: result.category,
+        location: defaultLocation,
+        purchaseDate: purchaseDateISO,
+        autoExpirationDate: calculateExpirationDate(purchaseDateISO, result.expiration_days),
+        manualExpirationDate: null,
+        expirationSource: 'auto' as const,
+      }));
+
       setProcessedItems(items);
       setInputMethod('review');
     } catch (error) {
-      console.error('Error processing manual input:', error);
+      console.error('Error processing input:', error);
       alert('Failed to process input. Please try again.');
     } finally {
       setProcessing(false);
     }
   };
+
+  const handleImageUpload = (extractedText: string) => processExtractedText(extractedText);
+  const handleManualInput = (text: string) => processExtractedText(text);
 
   const handleAddNewItem = () => {
     // Navigate to form view to add a new item manually
@@ -260,24 +202,18 @@ export function AddItemPage() {
     );
   };
 
-  const handleDateChange = async (newDateISO: string) => {
-    // Update receiptDate state
+  const handleDateChange = (newDateISO: string) => {
     setReceiptDate(newDateISO);
 
-    // Update all items' purchase dates and recalculate expiration dates
-    const updatedItems = await Promise.all(
-      processedItems.map(async (item) => {
-        // Recalculate expiration date based on new purchase date
-        const expiration = await estimateExpirationDays(item.name, item.category);
-        const autoExpirationDate = calculateExpirationDate(newDateISO, expiration.expiration_days);
-
-        return {
-          ...item,
-          purchaseDate: newDateISO,
-          autoExpirationDate,
-        };
-      })
-    );
+    // Use cached expiration days — no API call needed, just recalculate dates
+    const updatedItems = processedItems.map((item, i) => ({
+      ...item,
+      purchaseDate: newDateISO,
+      autoExpirationDate: calculateExpirationDate(
+        newDateISO,
+        cachedExpirations[i]?.expiration_days ?? 7
+      ),
+    }));
 
     setProcessedItems(updatedItems);
   };

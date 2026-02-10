@@ -1,4 +1,4 @@
-import { collection, addDoc, doc, setDoc, getDoc, query, where, getDocs, deleteDoc } from 'firebase/firestore';
+import { collection, addDoc, doc, setDoc, getDoc, query, where, getDocs, deleteDoc, writeBatch } from 'firebase/firestore';
 import { db } from './firebaseConfig';
 import type { Receipt, Item, UserPreferences, ItemStatus } from '../types';
 
@@ -50,9 +50,16 @@ export async function saveItem(item: Omit<Item, 'itemId'>): Promise<Item> {
  */
 export async function saveItems(items: Omit<Item, 'itemId'>[]): Promise<Item[]> {
   try {
-    const savedItems = await Promise.all(
-      items.map(item => saveItem(item))
-    );
+    const batch = writeBatch(db);
+    const savedItems: Item[] = [];
+
+    for (const item of items) {
+      const docRef = doc(collection(db, 'items'));
+      batch.set(docRef, item);
+      savedItems.push({ ...item, itemId: docRef.id });
+    }
+
+    await batch.commit();
     return savedItems;
   } catch (error) {
     console.error('Error saving items:', error);
