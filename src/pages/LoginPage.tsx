@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { GoogleLogin, useGoogleLogin } from '@react-oauth/google';
+import { GoogleLogin } from '@react-oauth/google';
 import { useAuth } from '../contexts/AuthContext';
 import broccoliImage from '../assets/img/broccoli.png';
 
@@ -23,9 +23,8 @@ export function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const isPWA = isStandalonePWA();
 
-  // Handle OAuth redirect response on page load (for PWA redirect flow).
-  // After Google redirects back, the URL hash contains access_token.
-  const handleAccessTokenFromHash = useCallback(async (accessToken: string) => {
+  // Consume access_token stored by main.tsx from OAuth redirect hash
+  const handleStoredAccessToken = useCallback(async (accessToken: string) => {
     setLoading(true);
     setError(null);
     try {
@@ -40,24 +39,29 @@ export function LoginPage() {
   }, [signInWithGoogleAccessToken, navigate]);
 
   useEffect(() => {
-    // Check if we're returning from a Google OAuth redirect
-    const hash = window.location.hash;
-    if (hash && hash.includes('access_token=')) {
-      const params = new URLSearchParams(hash.substring(1));
-      const accessToken = params.get('access_token');
-      if (accessToken) {
-        // Clear the hash from URL to avoid re-processing
-        window.history.replaceState(null, '', window.location.pathname);
-        handleAccessTokenFromHash(accessToken);
-      }
+    // Check sessionStorage for access_token saved by main.tsx on OAuth redirect
+    const accessToken = sessionStorage.getItem('oauth_access_token');
+    if (accessToken) {
+      sessionStorage.removeItem('oauth_access_token');
+      handleStoredAccessToken(accessToken);
     }
-  }, [handleAccessTokenFromHash]);
+  }, [handleStoredAccessToken]);
 
-  // PWA redirect-based Google login (bypasses GIS iframe that breaks in standalone PWA)
-  const pwaLogin = useGoogleLogin({
-    ux_mode: 'redirect',
-    redirect_uri: window.location.origin,
-  });
+  // PWA: Build Google OAuth URL manually and redirect.
+  // Uses implicit flow (response_type=token) → Google redirects back with #access_token=xxx
+  const handlePWALogin = () => {
+    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+    const redirectUri = window.location.origin;
+    const params = new URLSearchParams({
+      client_id: clientId,
+      redirect_uri: redirectUri,
+      response_type: 'token',
+      scope: 'openid email profile',
+      include_granted_scopes: 'true',
+      prompt: 'select_account',
+    });
+    window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+  };
 
   // Regular browser: GIS iframe-based login (works in Safari, Chrome, etc.)
   const handleGoogleSuccess = async (credentialResponse: { credential?: string }) => {
@@ -206,7 +210,7 @@ export function LoginPage() {
         ) : isPWA ? (
           /* PWA: Use redirect-based login to avoid GIS iframe issues */
           <button
-            onClick={() => pwaLogin()}
+            onClick={handlePWALogin}
             style={{
               display: 'flex',
               alignItems: 'center',
