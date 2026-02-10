@@ -34,7 +34,9 @@ export function NotificationSettings({ onBack }: NotificationSettingsProps) {
 
   const supported = isNotificationSupported();
   const permission = getNotificationPermission();
-  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+  // Detect actual iOS (not macOS pretending to be iPad)
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !('ontouchend' in document === false);
+  const isMobileIOS = isIOS && navigator.maxTouchPoints > 1 && !window.matchMedia('(pointer: fine)').matches;
   const isPWA = isInstalledPWA();
 
   useEffect(() => {
@@ -81,8 +83,8 @@ export function NotificationSettings({ onBack }: NotificationSettingsProps) {
     await saveUserPreferences(user.uid, { [key]: value });
   };
 
-  // iOS not installed as PWA
-  if (isIOS && !isPWA) {
+  // iOS (mobile) not installed as PWA
+  if (isMobileIOS && !isPWA) {
     return (
       <SettingsPanel onBack={onBack} title="Notifications">
         <InfoCard
