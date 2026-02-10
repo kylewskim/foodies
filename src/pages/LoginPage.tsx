@@ -7,14 +7,23 @@ import broccoliImage from '../assets/img/broccoli.png';
 // Check if dev mode is available
 const isDev = import.meta.env.DEV;
 
+// Check if running as iOS standalone PWA
+function isIOSStandalonePWA(): boolean {
+  if (typeof window === 'undefined') return false;
+  return (
+    ('standalone' in window.navigator && (window.navigator as { standalone?: boolean }).standalone === true) ||
+    window.matchMedia('(display-mode: standalone)').matches
+  ) && /iPhone|iPad|iPod/.test(navigator.userAgent);
+}
+
 export function LoginPage() {
   const { signInWithGoogleCredential, signInAsDev } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const isIOSPWA = isIOSStandalonePWA();
 
   const handleGoogleSuccess = async (credentialResponse: { credential?: string }) => {
-    alert('1. onSuccess called, credential: ' + (credentialResponse.credential ? 'YES' : 'NO'));
     if (!credentialResponse.credential) {
       setError('No credential received from Google');
       return;
@@ -23,11 +32,11 @@ export function LoginPage() {
     setError(null);
     try {
       await signInWithGoogleCredential(credentialResponse.credential);
-      alert('2. signInWithCredential SUCCESS');
       navigate('/');
     } catch (err: any) {
-      alert('3. signInWithCredential FAILED: ' + err.message);
-      setError(err.message || 'Failed to sign in with Google');
+      console.error('Login error details:', err);
+      const errorMsg = err.message || 'Failed to sign in with Google';
+      setError(errorMsg);
     } finally {
       setLoading(false);
     }
@@ -146,8 +155,35 @@ export function LoginPage() {
         width: '100%',
         flexShrink: 0,
       }}>
-        {/* Google Sign In Button (GIS - iframe based, works in iOS PWA) */}
-        {loading ? (
+        {/* iOS PWA 안내 메시지 */}
+        {isIOSPWA ? (
+          <div style={{
+            padding: '16px',
+            backgroundColor: '#fff3cd',
+            border: '1px solid #ffc107',
+            borderRadius: '8px',
+            maxWidth: '300px',
+            textAlign: 'center',
+          }}>
+            <p style={{
+              fontFamily: '"Poppins", sans-serif',
+              fontSize: '14px',
+              fontWeight: '500',
+              color: '#856404',
+              margin: '0 0 8px 0',
+            }}>
+              iOS PWA에서는 로그인이 제한됩니다
+            </p>
+            <p style={{
+              fontFamily: '"Poppins", sans-serif',
+              fontSize: '12px',
+              color: '#856404',
+              margin: 0,
+            }}>
+              Safari에서 앱을 열어 로그인해 주세요
+            </p>
+          </div>
+        ) : loading ? (
           <div style={{
             padding: '12px 32px',
             fontFamily: '"Poppins", sans-serif',

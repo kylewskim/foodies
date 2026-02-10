@@ -1,6 +1,8 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import {
   User,
+  GoogleAuthProvider,
+  signInWithCredential,
   signInWithCustomToken,
   signOut,
   onAuthStateChanged
@@ -95,35 +97,21 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, []);
 
   // Google sign-in via GIS credential.
-  // In iOS PWA we avoid signInWithCredential (authDomain/iframe) and instead:
-  // 1) send the Google ID token to a Cloud Function
-  // 2) receive a Firebase Custom Token
-  // 3) signInWithCustomToken(auth, customToken)
+  // For demo: Use signInWithCredential directly (works in regular browsers/Safari).
+  // iOS standalone PWA may fail due to ITP, but for demo purposes we'll try it.
   const signInWithGoogleCredential = async (idToken: string) => {
-    // Prefer env-based base URL, fallback to default region/project URL.
-    const functionsBase =
-      import.meta.env.VITE_FUNCTIONS_BASE_URL ||
-      'https://us-central1-foodies-d91fa.cloudfunctions.net';
-
-    const response = await fetch(`${functionsBase}/createCustomToken`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ idToken }),
-    });
-
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(`Custom token request failed: ${response.status} ${text}`);
+    try {
+      const credential = GoogleAuthProvider.credential(idToken);
+      await signInWithCredential(auth, credential);
+      console.log('signInWithCredential SUCCESS');
+    } catch (error: any) {
+      console.error('Error in signInWithGoogleCredential:', error);
+      // If network error in iOS PWA, provide helpful message
+      if (error.code === 'auth/network-request-failed') {
+        throw new Error('로그인에 실패했습니다. Safari에서 앱을 열어 로그인해 주세요.');
+      }
+      throw error;
     }
-
-    const data = (await response.json()) as { customToken?: string; error?: string };
-    if (!data.customToken) {
-      throw new Error(data.error || 'No custom token returned from server');
-    }
-
-    await signInWithCustomToken(auth, data.customToken);
   };
 
   const logout = async () => {
