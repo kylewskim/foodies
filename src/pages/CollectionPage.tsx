@@ -190,12 +190,12 @@ export function CollectionPage() {
                     {recipe.recipeName}
                   </h3>
                   <p style={{
-                    fontSize: '12px',
+                    fontSize: '11px',
                     fontFamily: '"Poppins", sans-serif',
-                    color: 'rgba(0, 0, 0, 0.8)',
+                    color: 'rgba(0, 0, 0, 0.4)',
                     margin: 0,
                   }}>
-                    By AI Chef
+                    By Jamie Oliver
                   </p>
                   {recipe.recipeDescription && (
                     <p style={{

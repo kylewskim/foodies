@@ -182,22 +182,31 @@ export async function getRecommendations(
     const cachedRecipes = await getUserRecipes(userId);
 
     if (cachedRecipes && !needsBackgroundRefresh) {
-      const check = shouldRegenerateRecipes(items, cachedRecipes);
-      if (!check.shouldRegenerate) {
-        console.log(`✅ Using cached recommendations: ${check.reason}`);
-        // Recover extra metadata if stored
-        const extra = cachedRecipes as any;
-        return {
-          mode: extra.mode || 'abundant',
-          inventorySummary: extra.inventorySummary || {
-            uniqueItemsCount: items.length,
-            expiringSoonCount: 0,
-            expiringSoonItems: [],
-          },
-          recipes: cachedRecipes.recipes,
-          shoppingList: extra.shoppingList || [],
-          fromCache: true,
-        };
+      // Invalidate old AI-generated recipes that lack a url field
+      // (RecipeRec engine always provides url from Jamie Oliver dataset)
+      const isLegacyAICache = cachedRecipes.recipes.length > 0 &&
+        cachedRecipes.recipes.every(r => !r.url);
+
+      if (isLegacyAICache) {
+        console.log('🔄 Cached recipes are from old AI system (no url). Regenerating...');
+      } else {
+        const check = shouldRegenerateRecipes(items, cachedRecipes);
+        if (!check.shouldRegenerate) {
+          console.log(`✅ Using cached recommendations: ${check.reason}`);
+          // Recover extra metadata if stored
+          const extra = cachedRecipes as any;
+          return {
+            mode: extra.mode || 'abundant',
+            inventorySummary: extra.inventorySummary || {
+              uniqueItemsCount: items.length,
+              expiringSoonCount: 0,
+              expiringSoonItems: [],
+            },
+            recipes: cachedRecipes.recipes,
+            shoppingList: extra.shoppingList || [],
+            fromCache: true,
+          };
+        }
       }
     }
   }
