@@ -5,16 +5,11 @@ import { getItemsByUser } from '../firebase/saveReceipt';
 import type { Item, StoredRecipe } from '../types';
 import { BottomNavigation } from '../components/BottomNavigation';
 import { RecipeCardSkeleton } from '../components/RecipeCardSkeleton';
-import { generateRecipes as generateAIRecipes } from '../llm/generateRecipes';
 import { fetchRecipeImages } from '../utils/fetchRecipeImage';
-import { generateRecipeId } from '../firebase/favoriteRecipes';
 import {
-  getUserRecipes,
-  saveUserRecipes,
-  shouldRegenerateRecipes,
-  checkRecipesNeedRefresh,
-  clearRecipesRefreshFlag,
-} from '../firebase/userRecipes';
+  getRecommendations,
+  type ShoppingListItem,
+} from '../services/recommendationService';
 
 interface Recipe extends StoredRecipe {
   userItems: Item[];  // User's items that match this recipe
@@ -28,6 +23,8 @@ export function RecipesPage() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [userItems, setUserItems] = useState<Item[]>([]);
   const [selectedIngredient, setSelectedIngredient] = useState<string | null>(null);
+  const [shoppingList, setShoppingList] = useState<ShoppingListItem[]>([]);
+  const [mode, setMode] = useState<string>('abundant');
 
   useEffect(() => {
     if (user) {
@@ -39,9 +36,6 @@ export function RecipesPage() {
     if (!user) return;
 
     try {
-      // Check if recipes need background refresh (from item changes)
-      const needsBackgroundRefresh = checkRecipesNeedRefresh();
-
       // Fetch user's current inventory
       const items = await getItemsByUser(user.uid);
 
@@ -56,141 +50,48 @@ export function RecipesPage() {
 
       if (items.length === 0) {
         setRecipes([]);
+        setShoppingList([]);
+        setMode('empty_fridge');
         setLoading(false);
         setIsRefreshing(false);
-        clearRecipesRefreshFlag();
         return;
       }
 
-      // Try to load from Firebase
-      const firebaseRecipes = await getUserRecipes(user.uid);
-
-      // Helper function to map recipes to UI format
-      const mapRecipesToUI = (storedRecipes: StoredRecipe[]) => {
-        return storedRecipes.map(stored => {
-          const matchedUserItems = items.filter(item =>
-            stored.matchedIngredients.some(ing =>
-              item.name.toLowerCase().includes(ing.toLowerCase()) ||
-              ing.toLowerCase().includes(item.name.toLowerCase())
-            )
-          );
-
-          matchedUserItems.sort((a, b) => {
-            const expA = new Date(a.manualExpirationDate || a.autoExpirationDate);
-            const expB = new Date(b.manualExpirationDate || b.autoExpirationDate);
-            return expA.getTime() - expB.getTime();
-          });
-
-          return {
-            ...stored,
-            userItems: matchedUserItems,
-          };
-        });
-      };
-
-      // Check if we should regenerate
-      let shouldRegenerate = forceRegenerate || needsBackgroundRefresh;
-      let regenerationReason = forceRegenerate ? 'Manual refresh' : needsBackgroundRefresh ? 'Items changed' : '';
-
-      if (!forceRegenerate && !needsBackgroundRefresh && firebaseRecipes) {
-        const check = shouldRegenerateRecipes(items, firebaseRecipes);
-        shouldRegenerate = check.shouldRegenerate;
-        regenerationReason = check.reason;
-      }
-
-      // If we have cached recipes and need background refresh, show cached first
-      if (needsBackgroundRefresh && firebaseRecipes && !forceRegenerate) {
-        console.log('📦 Showing cached recipes while refreshing in background');
-        const recipesWithUserItems = mapRecipesToUI(firebaseRecipes.recipes);
-        // Filter out recipes with no matching items in current inventory
-        const visibleRecipes = recipesWithUserItems.filter(r => r.userItems.length > 0);
-        setRecipes(visibleRecipes);
-        setLoading(false);
-        // Continue to background refresh below
-      }
-
-      if (!shouldRegenerate && firebaseRecipes) {
-        // Use Firebase recipes
-        console.log(`✅ Using Firebase recipes: ${regenerationReason || 'No changes'}`);
-        const recipesWithUserItems = mapRecipesToUI(firebaseRecipes.recipes);
-        // Filter out recipes with no matching items in current inventory
-        const visibleRecipes = recipesWithUserItems.filter(r => r.userItems.length > 0);
-        setRecipes(visibleRecipes);
-        setLoading(false);
-        setIsRefreshing(false);
-        clearRecipesRefreshFlag();
-        return;
-      }
-
-      if (!firebaseRecipes && !forceRegenerate) {
-        regenerationReason = 'No saved recipes';
-      }
-
-      // Regenerate recipes
-      console.log(`🔄 Regenerating recipes: ${regenerationReason}`);
       setIsRefreshing(true);
 
-      const aiRecipes = await generateAIRecipes(items);
+      // Call the deterministic recommendation engine
+      const result = await getRecommendations(user.uid, items, forceRegenerate);
 
-      // Fetch images for all recipes in parallel
-      const recipeNames = aiRecipes.map(r => r.name);
+      setMode(result.mode);
+      setShoppingList(result.shoppingList);
+
+      // Fetch images for recipe names
+      const recipeNames = result.recipes.map(r => r.name);
       const images = await fetchRecipeImages(recipeNames);
 
-      // Map AI recipes to Recipe interface with images and user items
-      const recipesWithImages: Recipe[] = aiRecipes.map(aiRecipe => {
-        // Find user items that match the matched ingredients
+      // Map to UI format with user items
+      const recipesWithUI: Recipe[] = result.recipes.map(stored => {
         const matchedUserItems = items.filter(item =>
-          aiRecipe.matchedIngredients.some(ing =>
+          stored.matchedIngredients.some(ing =>
             item.name.toLowerCase().includes(ing.toLowerCase()) ||
             ing.toLowerCase().includes(item.name.toLowerCase())
           )
         );
 
-        // Sort matched user items by expiration date
         matchedUserItems.sort((a, b) => {
           const expA = new Date(a.manualExpirationDate || a.autoExpirationDate);
           const expB = new Date(b.manualExpirationDate || b.autoExpirationDate);
           return expA.getTime() - expB.getTime();
         });
 
-        // Calculate missing ingredients
-        const missingIngredients = aiRecipe.ingredients.filter(
-          ing => !aiRecipe.matchedIngredients.some(matched =>
-            matched.toLowerCase().includes(ing.toLowerCase()) ||
-            ing.toLowerCase().includes(matched.toLowerCase())
-          )
-        );
-
         return {
-          ...aiRecipe,
-          id: generateRecipeId(aiRecipe.name),
-          image: images.get(aiRecipe.name),
-          missingIngredients,
+          ...stored,
+          image: stored.image || images.get(stored.name),
           userItems: matchedUserItems,
         };
       });
 
-      // Filter out recipes with no matching items
-      const visibleRecipes = recipesWithImages.filter(r => r.userItems.length > 0);
-      setRecipes(visibleRecipes);
-
-      // Save to Firebase
-      const storedRecipes: StoredRecipe[] = recipesWithImages.map(recipe => ({
-        id: recipe.id,
-        name: recipe.name,
-        description: recipe.description,
-        image: recipe.image,
-        ingredients: recipe.ingredients,
-        matchedIngredients: recipe.matchedIngredients,
-        missingIngredients: recipe.missingIngredients,
-        prepTime: recipe.prepTime,
-        calories: recipe.calories,
-        difficulty: recipe.difficulty,
-        instructions: recipe.instructions,
-      }));
-
-      await saveUserRecipes(user.uid, storedRecipes, items);
-      clearRecipesRefreshFlag(); // Clear the flag after successful refresh
+      setRecipes(recipesWithUI);
     } catch (error) {
       console.error('Error loading recipes:', error);
     } finally {
@@ -552,6 +453,49 @@ export function RecipesPage() {
         </div>
       )}
 
+      {/* Shopping List — only for low_stock / empty_fridge */}
+      {shoppingList.length > 0 && (mode === 'low_stock' || mode === 'empty_fridge') && (
+        <div style={{ padding: '0 20px', marginBottom: '24px' }}>
+          <h2 style={{
+            fontSize: '20px',
+            fontWeight: '400',
+            fontFamily: '"Poppins", sans-serif',
+            color: '#1a1a1a',
+            margin: '0 0 12px 0',
+          }}>
+            Quick shopping list
+          </h2>
+          <div style={{
+            backgroundColor: '#fff',
+            borderRadius: '16px',
+            padding: '16px',
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: '8px',
+          }}>
+            {shoppingList.slice(0, 8).map((item) => (
+              <div
+                key={item.item}
+                style={{
+                  backgroundColor: '#f5f5f0',
+                  borderRadius: '20px',
+                  padding: '6px 14px',
+                  fontSize: '13px',
+                  fontFamily: '"Poppins", sans-serif',
+                  color: '#333',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                }}
+              >
+                <span style={{ color: '#98a93c', fontWeight: '600' }}>+</span>
+                {item.item}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Recipe Cards */}
       <div style={{ padding: '0 20px' }}>
         {loading ? (
@@ -684,7 +628,7 @@ export function RecipesPage() {
                       color: 'rgba(0, 0, 0, 0.8)',
                       margin: 0,
                     }}>
-                      By AI Chef
+                      {recipe.matchedIngredients.length} ingredients matched
                     </p>
                     <p style={{
                       fontSize: '12px',

@@ -1,12 +1,41 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { BottomNavigation } from '../components/BottomNavigation';
 import { NotificationSettings } from '../components/NotificationSettings';
+import { getUserPreferences, saveUserPreferences } from '../firebase/saveReceipt';
+import { markRecipesNeedRefresh } from '../firebase/userRecipes';
+
+// Same options as OnboardingPage
+const dietaryOptions = ['Vegetarian', 'Vegan', 'Pescatarian', 'Gluten-free', 'Dairy-free', 'Low-carb'];
+const allergyOptions = ['Nuts', 'Shellfish', 'Eggs', 'Soy', 'Dairy', 'Wheat'];
+const exclusionOptions = ['Beef', 'Pork', 'Shellfish', 'Mushrooms', 'Cilantro', 'Onions'];
 
 export function SettingsPage() {
   const { user, logout } = useAuth();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showFoodPrefs, setShowFoodPrefs] = useState(false);
+
+  // Food preferences state
+  const [dietaryPreferences, setDietaryPreferences] = useState<string[]>([]);
+  const [allergies, setAllergies] = useState<string[]>([]);
+  const [ingredientExclusions, setIngredientExclusions] = useState<string[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [prefsLoaded, setPrefsLoaded] = useState(false);
+
+  // Load preferences when overlay opens
+  useEffect(() => {
+    if (showFoodPrefs && user && !prefsLoaded) {
+      getUserPreferences(user.uid).then(prefs => {
+        if (prefs) {
+          setDietaryPreferences(prefs.dietaryPreferences || []);
+          setAllergies(prefs.allergies || []);
+          setIngredientExclusions(prefs.ingredientExclusions || []);
+        }
+        setPrefsLoaded(true);
+      });
+    }
+  }, [showFoodPrefs, user, prefsLoaded]);
 
   const handleLogout = async () => {
     setIsLoggingOut(true);
@@ -18,11 +47,34 @@ export function SettingsPage() {
     }
   };
 
+  const toggleItem = (list: string[], setList: (v: string[]) => void, item: string) => {
+    setList(list.includes(item) ? list.filter(i => i !== item) : [...list, item]);
+  };
+
+  const handleSavePrefs = async () => {
+    if (!user) return;
+    setSaving(true);
+    try {
+      await saveUserPreferences(user.uid, {
+        dietaryPreferences,
+        allergies,
+        ingredientExclusions,
+      });
+      // Mark recipes for refresh so next visit re-runs engine with new restrictions
+      markRecipesNeedRefresh();
+      setShowFoodPrefs(false);
+    } catch (err) {
+      console.error('Error saving preferences:', err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div style={{
       minHeight: '100vh',
       backgroundColor: '#f7f6ef',
-      paddingBottom: '92px', // 72px nav + 20px spacing
+      paddingBottom: '92px',
     }}>
       {/* Header */}
       <div style={{
@@ -54,7 +106,6 @@ export function SettingsPage() {
             alignItems: 'center',
             gap: '16px',
           }}>
-            {/* Profile Avatar */}
             <div style={{
               width: '60px',
               height: '60px',
@@ -82,8 +133,6 @@ export function SettingsPage() {
                 </span>
               )}
             </div>
-
-            {/* Profile Info */}
             <div>
               <div style={{
                 fontFamily: '"Poppins", sans-serif',
@@ -125,7 +174,7 @@ export function SettingsPage() {
           <SettingsItem 
             icon="🍽️" 
             label="Food preferences" 
-            onClick={() => {}}
+            onClick={() => setShowFoodPrefs(true)}
           />
           <SettingsItem 
             icon="🌙" 
@@ -196,7 +245,6 @@ export function SettingsPage() {
         </div>
       </div>
 
-      {/* Bottom Navigation */}
       <BottomNavigation />
 
       {/* Notification Settings Overlay */}
@@ -205,9 +253,101 @@ export function SettingsPage() {
           <NotificationSettings onBack={() => setShowNotifications(false)} />
         </div>
       )}
+
+      {/* Food Preferences Overlay */}
+      {showFoodPrefs && (
+        <div style={{
+          position: 'fixed',
+          top: 0, left: 0, right: 0, bottom: 0,
+          zIndex: 100,
+          backgroundColor: '#f7f6ef',
+          overflowY: 'auto',
+        }}>
+          {/* Header */}
+          <div style={{
+            padding: '16px 20px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+          }}>
+            <button
+              onClick={() => setShowFoodPrefs(false)}
+              style={{
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                padding: '4px',
+              }}
+            >
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#11130b" strokeWidth="2">
+                <polyline points="15,18 9,12 15,6" />
+              </svg>
+            </button>
+            <h1 style={{
+              fontFamily: '"Poppins", sans-serif',
+              fontSize: '20px',
+              fontWeight: '500',
+              color: '#11130b',
+              margin: 0,
+            }}>
+              Food preferences
+            </h1>
+          </div>
+
+          <div style={{ padding: '0 20px', paddingBottom: '100px' }}>
+            {/* Dietary Preferences */}
+            <PreferenceSection
+              title="Dietary preferences"
+              options={dietaryOptions}
+              selected={dietaryPreferences}
+              onToggle={(item) => toggleItem(dietaryPreferences, setDietaryPreferences, item)}
+            />
+
+            {/* Allergies */}
+            <PreferenceSection
+              title="Allergies"
+              options={allergyOptions}
+              selected={allergies}
+              onToggle={(item) => toggleItem(allergies, setAllergies, item)}
+            />
+
+            {/* Ingredient Exclusions */}
+            <PreferenceSection
+              title="Ingredients to exclude"
+              options={exclusionOptions}
+              selected={ingredientExclusions}
+              onToggle={(item) => toggleItem(ingredientExclusions, setIngredientExclusions, item)}
+            />
+
+            {/* Save Button */}
+            <button
+              onClick={handleSavePrefs}
+              disabled={saving}
+              style={{
+                width: '100%',
+                padding: '16px',
+                backgroundColor: '#073d35',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '16px',
+                fontSize: '16px',
+                fontWeight: '500',
+                fontFamily: '"Poppins", sans-serif',
+                cursor: saving ? 'not-allowed' : 'pointer',
+                opacity: saving ? 0.7 : 1,
+                marginTop: '16px',
+              }}
+            >
+              {saving ? 'Saving...' : 'Save preferences'}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
+// ─── Sub-components ──────────────────────────────────────────────────────────
 
 interface SettingsItemProps {
   icon: string;
@@ -251,5 +391,56 @@ function SettingsItem({ icon, label, onClick, showBorder = true }: SettingsItemP
         <polyline points="9,18 15,12 9,6" />
       </svg>
     </button>
+  );
+}
+
+interface PreferenceSectionProps {
+  title: string;
+  options: string[];
+  selected: string[];
+  onToggle: (item: string) => void;
+}
+
+function PreferenceSection({ title, options, selected, onToggle }: PreferenceSectionProps) {
+  return (
+    <div style={{ marginBottom: '24px' }}>
+      <h3 style={{
+        fontFamily: '"Poppins", sans-serif',
+        fontSize: '16px',
+        fontWeight: '500',
+        color: '#11130b',
+        margin: '0 0 12px 0',
+      }}>
+        {title}
+      </h3>
+      <div style={{
+        display: 'flex',
+        flexWrap: 'wrap',
+        gap: '8px',
+      }}>
+        {options.map(option => {
+          const isSelected = selected.includes(option);
+          return (
+            <button
+              key={option}
+              onClick={() => onToggle(option)}
+              style={{
+                padding: '8px 16px',
+                borderRadius: '20px',
+                border: isSelected ? '1.5px solid #073d35' : '1.5px solid #ddd',
+                backgroundColor: isSelected ? '#d3e2d0' : '#fff',
+                color: isSelected ? '#073d35' : '#333',
+                fontFamily: '"Poppins", sans-serif',
+                fontSize: '14px',
+                fontWeight: isSelected ? '500' : '400',
+                cursor: 'pointer',
+              }}
+            >
+              {option}
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }

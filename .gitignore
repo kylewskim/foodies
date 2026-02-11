@@ -30,3 +30,14 @@ dist-ssr
 
 # MCP configuration (local dev environment)
 .mcp.json
+
+# Firebase local
+.firebase/
+.firebaserc
+
+# Vite PWA dev
+dev-dist/
+
+# Firebase Functions build artifacts
+functions/lib/
+functions/package-lock.json
