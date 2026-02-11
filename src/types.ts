@@ -123,6 +123,9 @@ export interface StoredRecipe {
   calories: number;
   difficulty: 'Easy' | 'Medium' | 'Hard';
   instructions: string[];
+  url?: string;           // Original recipe URL (e.g. Jamie Oliver page)
+  coverage?: number;      // Ingredient match ratio from recommendation engine
+  score?: number;         // Overall recommendation score
 }
 
 export interface UserRecipes {

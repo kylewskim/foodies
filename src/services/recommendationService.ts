@@ -144,12 +144,11 @@ function apiRecipeToStoredRecipe(rec: APIRecipe): StoredRecipe {
     prepTime: rec.bucket === 'quick_bites' ? '15 min' : '30 min',
     calories: 0,   // not available from engine
     difficulty: rec.bucket === 'quick_bites' ? 'Easy' : 'Medium',
-    instructions: rec.url ? [`Full recipe: ${rec.url}`] : [],
-    // Extra fields stored for UI
-    ...(rec.url ? { url: rec.url } : {}),
-    ...(rec.coverage ? { coverage: rec.coverage } : {}),
-    ...(rec.score ? { score: rec.score } : {}),
-  } as StoredRecipe;
+    instructions: [],  // Actual steps not available; original recipe URL shown via "View Original Recipe" button
+    url: rec.url || undefined,
+    coverage: rec.coverage || undefined,
+    score: rec.score || undefined,
+  };
 }
 
 // ─── Main Service Function ───────────────────────────────────────────────────

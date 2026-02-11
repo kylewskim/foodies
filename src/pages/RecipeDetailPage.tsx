@@ -19,6 +19,7 @@ interface RecipeDetailState {
   prepTime?: string;
   calories?: number;
   difficulty?: 'Easy' | 'Medium' | 'Hard';
+  url?: string | null;
 }
 
 export function RecipeDetailPage() {
@@ -249,7 +250,7 @@ export function RecipeDetailPage() {
             opacity: 0.4,
             lineHeight: '1.35',
           }}>
-            By AI Chef
+            By Jamie Oliver
           </p>
 
           {/* Recipe Stats */}
@@ -403,12 +404,14 @@ export function RecipeDetailPage() {
           ))}
         </div>
 
-        {/* Steps */}
-        {recipe.instructions && recipe.instructions.length > 0 && (
+        {/* Steps – only show if there are real instructions (not just a URL link) */}
+        {recipe.instructions && recipe.instructions.length > 0 &&
+          !recipe.instructions.every(i => i.startsWith('Full recipe:')) && (
           <div style={{
             display: 'flex',
             flexDirection: 'column',
             gap: '20px',
+            marginBottom: '28px',
           }}>
             <h2 style={{
               margin: 0,
@@ -419,7 +422,9 @@ export function RecipeDetailPage() {
             }}>
               Steps
             </h2>
-            {recipe.instructions.map((instruction, idx) => (
+            {recipe.instructions
+              .filter(i => !i.startsWith('Full recipe:'))
+              .map((instruction, idx) => (
               <div
                 key={idx}
                 style={{
@@ -448,6 +453,49 @@ export function RecipeDetailPage() {
                 </p>
               </div>
             ))}
+          </div>
+        )}
+
+        {/* View Original Recipe Button */}
+        {recipe.url && (
+          <div style={{
+            marginTop: '8px',
+            marginBottom: '40px',
+          }}>
+            <a
+              href={recipe.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                width: '100%',
+                padding: '14px 0',
+                backgroundColor: '#4a7c59',
+                color: '#fff',
+                borderRadius: '12px',
+                border: 'none',
+                fontSize: '14px',
+                fontFamily: '"Poppins", sans-serif',
+                fontWeight: '500',
+                textDecoration: 'none',
+                cursor: 'pointer',
+                boxSizing: 'border-box',
+              }}
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <path
+                  d="M6 3.5H3.5C2.94772 3.5 2.5 3.94772 2.5 4.5V12.5C2.5 13.0523 2.94772 13.5 3.5 13.5H11.5C12.0523 13.5 12.5 13.0523 12.5 12.5V10M9.5 2.5H13.5M13.5 2.5V6.5M13.5 2.5L6.5 9.5"
+                  stroke="white"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+              View Original Recipe
+            </a>
           </div>
         )}
       </div>

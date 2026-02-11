@@ -564,6 +564,7 @@ export function RecipesPage() {
                       calories: recipe.calories,
                       difficulty: recipe.difficulty,
                       instructions: recipe.instructions,
+                      url: recipe.url || null,
                     }
                   });
                 }}
@@ -622,6 +623,14 @@ export function RecipesPage() {
                     }}>
                       {recipe.name}
                     </h3>
+                    <p style={{
+                      fontSize: '11px',
+                      fontFamily: '"Poppins", sans-serif',
+                      color: 'rgba(0, 0, 0, 0.4)',
+                      margin: 0,
+                    }}>
+                      By Jamie Oliver
+                    </p>
                     <p style={{
                       fontSize: '12px',
                       fontFamily: '"Poppins", sans-serif',
