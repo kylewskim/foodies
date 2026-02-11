@@ -7,8 +7,8 @@
       "abundant": { "unique_items_count_gte": 8 }
     },
     "candidate_generation": {
-      "abundant": { "min_matched_core": 3, "max_missing_core": 6 },
-      "low_stock": { "min_matched_core": 2, "max_missing_core": 6 },
+      "abundant": { "min_matched_core": 2, "max_missing_core": 8 },
+      "low_stock": { "min_matched_core": 1, "max_missing_core": 8 },
       "empty_fridge": { "min_matched_core": 0, "max_missing_core": 10 }
     },
     "ranking": {

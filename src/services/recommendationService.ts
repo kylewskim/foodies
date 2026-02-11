@@ -114,8 +114,10 @@ async function callRecommendAPI(
     inventory: itemsToPayload(items),
     restrictions,
     top_k: topK,
-    debug: false,
+    debug: true,
   };
+
+  console.log('📤 RecipeRec API request:', JSON.stringify(payload, null, 2));
 
   const response = await fetch('/api/recommend', {
     method: 'POST',
@@ -124,11 +126,19 @@ async function callRecommendAPI(
   });
 
   if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.error || `API error: ${response.status}`);
+    const text = await response.text();
+    console.error('❌ RecipeRec API error response:', response.status, text);
+    throw new Error(`API error: ${response.status} — ${text}`);
   }
 
-  return response.json();
+  const data = await response.json();
+  console.log('📥 RecipeRec API response:', {
+    mode: data.mode,
+    recommendationCount: data.recommendations?.length ?? 0,
+    inventorySummary: data.inventory_summary,
+    debug: data.debug,
+  });
+  return data;
 }
 
 // ─── API Response → StoredRecipe ─────────────────────────────────────────────
