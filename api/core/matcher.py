@@ -1,6 +1,6 @@
 from typing import Dict, List, Set, Tuple
 
-PANTRY_IGNORE = {"salt", "pepper", "water"}
+PANTRY_IGNORE = {"salt", "pepper", "water", "_non_food"}
 
 def recipe_core(ingredients_norm: List[str]) -> List[str]:
     return [x for x in ingredients_norm if x not in PANTRY_IGNORE]

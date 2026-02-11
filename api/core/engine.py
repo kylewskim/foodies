@@ -51,7 +51,12 @@ def recommend(
 
     # ---- Adapt inventory ----
     inv_items = adapt_inventory(inventory_payload, expiring_soon_days=expiring_soon_days)
-    inv_set = set([i.canonical_name for i in inv_items])
+    # Use ALL canonical tokens (not just first) so brand-name products
+    # like "Sargento Shredded Mozzarella" contribute "mozzarella" to matching
+    inv_set = set()
+    for i in inv_items:
+        for token in i.canonical_tokens:
+            inv_set.add(token)
 
     inv_sum = inventory_summary(inv_items, expiring_soon_days)
     mode = select_mode(inv_sum["unique_items_count"], policy)

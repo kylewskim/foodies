@@ -98,6 +98,16 @@ PHRASE_INGREDIENTS = [
     "caster sugar",
     "powdered sugar",
     "icing sugar",
+
+    # pastry
+    "puff pastry",
+    "filo pastry",
+
+    # other compounds
+    "cat food",
+    "dog food",
+    "pop tarts",
+    "coca cola",
 ]
 
 # ---- Alias map (canonical forms) ----
@@ -198,6 +208,24 @@ ALIASES = {
     # normalize spice blends
     "chinese five spice": "five spice",
 
+    # non-food products → map to something that won't match recipes
+    "cat food": "_non_food",
+    "dog food": "_non_food",
+    "pop tarts": "_non_food",
+    "coca cola": "_non_food",
+
+    # pasta types
+    "lasagne": "pasta",
+    "lasagna": "pasta",
+    "spaghetti": "pasta",
+    "penne": "pasta",
+    "fettuccine": "pasta",
+    "rigatoni": "pasta",
+    "macaroni": "pasta",
+    "linguine": "pasta",
+    "tagliatelle": "pasta",
+    "fusilli": "pasta",
+
     # common pantry aliases
     "all purpose flour": "flour",
     "plain flour": "flour",
@@ -216,10 +244,48 @@ ALIASES = {
 }
 
 # tokens that are usually not meaningful alone in this dataset
+# Includes: descriptors, preparation methods, brand fragments, sizes, etc.
 DROP_TOKENS = {
+    # original
     "five", "chinese",
     "t", "reduced", "eating", "single", "back", "flower",
-    "fresh", "large", "small"
+    "fresh", "large", "small",
+
+    # sizes / quantities
+    "medium", "extra", "mini", "jumbo", "giant", "regular",
+    "thin", "thick", "whole", "half",
+
+    # preparation / state descriptors
+    "shredded", "breaded", "purified", "sliced", "diced", "chopped",
+    "minced", "crushed", "grated", "peeled", "toasted", "roasted",
+    "grilled", "baked", "fried", "steamed", "boiled", "smoked",
+    "cured", "dried", "frozen", "canned", "packed", "stuffed",
+    "marinated", "seasoned", "cooked", "raw", "uncooked",
+    "boneless", "skinless", "seedless", "pitted",
+    "unsalted", "salted", "sweetened", "unsweetened",
+
+    # quality / type descriptors
+    "organic", "natural", "premium", "select", "choice", "prime",
+    "classic", "original", "traditional", "homestyle", "artisan",
+    "imported", "domestic", "local",
+    "low", "less", "free", "lite", "light", "fat", "lean",
+    "calorie", "calories",
+    "plain", "greek", "italian", "french", "mexican", "japanese",
+    "american", "british", "thai", "indian", "korean", "spanish",
+
+    # packaging / product descriptors
+    "brand", "pack", "count", "oz", "lb", "kg", "ml", "ct",
+    "bag", "box", "can", "jar", "bottle", "carton", "tub",
+    "pouch", "wrapper", "container",
+    "one", "two", "three", "four", "six", "eight", "twelve",
+    "dry", "wet", "liquid",
+
+    # non-food noise
+    "food", "foods", "pet", "cat", "dog", "treat", "treats",
+    "toaster", "snack", "snacks",
+    "drink", "drinks", "beverage", "beverages",
+    "purified", "distilled", "spring", "sparkling", "carbonated",
+    "grocer", "grocery", "market", "store",
 }
 
 
