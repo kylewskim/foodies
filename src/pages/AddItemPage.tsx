@@ -52,7 +52,6 @@ export function AddItemPage() {
   const [processing, setProcessing] = useState(false);
   const [processedItems, setProcessedItems] = useState<Item[]>(returningItems || []);
   const [saving, setSaving] = useState(false);
-  const [defaultLocation] = useState<StorageLocation>('fridge');
   const [autoProcessStarted, setAutoProcessStarted] = useState(false);
   const [receiptDate, setReceiptDate] = useState<string | undefined>(undefined);
 
@@ -81,24 +80,31 @@ export function AddItemPage() {
 
   const processSelectedFile = async (file: File) => {
     setProcessing(true);
+    const t0 = performance.now();
     try {
       // Import OCR functions
+      const tImportStart = performance.now();
       const { extractTextWithGoogleVision, isGoogleVisionConfigured } = await import('../utils/googleVisionOCR');
       const Tesseract = (await import('tesseract.js')).default;
+      console.log(`⏱️ [Pipeline] Dynamic imports: ${(performance.now() - tImportStart).toFixed(0)}ms`);
       
       let extractedText: string;
+      const tOcrStart = performance.now();
       
       if (isGoogleVisionConfigured()) {
         try {
           extractedText = await extractTextWithGoogleVision(file);
+          console.log(`⏱️ [Pipeline] Google Vision OCR: ${(performance.now() - tOcrStart).toFixed(0)}ms`);
         } catch (googleError) {
           console.warn('Google Vision API failed, falling back to Tesseract:', googleError);
           const result = await Tesseract.recognize(file, 'eng+kor');
           extractedText = result.data.text;
+          console.log(`⏱️ [Pipeline] Tesseract OCR (fallback): ${(performance.now() - tOcrStart).toFixed(0)}ms`);
         }
       } else {
         const result = await Tesseract.recognize(file, 'eng+kor');
         extractedText = result.data.text;
+        console.log(`⏱️ [Pipeline] Tesseract OCR: ${(performance.now() - tOcrStart).toFixed(0)}ms`);
       }
       
       if (!extractedText.trim()) {
@@ -107,8 +113,10 @@ export function AddItemPage() {
         return;
       }
       
+      console.log(`⏱️ [Pipeline] OCR total (import+recognize): ${(performance.now() - t0).toFixed(0)}ms`);
       // Process the extracted text
       await handleImageUpload(extractedText);
+      console.log(`⏱️ [Pipeline] Full pipeline (OCR → save-ready): ${(performance.now() - t0).toFixed(0)}ms`);
     } catch (error) {
       console.error('Error processing file:', error);
       alert('Failed to process image. Please try again.');
@@ -130,9 +138,12 @@ export function AddItemPage() {
 
   const processExtractedText = async (extractedText: string) => {
     setProcessing(true);
+    const tStart = performance.now();
     try {
       // Step 1: Extract items + purchase date from raw text (1 API call or pattern matching)
+      const tNormStart = performance.now();
       const normalized = await normalizeInputText(extractedText);
+      console.log(`⏱️ [Pipeline] normalizeInputText: ${(performance.now() - tNormStart).toFixed(0)}ms (${normalized.items.length} items extracted)`);
 
       const purchaseDateRaw = normalized.purchase_date || getCurrentDateISO();
       // Convert to YYYY-MM-DD for lifecycle prediction
@@ -144,12 +155,14 @@ export function AddItemPage() {
       setReceiptDate(purchaseDateRaw);
 
       // Step 2: For each item, predict lifecycle using rule-based engine (instant, no API)
+      // Location is auto-predicted from category (no need to default everything to fridge)
+      const tLifecycleStart = performance.now();
       const items: Item[] = normalized.items.map((rawItem, i) => {
         const itemName = capitalizeWords(rawItem.raw_name);
         const lifecycle = predictLifecycle({
           name: itemName,
           purchaseDate: purchaseDateYMD,
-          storageLocation: defaultLocation,
+          // Don't pass storageLocation — let predictLifecycle pick the best one
         });
 
         return {
@@ -159,7 +172,7 @@ export function AddItemPage() {
           name: itemName,
           quantity: rawItem.quantity,
           category: lifecycle.displayCategory,
-          location: defaultLocation,
+          location: lifecycle.recommendedLocation,
           purchaseDate: purchaseDateRaw,
           autoExpirationDate: lifecycle.autoExpirationDate
             ? new Date(lifecycle.autoExpirationDate + 'T00:00:00').toISOString()
@@ -174,6 +187,13 @@ export function AddItemPage() {
           autoExpireStatus: lifecycle.autoExpireStatus,
         };
       });
+
+      console.log(`⏱️ [Pipeline] predictLifecycle (${items.length} items): ${(performance.now() - tLifecycleStart).toFixed(0)}ms`);
+      // Log individual item predictions for debugging
+      items.forEach(item => {
+        console.log(`  📦 ${item.name} → cat: ${item.ingredientCategory} → loc: ${item.location} → ${item.autoExpireLabel}`);
+      });
+      console.log(`⏱️ [Pipeline] processExtractedText total: ${(performance.now() - tStart).toFixed(0)}ms`);
 
       setProcessedItems(items);
       setInputMethod('review');

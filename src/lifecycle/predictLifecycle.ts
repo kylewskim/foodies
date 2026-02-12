@@ -21,6 +21,8 @@ export interface LifecyclePrediction {
   autoExpireStatus: AutoExpireStatus;
   /** The mapped Level-1 FoodCategory for display */
   displayCategory: FoodCategory;
+  /** Recommended storage location based on ingredient category */
+  recommendedLocation: StorageLocation;
 }
 
 export interface PredictLifecycleInput {
@@ -102,6 +104,63 @@ const LEVEL2_TO_FOOD_CATEGORY: Record<string, FoodCategory> = {
 
   'leftovers-cooked': 'Prepared',
 };
+
+// ─── Recommended Storage Location ─────────────────────────────────────────────
+
+/**
+ * Determine the best storage location for an ingredient category.
+ *
+ * Logic:
+ * - Items that spoil quickly and MUST be cold → fridge
+ * - Items that last long at room temp → pantry
+ * - Unknown → fridge (safest default)
+ */
+const CATEGORY_TO_LOCATION: Record<string, StorageLocation> = {
+  // Fruit — fridge extends life for most
+  'fruit-berries': 'fridge',
+  'fruit-melon': 'fridge',
+  'fruit-citrus': 'pantry',     // Citrus can stay on counter ~1 week
+  'fruit-pome': 'fridge',
+  'fruit-stone': 'fridge',
+  'fruit-tropical': 'fridge',
+  'fruit-banana': 'pantry',     // Bananas brown in fridge
+  'fruit-grapes': 'fridge',
+  'fruit-avocado': 'pantry',    // Ripen on counter, then fridge
+
+  // Vegetables
+  'veg-leafy': 'fridge',
+  'veg-cruciferous': 'fridge',
+  'veg-root': 'pantry',         // Potatoes, carrots etc. keep well in pantry
+  'veg-allium': 'pantry',       // Onions, garlic — pantry is best
+  'veg-pepper': 'fridge',
+  'veg-tomato': 'pantry',       // Tomatoes lose flavor in fridge
+  'veg-cucumber': 'fridge',
+  'veg-mushroom': 'fridge',
+
+  // Dairy — always fridge
+  'dairy-milk': 'fridge',
+  'dairy-yogurt': 'fridge',
+  'dairy-cheese-soft': 'fridge',
+  'dairy-cheese-hard': 'fridge',
+  'dairy-butter': 'fridge',
+
+  // Meat / Seafood — always fridge (or freezer for long-term)
+  'meat-raw-poultry': 'fridge',
+  'meat-raw-red': 'fridge',
+  'meat-raw-ground': 'fridge',
+  'seafood-raw-fish': 'fridge',
+  'seafood-raw-shellfish': 'fridge',
+
+  // Eggs
+  'eggs-shell': 'fridge',
+
+  // Leftovers
+  'leftovers-cooked': 'fridge',
+};
+
+function resolveDefaultLocation(ingredientCategory: string): StorageLocation {
+  return CATEGORY_TO_LOCATION[ingredientCategory] || 'fridge';
+}
 
 // ─── Keyword → Level-2 Category Resolver ──────────────────────────────────────
 
@@ -206,7 +265,10 @@ export function predictLifecycle(input: PredictLifecycleInput): LifecyclePredict
   // Map Level-2 → Level-1 for display
   const displayCategory: FoodCategory = LEVEL2_TO_FOOD_CATEGORY[ingredientCategory] || 'Produce';
 
-  // 2. If unknown → return early with no expiration date
+  // 2. Determine recommended location
+  const recommendedLocation = resolveDefaultLocation(ingredientCategory);
+
+  // 2b. If unknown → return early with no expiration date
   if (ingredientCategory === 'unknown') {
     return {
       ingredientCategory: 'unknown',
@@ -215,11 +277,13 @@ export function predictLifecycle(input: PredictLifecycleInput): LifecyclePredict
       autoExpireLabel: 'Unknown',
       autoExpireStatus: 'unknown',
       displayCategory,
+      recommendedLocation: 'fridge', // safe default
     };
   }
 
   // 3. Compute shelf-life days
-  const storageLocation = input.storageLocation || 'fridge';
+  // Use the recommended location if caller didn't specify one
+  const storageLocation = input.storageLocation || recommendedLocation;
   const shelfLife = SHELF_LIFE_DEFAULTS[ingredientCategory];
 
   let days: number;
@@ -250,6 +314,7 @@ export function predictLifecycle(input: PredictLifecycleInput): LifecyclePredict
     autoExpireLabel: label,
     autoExpireStatus: status,
     displayCategory,
+    recommendedLocation,
   };
 }
 
