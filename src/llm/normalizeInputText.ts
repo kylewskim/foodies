@@ -274,7 +274,46 @@ const BRAND_PREFIXES: RegExp[] = [
   /^gv\s+/i,                                   // Great Value abbr
   /^mm\s+/i,                                   // Member's Mark abbr
   /^o\s+org(anic)?\s+/i,                       // "O Organic" prefix
+  /^amazon\s+grocery,?\s*/i,                   // "Amazon Grocery, Purified Water"
 ];
+
+/**
+ * Clean receipt artifacts from an item name.
+ * Removes OCR noise (ellipsis, "Now" button text, tax codes),
+ * inline size descriptors, and trailing punctuation/fragments.
+ */
+function cleanItemName(name: string): string {
+  let cleaned = name;
+
+  // 1. Remove ellipsis and everything after it
+  //    "Mozzarella... Now" → "Mozzarella", "Wate... Now F T" → "Wate"
+  cleaned = cleaned.replace(/\s*\(?\.{2,}.*$/, '');
+
+  // 2. Remove trailing "Now" + optional tax codes (Amazon Fresh "Buy Now" text)
+  //    "Soda Now F T" → "Soda"
+  cleaned = cleaned.replace(/\s+Now\s*(?:[FTNft]\s*)*$/i, '');
+
+  // 3. Remove trailing isolated tax/category codes (uppercase F, T, N only)
+  //    "Soda F T" → "Soda"
+  cleaned = cleaned.replace(/(?:\s+[FTN])+\s*$/, '');
+
+  // 4. Remove inline size descriptors: ", 12 Oz", " 12oz"
+  cleaned = cleaned.replace(/,?\s+\d+\s*oz\b/i, '');
+
+  // 5. Remove trailing single-letter fragments from truncation
+  //    "Balanced N" → "Balanced", "Pastries, B" → "Pastries,"
+  cleaned = cleaned.replace(/\s+[A-Za-z]\s*$/, '');
+
+  // 6. Clean trailing punctuation (commas, spaces, orphaned parens)
+  cleaned = cleaned.replace(/[,\s]+$/, '');
+  cleaned = cleaned.replace(/\(\s*$/, '');
+
+  // 7. Normalize commas to spaces (Amazon Fresh product naming convention)
+  //    "Coca-cola, Zero Soda" → "Coca-cola Zero Soda"
+  cleaned = cleaned.replace(/,\s*/g, ' ');
+
+  return cleaned.trim();
+}
 
 /**
  * Enhanced pattern-matching receipt parser.
@@ -318,7 +357,10 @@ function normalizeWithPatternMatching(rawText: string): NormalizeInputTextOutput
       cleaned = cleaned.replace(prefix, '').trim();
     }
 
-    // 4. Skip if nothing left after price/brand removal
+    // 3c. Clean receipt artifacts (ellipsis, "Now" text, tax codes, sizes)
+    cleaned = cleanItemName(cleaned);
+
+    // 4. Skip if nothing left after price/brand/artifact removal
     if (!cleaned || cleaned.length <= 2) continue;
 
     // 5. Skip lines that are ALL CAPS and very short (likely headers/footers)

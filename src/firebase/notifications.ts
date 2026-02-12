@@ -45,9 +45,8 @@ export async function requestNotificationPermission(userId: string): Promise<boo
       return false;
     }
 
-    // Get the service worker registration for FCM
-    const swRegistration = await navigator.serviceWorker.getRegistration('/firebase-messaging-sw.js')
-      || await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+    // Use the existing PWA service worker (which now includes FCM handling)
+    const swRegistration = await navigator.serviceWorker.ready;
 
     const token = await getToken(messaging, {
       vapidKey,
@@ -76,7 +75,7 @@ export async function removeFCMToken(userId: string): Promise<void> {
     const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY;
     if (!vapidKey) return;
 
-    const swRegistration = await navigator.serviceWorker.getRegistration('/firebase-messaging-sw.js');
+    const swRegistration = await navigator.serviceWorker.ready;
     const token = await getToken(messaging, {
       vapidKey,
       serviceWorkerRegistration: swRegistration,
