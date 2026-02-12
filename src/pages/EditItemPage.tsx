@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import type { Item, StorageLocation, FoodCategory } from '../types';
 import { updateItem } from '../firebase/saveReceipt';
+import { predictLifecycle } from '../lifecycle/predictLifecycle';
 
 export function EditItemPage() {
   const navigate = useNavigate();
@@ -51,9 +52,21 @@ export function EditItemPage() {
     setSaving(true);
     try {
       const purchaseDateISO = new Date(purchaseDate).toISOString();
+      const purchaseDateYMD = purchaseDate; // Already in YYYY-MM-DD from input[type=date]
 
       // Convert price string to cents (number), or null if empty
       const priceInCents = price.trim() ? Math.round(parseFloat(price) * 100) : null;
+
+      // Recompute lifecycle prediction when name/location/date change
+      const lifecycle = predictLifecycle({
+        name: itemName,
+        purchaseDate: purchaseDateYMD,
+        storageLocation: locationValue,
+      });
+
+      const autoExpDate = lifecycle.autoExpirationDate
+        ? new Date(lifecycle.autoExpirationDate + 'T00:00:00').toISOString()
+        : item.autoExpirationDate;
 
       const updatedItem: Item = {
         ...item,
@@ -61,7 +74,13 @@ export function EditItemPage() {
         category,
         location: locationValue,
         purchaseDate: purchaseDateISO,
+        autoExpirationDate: item.manualExpirationDate ? item.autoExpirationDate : autoExpDate,
         price: priceInCents,
+        ingredientCategory: lifecycle.ingredientCategory,
+        categorySource: lifecycle.categorySource,
+        predictionSource: lifecycle.predictionSource,
+        autoExpireLabel: lifecycle.autoExpireLabel,
+        autoExpireStatus: lifecycle.autoExpireStatus,
       };
 
       // If it's a temporary item from ProcessedItemsList/ScanResultPage, pass updatedItem back via state

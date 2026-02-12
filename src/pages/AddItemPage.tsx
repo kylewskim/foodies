@@ -7,10 +7,11 @@ import { ProcessingScreen } from '../components/ProcessingScreen';
 import { ScanResultPage } from '../components/ScanResultPage';
 import type { Item, StorageLocation, FoodCategory } from '../types';
 import { saveReceipt, saveItems } from '../firebase/saveReceipt';
-import { getCurrentDateISO, calculateExpirationDate } from '../utils/dateHelpers';
+import { getCurrentDateISO } from '../utils/dateHelpers';
 import { normalizeInputText } from '../llm/normalizeInputText';
-import { classifyAndEstimate } from '../llm/classifyAndEstimate';
+import { predictLifecycle } from '../lifecycle/predictLifecycle';
 import { markRecipesNeedRefresh } from '../firebase/userRecipes';
+import { capitalizeWords } from '../llm/classifyItems';
 
 type InputMethod = 'image' | 'manual' | 'form' | 'review';
 
@@ -54,7 +55,6 @@ export function AddItemPage() {
   const [defaultLocation] = useState<StorageLocation>('fridge');
   const [autoProcessStarted, setAutoProcessStarted] = useState(false);
   const [receiptDate, setReceiptDate] = useState<string | undefined>(undefined);
-  const [cachedExpirations, setCachedExpirations] = useState<{ expiration_days: number; confidence: 'high' | 'medium' | 'low' }[]>([]);
 
   // Handle returning from EditItemPage with an updated item
   useEffect(() => {
@@ -131,35 +131,49 @@ export function AddItemPage() {
   const processExtractedText = async (extractedText: string) => {
     setProcessing(true);
     try {
+      // Step 1: Extract items + purchase date from raw text (1 API call or pattern matching)
       const normalized = await normalizeInputText(extractedText);
-      const rawNames = normalized.items.map(item => item.raw_name);
 
-      // Classify items and estimate expiration days in a single API call
-      const results = await classifyAndEstimate(rawNames);
+      const purchaseDateRaw = normalized.purchase_date || getCurrentDateISO();
+      // Convert to YYYY-MM-DD for lifecycle prediction
+      const purchaseDateYMD = purchaseDateRaw.includes('T')
+        ? purchaseDateRaw.split('T')[0]
+        : purchaseDateRaw;
 
-      const purchaseDateISO = normalized.purchase_date || getCurrentDateISO();
       const tempReceiptId = `temp_${Date.now()}`;
-      setReceiptDate(purchaseDateISO);
+      setReceiptDate(purchaseDateRaw);
 
-      // Cache expirations so date changes don't need API calls
-      setCachedExpirations(results.map(r => ({
-        expiration_days: r.expiration_days,
-        confidence: r.confidence,
-      })));
+      // Step 2: For each item, predict lifecycle using rule-based engine (instant, no API)
+      const items: Item[] = normalized.items.map((rawItem, i) => {
+        const itemName = capitalizeWords(rawItem.raw_name);
+        const lifecycle = predictLifecycle({
+          name: itemName,
+          purchaseDate: purchaseDateYMD,
+          storageLocation: defaultLocation,
+        });
 
-      const items: Item[] = results.map((result, i) => ({
-        itemId: `temp_${i}_${Date.now()}`,
-        userId: user?.uid || '',
-        receiptId: tempReceiptId,
-        name: result.normalized_name,
-        quantity: normalized.items[i].quantity,
-        category: result.category,
-        location: defaultLocation,
-        purchaseDate: purchaseDateISO,
-        autoExpirationDate: calculateExpirationDate(purchaseDateISO, result.expiration_days),
-        manualExpirationDate: null,
-        expirationSource: 'auto' as const,
-      }));
+        return {
+          itemId: `temp_${i}_${Date.now()}`,
+          userId: user?.uid || '',
+          receiptId: tempReceiptId,
+          name: itemName,
+          quantity: rawItem.quantity,
+          category: lifecycle.displayCategory,
+          location: defaultLocation,
+          purchaseDate: purchaseDateRaw,
+          autoExpirationDate: lifecycle.autoExpirationDate
+            ? new Date(lifecycle.autoExpirationDate + 'T00:00:00').toISOString()
+            : getCurrentDateISO(),
+          manualExpirationDate: null,
+          expirationSource: 'auto' as const,
+          // Lifecycle prediction fields
+          ingredientCategory: lifecycle.ingredientCategory,
+          categorySource: lifecycle.categorySource,
+          predictionSource: lifecycle.predictionSource,
+          autoExpireLabel: lifecycle.autoExpireLabel,
+          autoExpireStatus: lifecycle.autoExpireStatus,
+        };
+      });
 
       setProcessedItems(items);
       setInputMethod('review');
@@ -204,16 +218,26 @@ export function AddItemPage() {
 
   const handleDateChange = (newDateISO: string) => {
     setReceiptDate(newDateISO);
+    const dateYMD = newDateISO.includes('T') ? newDateISO.split('T')[0] : newDateISO;
 
-    // Use cached expiration days — no API call needed, just recalculate dates
-    const updatedItems = processedItems.map((item, i) => ({
-      ...item,
-      purchaseDate: newDateISO,
-      autoExpirationDate: calculateExpirationDate(
-        newDateISO,
-        cachedExpirations[i]?.expiration_days ?? 7
-      ),
-    }));
+    // Recompute lifecycle for each item with the new purchase date (instant, no API)
+    const updatedItems = processedItems.map((item) => {
+      const lifecycle = predictLifecycle({
+        name: item.name,
+        purchaseDate: dateYMD,
+        storageLocation: item.location,
+        ingredientCategory: item.ingredientCategory,
+      });
+      return {
+        ...item,
+        purchaseDate: newDateISO,
+        autoExpirationDate: lifecycle.autoExpirationDate
+          ? new Date(lifecycle.autoExpirationDate + 'T00:00:00').toISOString()
+          : item.autoExpirationDate,
+        autoExpireLabel: lifecycle.autoExpireLabel,
+        autoExpireStatus: lifecycle.autoExpireStatus,
+      };
+    });
 
     setProcessedItems(updatedItems);
   };
@@ -266,7 +290,19 @@ export function AddItemPage() {
       const expirationDateISO = expirationDate ? new Date(expirationDate).toISOString() : null;
 
       if (editItem) {
-        // Update existing item
+        // Update existing item — recompute lifecycle
+        const purchaseDateYMD = purchaseDateISO.includes('T')
+          ? purchaseDateISO.split('T')[0]
+          : purchaseDateISO;
+        const lifecycle = predictLifecycle({
+          name: itemName,
+          purchaseDate: purchaseDateYMD,
+          storageLocation: locationValue,
+        });
+        const autoExpDate = lifecycle.autoExpirationDate
+          ? new Date(lifecycle.autoExpirationDate + 'T00:00:00').toISOString()
+          : editItem.autoExpirationDate;
+
         const { updateItem } = await import('../firebase/saveReceipt');
         await updateItem({
           ...editItem,
@@ -275,8 +311,14 @@ export function AddItemPage() {
           category,
           location: locationValue,
           purchaseDate: purchaseDateISO,
+          autoExpirationDate: autoExpDate,
           manualExpirationDate: expirationDateISO,
           expirationSource: expirationDateISO ? 'manual' : 'auto',
+          ingredientCategory: lifecycle.ingredientCategory,
+          categorySource: lifecycle.categorySource,
+          predictionSource: lifecycle.predictionSource,
+          autoExpireLabel: lifecycle.autoExpireLabel,
+          autoExpireStatus: lifecycle.autoExpireStatus,
         });
         alert('Item updated successfully!');
       } else {
@@ -288,17 +330,37 @@ export function AddItemPage() {
           createdAt: getCurrentDateISO(),
         });
 
+        // Compute lifecycle prediction for the new item
+        const purchaseDateYMD = purchaseDateISO.includes('T')
+          ? purchaseDateISO.split('T')[0]
+          : purchaseDateISO;
+        const lifecycle = predictLifecycle({
+          name: itemName,
+          purchaseDate: purchaseDateYMD,
+          storageLocation: locationValue,
+        });
+
+        const autoExpDate = lifecycle.autoExpirationDate
+          ? new Date(lifecycle.autoExpirationDate + 'T00:00:00').toISOString()
+          : getCurrentDateISO();
+
         const itemToSave: Omit<Item, 'itemId'> = {
           userId: user.uid,
           receiptId: receipt.receiptId,
           name: itemName,
           quantity: quantity || null,
-          category,
+          category: category,
           location: locationValue,
           purchaseDate: purchaseDateISO,
-          autoExpirationDate: expirationDateISO || calculateExpirationDate(purchaseDateISO, 7),
+          autoExpirationDate: expirationDateISO || autoExpDate,
           manualExpirationDate: expirationDateISO,
           expirationSource: expirationDateISO ? 'manual' : 'auto',
+          // Lifecycle prediction fields
+          ingredientCategory: lifecycle.ingredientCategory,
+          categorySource: lifecycle.categorySource,
+          predictionSource: lifecycle.predictionSource,
+          autoExpireLabel: lifecycle.autoExpireLabel,
+          autoExpireStatus: lifecycle.autoExpireStatus,
         };
 
         await saveItems([itemToSave]);

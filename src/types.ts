@@ -45,6 +45,13 @@ export interface Item {
   expirationSource: ExpirationSource;
   price?: number | null;  // Price in cents (optional)
   status?: ItemStatus;  // 'active' | 'used' | 'trashed' (default: 'active')
+
+  // Lifecycle prediction fields (client-side rule-based)
+  ingredientCategory?: string;                   // Level-2 key (e.g. "dairy-milk") or "unknown"
+  categorySource?: 'user' | 'inferred' | 'unknown';
+  predictionSource?: 'rule_baseline';
+  autoExpireLabel?: string;                      // "Use by Feb 10" / "Unknown"
+  autoExpireStatus?: 'ok' | 'urgent' | 'expired' | 'unknown';
 }
 
 // LLM function input/output types
