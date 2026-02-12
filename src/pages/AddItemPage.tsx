@@ -195,13 +195,27 @@ export function AddItemPage() {
         console.log(`  📦 ${item.name} → cat: ${item.ingredientCategory} → loc: ${item.location} → ${item.autoExpireLabel}`);
       });
 
-      // Step 3: AI micro-call for items that are unknown OR have truncated names
-      // Only sends the subset that needs enrichment (~3-8 items), not ALL items
+      // Step 3: AI micro-call for items that are truly unknown OR have truncated names
+      // Pre-filter: only send items that look like real products (not receipt noise)
+      const MAX_ENRICHMENT_BATCH = 15; // Cap to avoid huge AI calls
+
       const needsEnrichment = items
         .map((item, i) => ({ item, i }))
-        .filter(({ item }) =>
-          item.ingredientCategory === 'unknown' || looksLikeTruncated(item.name)
-        );
+        .filter(({ item }) => {
+          // Only consider items that are unknown OR truncated
+          if (item.ingredientCategory !== 'unknown' && !looksLikeTruncated(item.name)) {
+            return false;
+          }
+          // Pre-filter obvious garbage that shouldn't go to AI
+          const name = item.name.toLowerCase();
+          // Too short to be a real product
+          if (name.length <= 4) return false;
+          // Must have at least 2 alphabetic words
+          const alphaWords = name.split(/\s+/).filter(w => /[a-z]{2,}/i.test(w));
+          if (alphaWords.length < 2) return false;
+          return true;
+        })
+        .slice(0, MAX_ENRICHMENT_BATCH); // Cap batch size
 
       if (needsEnrichment.length > 0) {
         console.log(`🔍 [Pipeline] ${needsEnrichment.length}/${items.length} items need AI enrichment (unknown or truncated)`);

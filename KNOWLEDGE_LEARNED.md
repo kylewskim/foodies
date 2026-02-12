@@ -578,6 +578,36 @@ Added a **Pass 2: Prefix matching** after the strict word-boundary pass:
 
 ---
 
+## Issue 8: Pattern matching extracted 53 items (mostly noise) from receipt
+
+### Problem
+Real receipt scan produced 53 items, but only ~21 were actual products. Rest were:
+- "Sale 2@ $3.99, Was: $4.99 Each" — 17 pricing lines
+- "Amazon Fresh", "Factoria Mall" — store name/address
+- "Lb @ Per Lb", "Tare:" — weight/scale info
+- "Ption", "Command", "Now", "Purchase" — garbage fragments
+
+Also: product names had "... Now F T" suffix (receipt's price marker leftover).
+
+Also: "Wate" (truncated "Water") matched "watermelon" via prefix → fruit-melon (false positive).
+
+### Root Cause
+1. Missing ignore patterns: `sale`, `was:`, `@` quantity, `per lb`, `tare`, `purchase`, `mall`
+2. No cleanup for "Now F T" receipt price markers after price stripping
+3. Prefix matching too aggressive: token only needed ≥3 chars, no length ratio check
+4. AI enrichment had no pre-filter: 52/53 items sent → 40 second API call
+
+### Solution Implemented
+1. **Added 20+ ignore patterns**: `sale`, `was:`, `@`, `per lb/each`, `tare`, `purchase`, store names (Amazon Fresh, Walmart, etc.), `mall/plaza/center`
+2. **Trailing receipt noise cleanup**: Strip "... Now F T", "Now", "F T", "F", "T", "N" and "..." from product names
+3. **Prefix matching 60% threshold**: Token must cover ≥60% of keyword length. "wate" (4) vs "watermelon" (10) = 40% → rejected. "wate" (4) vs "water" (5) = 80% → accepted.
+4. **Best-match selection**: Instead of returning first prefix hit, collect all matches and pick shortest keyword (closest match)
+5. **AI enrichment pre-filter**: Must have ≥2 alphabetic words, name > 4 chars. Cap at 15 items.
+6. **Non-food keywords expanded**: Colgate, Tylenol, OXO, Stasher, Command hooks, etc.
+7. **Quality gate raised**: Pattern matching needs ≥3 items (was ≥1) to skip AI
+
+---
+
 **Last Updated**: February 3, 2026  
 **Status**: MVP Complete ✅  
 **Next Steps**: 
