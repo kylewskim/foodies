@@ -189,13 +189,26 @@ export function AddItemPage() {
       });
 
       console.log(`⏱️ [Pipeline] predictLifecycle (${items.length} items): ${(performance.now() - tLifecycleStart).toFixed(0)}ms`);
-      // Log individual item predictions for debugging
-      items.forEach(item => {
+
+      // Step 3: Filter out non-food & unrecognized items (receipt noise)
+      const foodItems = items.filter(item =>
+        item.ingredientCategory !== 'unknown' && item.ingredientCategory !== 'non-food'
+      );
+
+      // Log filtering results
+      const filtered = items.filter(item =>
+        item.ingredientCategory === 'unknown' || item.ingredientCategory === 'non-food'
+      );
+      if (filtered.length > 0) {
+        console.log(`🚫 Filtered ${filtered.length} non-food/unknown items:`);
+        filtered.forEach(item => console.log(`  ❌ ${item.name} (${item.ingredientCategory})`));
+      }
+      foodItems.forEach(item => {
         console.log(`  📦 ${item.name} → cat: ${item.ingredientCategory} → loc: ${item.location} → ${item.autoExpireLabel}`);
       });
       console.log(`⏱️ [Pipeline] processExtractedText total: ${(performance.now() - tStart).toFixed(0)}ms`);
 
-      setProcessedItems(items);
+      setProcessedItems(foodItems);
       setInputMethod('review');
     } catch (error) {
       console.error('Error processing input:', error);

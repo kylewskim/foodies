@@ -296,7 +296,7 @@ const CATEGORY_KEYWORDS: Array<[string[], string]> = [
   [['onion', 'onions', 'garlic', 'scallion', 'scallions', 'shallot', 'shallots', 'leek', 'leeks', 'chive', 'chives', 'green onion'], 'veg-allium'],
   [['pepper', 'peppers', 'bell pepper', 'bell peppers', 'jalapeno', 'jalapeño', 'chili', 'habanero', 'serrano', 'poblano', 'anaheim'], 'veg-pepper'],
   [['tomato', 'tomatoes', 'cherry tomato', 'grape tomato', 'roma tomato', 'heirloom tomato'], 'veg-tomato'],
-  [['cucumber', 'cucumbers', 'zucchini', 'zucchinis', 'squash'], 'veg-cucumber'],
+  [['cucumber', 'cucumbers', 'zucchini', 'zucchinis', 'squash', 'butternut', 'acorn squash', 'spaghetti squash', 'eggplant', 'corn', 'corn on the cob', 'artichoke', 'asparagus', 'green bean', 'green beans', 'snap pea', 'snap peas', 'snow pea', 'snow peas', 'edamame', 'okra'], 'veg-cucumber'],
   [['mushroom', 'mushrooms', 'shiitake', 'portobello', 'cremini', 'oyster mushroom', 'enoki'], 'veg-mushroom'],
 
   // Dairy
@@ -308,23 +308,23 @@ const CATEGORY_KEYWORDS: Array<[string[], string]> = [
 
   // Meat / Protein — multi-word first
   [['ground beef', 'ground pork', 'ground turkey', 'ground chicken', 'ground meat', 'ground lamb', 'mince', 'minced meat'], 'meat-raw-ground'],
-  [['chicken', 'turkey', 'duck', 'cornish hen', 'poultry', 'chicken breast', 'chicken thigh', 'chicken wing', 'chicken drumstick', 'chicken tender'], 'meat-raw-poultry'],
-  [['beef', 'steak', 'pork', 'lamb', 'veal', 'bison', 'venison', 'pork chop', 'pork loin', 'pork belly', 'ribeye', 'sirloin', 'tenderloin', 'roast', 'ribs', 'bacon', 'ham', 'sausage', 'prosciutto', 'salami', 'pepperoni'], 'meat-raw-red'],
+  [['chicken', 'turkey', 'duck', 'cornish hen', 'poultry', 'chicken breast', 'chicken thigh', 'chicken wing', 'chicken drumstick', 'chicken tender', 'chkn', 'rotisserie'], 'meat-raw-poultry'],
+  [['beef', 'steak', 'pork', 'lamb', 'veal', 'bison', 'venison', 'pork chop', 'pork loin', 'pork belly', 'ribeye', 'sirloin', 'tenderloin', 'roast', 'ribs', 'bacon', 'ham', 'sausage', 'prosciutto', 'salami', 'pepperoni', 'brisket', 'flank', 'tri tip', 'tri-tip', 'short rib', 'short ribs', 'jerky', 'hot dog', 'hot dogs', 'bratwurst'], 'meat-raw-red'],
 
   // Seafood
   [['salmon', 'tuna', 'cod', 'tilapia', 'fish', 'trout', 'halibut', 'mahi mahi', 'sea bass', 'catfish', 'snapper', 'swordfish', 'sole', 'flounder', 'sardine', 'sardines', 'anchovy', 'anchovies', 'mackerel'], 'seafood-raw-fish'],
   [['shrimp', 'prawns', 'crab', 'lobster', 'scallop', 'scallops', 'clam', 'clams', 'mussel', 'mussels', 'oyster', 'oysters', 'squid', 'calamari', 'octopus', 'crawfish', 'crayfish'], 'seafood-raw-shellfish'],
 
-  // Eggs
-  [['egg', 'eggs'], 'eggs-shell'],
+  // Eggs / Plant protein
+  [['egg', 'eggs', 'tofu', 'tempeh', 'seitan', 'beyond meat', 'impossible', 'plant based'], 'eggs-shell'],
 
-  // Leftovers
-  [['leftover', 'leftovers', 'meal prep', 'cooked'], 'leftovers-cooked'],
+  // Leftovers / Prepared / Deli
+  [['leftover', 'leftovers', 'meal prep', 'cooked', 'deli', 'sandwich', 'sandwiches', 'sub', 'pizza', 'pie', 'quiche', 'casserole', 'hummus', 'guacamole', 'pico', 'salsa fresca', 'rotisserie chicken', 'fried chicken', 'sushi', 'dim sum', 'dumpling', 'dumplings', 'spring roll', 'spring rolls', 'egg roll', 'egg rolls', 'empanada', 'empanadas', 'tamale', 'tamales', 'burrito', 'burritos', 'taco', 'tacos'], 'leftovers-cooked'],
 
   // Grains / Pasta / Bread
   [['pasta', 'spaghetti', 'penne', 'rigatoni', 'fusilli', 'fettuccine', 'linguine', 'macaroni', 'lasagne', 'lasagna', 'orzo', 'noodle', 'noodles', 'ramen', 'udon', 'lo mein', 'angel hair', 'rotini', 'farfalle', 'ravioli', 'tortellini', 'gnocchi', 'vermicelli'], 'grain-pasta'],
   [['rice', 'basmati', 'jasmine rice', 'brown rice', 'wild rice', 'arborio', 'quinoa', 'couscous', 'farro', 'barley', 'bulgur', 'millet', 'polenta', 'grits'], 'grain-rice'],
-  [['bread', 'bagel', 'bagels', 'baguette', 'ciabatta', 'sourdough', 'pita', 'naan', 'tortilla', 'tortillas', 'wrap', 'wraps', 'bun', 'buns', 'roll', 'rolls', 'croissant', 'english muffin', 'flatbread'], 'grain-bread'],
+  [['bread', 'bagel', 'bagels', 'baguette', 'ciabatta', 'sourdough', 'pita', 'naan', 'tortilla', 'tortillas', 'wrap', 'wraps', 'bun', 'buns', 'roll', 'rolls', 'croissant', 'english muffin', 'flatbread', 'muffin', 'muffins', 'donut', 'donuts', 'doughnut', 'doughnuts', 'pancake', 'waffle', 'waffles'], 'grain-bread'],
   [['cereal', 'granola', 'muesli', 'corn flakes', 'cheerios', 'oatmeal'], 'grain-cereal'],
   [['flour', 'all purpose flour', 'bread flour', 'cake flour', 'wheat flour', 'cornstarch', 'baking mix'], 'grain-flour'],
   [['oats', 'rolled oats', 'steel cut oats', 'instant oats'], 'grain-oats'],
@@ -351,10 +351,10 @@ const CATEGORY_KEYWORDS: Array<[string[], string]> = [
   [['ketchup', 'mustard', 'mayonnaise', 'mayo', 'relish', 'hot sauce', 'sriracha', 'tabasco', 'bbq sauce', 'barbecue sauce', 'steak sauce', 'worcestershire', 'soy sauce', 'teriyaki', 'hoisin', 'fish sauce', 'oyster sauce', 'salsa', 'pesto', 'marinara', 'pasta sauce', 'tomato sauce', 'alfredo', 'ranch', 'dressing', 'vinaigrette'], 'condiment-sauce'],
   [['olive oil', 'vegetable oil', 'canola oil', 'coconut oil', 'sesame oil', 'avocado oil', 'cooking spray', 'pam'], 'condiment-oil'],
   [['vinegar', 'balsamic', 'apple cider vinegar', 'white vinegar', 'red wine vinegar', 'rice vinegar'], 'condiment-vinegar'],
-  [['salt', 'pepper', 'spice', 'seasoning', 'cumin', 'paprika', 'oregano', 'basil', 'thyme', 'rosemary', 'cinnamon', 'nutmeg', 'turmeric', 'chili powder', 'garlic powder', 'onion powder', 'cayenne'], 'condiment-spice'],
+  [['salt', 'pepper', 'spice', 'seasoning', 'cumin', 'paprika', 'oregano', 'basil', 'thyme', 'rosemary', 'cinnamon', 'nutmeg', 'turmeric', 'chili powder', 'garlic powder', 'onion powder', 'cayenne', 'sugar', 'brown sugar', 'honey', 'maple syrup', 'syrup', 'jam', 'jelly', 'preserves', 'peanut butter', 'almond butter', 'nutella'], 'condiment-spice'],
 
   // Canned / Preserved
-  [['canned', 'can of', 'soup', 'beans', 'chickpeas', 'lentils', 'tuna can', 'canned tuna', 'tomato paste', 'tomato puree', 'diced tomatoes', 'crushed tomatoes', 'coconut milk', 'condensed', 'evaporated'], 'canned-goods'],
+  [['canned', 'can of', 'soup', 'beans', 'chickpeas', 'lentils', 'tuna can', 'canned tuna', 'tomato paste', 'tomato puree', 'diced tomatoes', 'crushed tomatoes', 'coconut milk', 'condensed', 'evaporated', 'broth', 'stock', 'chicken broth', 'beef broth', 'vegetable broth', 'bouillon', 'corn', 'green beans', 'peas', 'mixed vegetables', 'olives', 'pickles', 'pickle', 'sauerkraut', 'kimchi', 'spam'], 'canned-goods'],
 
   // Frozen
   [['frozen pizza', 'frozen dinner', 'frozen meal', 'tv dinner', 'lean cuisine', 'stouffer', 'hungry man', 'hot pocket', 'hot pockets', 'frozen burrito', 'frozen entree'], 'frozen-meal'],
@@ -368,7 +368,27 @@ const CATEGORY_KEYWORDS: Array<[string[], string]> = [
     'trash bag', 'trash bags', 'garbage bag', 'garbage bags', 'ziploc', 'zip lock', 'aluminum foil', 'plastic wrap', 'saran wrap',
     'soap', 'dish soap', 'hand soap', 'body wash', 'shampoo', 'conditioner', 'lotion', 'deodorant', 'toothpaste',
     'laundry', 'snuggle', 'tide', 'downy', 'bounce', 'gain',
-    'battery', 'batteries', 'light bulb', 'light bulbs'], 'non-food'],
+    'battery', 'batteries', 'light bulb', 'light bulbs',
+    // Baby / health / personal care
+    'diaper', 'diapers', 'wipes', 'baby wipe', 'baby wipes',
+    'medicine', 'vitamin', 'vitamins', 'supplement', 'supplements',
+    'tylenol', 'advil', 'ibuprofen', 'aspirin', 'bandaid', 'band-aid',
+    'sunscreen', 'sunblock', 'insect repellent',
+    // Cleaning / household
+    'sponge', 'brush', 'mop', 'broom', 'dustpan',
+    'candle', 'air freshener', 'febreze',
+    'pen', 'pencil', 'marker', 'tape', 'glue', 'scissors',
+    'charcoal', 'lighter', 'lighter fluid', 'match', 'matches',
+    'filter', 'water filter', 'air filter',
+    'bulb', 'fuse',
+    // Garden / misc
+    'flower', 'flowers', 'plant', 'potting soil', 'fertilizer',
+    'bag', 'bags', 'container', 'containers',
+    // Pet
+    'pet treat', 'pet treats', 'rawhide', 'chew toy',
+    // Clothing / textile (sometimes on warehouse receipts)
+    'shirt', 'pants', 'socks', 'underwear', 'towel', 'towels', 'blanket',
+    ], 'non-food'],
 ];
 
 // ─── Public API ───────────────────────────────────────────────────────────────

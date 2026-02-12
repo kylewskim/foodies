@@ -193,6 +193,53 @@ const IGNORE_PATTERNS: RegExp[] = [
 
   // ── Single characters / too short ──
   /^.{0,2}$/,                                  // 0–2 chars (noise)
+
+  // ── Store / brand names ──
+  /\bcostco\b/i,
+  /\bwholesale\b/i,
+  /\bsam'?s\s*club\b/i,
+  /\bwalmart\b/i,
+  /\btarget\b/i,
+  /\bkroger\b/i,
+  /\bsafeway\b/i,
+  /\btrader\s*joe'?s?\b/i,
+  /\baldi\b/i,
+  /\bwhole\s*foods\b/i,
+  /\bpublix\b/i,
+  /\bheb\b/i,
+  /\bmeijer\b/i,
+  /\bfood\s*lion\b/i,
+  /\bpiggly\b/i,
+  /\bwinn\s*dixie\b/i,
+  /\bsprouts\b/i,
+  /\bamazon\s*fresh\b/i,
+  /\binstacart\b/i,
+  /\bfresh\s*direct\b/i,
+
+  // ── Brand names when standalone (entire line) ──
+  /^kirkland(\s+signature)?$/i,
+  /^great\s+value$/i,
+  /^market\s+pantry$/i,
+  /^good\s*&?\s*gather$/i,
+  /^365(\s+by\s+whole\s+foods)?$/i,
+  /^member'?s?\s*mark$/i,
+
+  // ── USDA / grading / regulatory ──
+  /\busda\b/i,
+  /\bgrade\s*[a-z]\b/i,
+  /\borganic\s*certified\b/i,
+  /^choice$/i,
+  /^prime$/i,
+  /^select$/i,
+
+  // ── Misc receipt noise ──
+  /\binstant\s*savings\b/i,
+  /\bprice\b/i,
+  /\b(each|per\s+lb)\b/i,
+  /\bweight\b/i,
+  /\bnet\s*wt\b/i,
+  /\bage\s*restrict/i,
+  /\bid\s*(check|required)/i,
 ];
 
 /**
@@ -213,10 +260,27 @@ const DATE_PATTERNS = [
 ];
 
 /**
+ * Brand prefixes to strip from item names.
+ * e.g. "KS Organic Eggs" → "Organic Eggs", "Kirkland Signature Chicken" → "Chicken"
+ */
+const BRAND_PREFIXES: RegExp[] = [
+  /^k\.?s\.?\s+/i,                            // KS, K.S.
+  /^kirkland\s+(signature\s+)?/i,              // Kirkland, Kirkland Signature
+  /^great\s+value\s+/i,
+  /^market\s+pantry\s+/i,
+  /^good\s*&?\s*gather\s+/i,
+  /^365\s+(everyday\s+value\s+)?/i,
+  /^member'?s?\s*mark\s+/i,
+  /^gv\s+/i,                                   // Great Value abbr
+  /^mm\s+/i,                                   // Member's Mark abbr
+  /^o\s+org(anic)?\s+/i,                       // "O Organic" prefix
+];
+
+/**
  * Enhanced pattern-matching receipt parser.
  *
  * Much more aggressive at filtering receipt noise than the old version.
- * Designed to handle US grocery receipts (Walmart, Target, Amazon Fresh, etc.)
+ * Designed to handle US grocery receipts (Walmart, Target, Amazon Fresh, Costco, etc.)
  */
 function normalizeWithPatternMatching(rawText: string): NormalizeInputTextOutput {
   const lines = rawText
@@ -249,7 +313,12 @@ function normalizeWithPatternMatching(rawText: string): NormalizeInputTextOutput
     cleaned = cleaned.replace(INLINE_PRICE, '');
     cleaned = cleaned.trim();
 
-    // 4. Skip if nothing left after price removal
+    // 3b. Strip known brand prefixes to reveal the actual item name
+    for (const prefix of BRAND_PREFIXES) {
+      cleaned = cleaned.replace(prefix, '').trim();
+    }
+
+    // 4. Skip if nothing left after price/brand removal
     if (!cleaned || cleaned.length <= 2) continue;
 
     // 5. Skip lines that are ALL CAPS and very short (likely headers/footers)
