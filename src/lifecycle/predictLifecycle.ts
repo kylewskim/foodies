@@ -368,14 +368,7 @@ const CATEGORY_KEYWORDS: Array<[string[], string]> = [
     'trash bag', 'trash bags', 'garbage bag', 'garbage bags', 'ziploc', 'zip lock', 'aluminum foil', 'plastic wrap', 'saran wrap',
     'soap', 'dish soap', 'hand soap', 'body wash', 'shampoo', 'conditioner', 'lotion', 'deodorant', 'toothpaste',
     'laundry', 'snuggle', 'tide', 'downy', 'bounce', 'gain',
-    'battery', 'batteries', 'light bulb', 'light bulbs',
-    'colgate', 'toothbrush', 'floss', 'mouthwash', 'listerine', 'crest',
-    'tylenol', 'advil', 'ibuprofen', 'acetaminophen', 'aspirin', 'medicine', 'vitamin',
-    'band aid', 'bandaid', 'first aid',
-    'oxo', 'tupperware', 'container', 'silicone', 'stasher', 'reusable bag',
-    'command', 'hook', 'adhesive', 'tape', 'glue',
-    'sponge', 'scrub', 'mop', 'broom', 'dustpan',
-    'candle', 'air freshener', 'febreze'], 'non-food'],
+    'battery', 'batteries', 'light bulb', 'light bulbs'], 'non-food'],
 ];
 
 // ─── Public API ───────────────────────────────────────────────────────────────
@@ -410,37 +403,23 @@ export function resolveCategoryFromName(name: string): {
 
   // Pass 2: Prefix/partial matching for truncated OCR names
   // e.g. "Yogu" → matches "yogurt", "Chick" → matches "chicken"
-  //
-  // To avoid false positives like "wate" → "watermelon" (should be "water"):
-  //   - Token must be ≥60% of the keyword length
-  //   - Collect ALL matches and pick the BEST one (shortest keyword = closest match)
+  // Only considers tokens ≥ 3 chars to avoid false positives
   const nameTokens = normalized.split(' ').filter(t => t.length >= 3);
-  let bestMatch: { category: string; kwLen: number } | null = null;
-
   for (const [keywords, category] of CATEGORY_KEYWORDS) {
     for (const kw of keywords) {
-      if (kw.includes(' ')) continue;
+      if (kw.includes(' ')) continue; // skip phrases in pass 2
       if (kw.length < 3) continue;
       for (const token of nameTokens) {
         // Token is a prefix of keyword: "yogu" → "yogurt"
-        // Require token covers ≥60% of keyword to avoid "wate" → "watermelon"
-        if (kw.startsWith(token) && token.length >= 3 && token.length >= kw.length * 0.6) {
-          if (!bestMatch || kw.length < bestMatch.kwLen) {
-            bestMatch = { category, kwLen: kw.length };
-          }
+        if (kw.startsWith(token) && token.length >= 3) {
+          return { ingredientCategory: category, categorySource: 'inferred' };
         }
-        // Keyword is a prefix of token: "pasta" → "pastas", "chicken" → "chickens"
-        if (token.startsWith(kw) && kw.length >= 3) {
-          if (!bestMatch || kw.length < bestMatch.kwLen) {
-            bestMatch = { category, kwLen: kw.length };
-          }
+        // Keyword is a prefix of token: "pasta" → "pastas"
+        if (token.startsWith(kw)) {
+          return { ingredientCategory: category, categorySource: 'inferred' };
         }
       }
     }
-  }
-
-  if (bestMatch) {
-    return { ingredientCategory: bestMatch.category, categorySource: 'inferred' };
   }
 
   return { ingredientCategory: 'unknown', categorySource: 'unknown' };

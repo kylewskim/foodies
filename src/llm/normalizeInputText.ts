@@ -6,8 +6,8 @@ import { openai, isOpenAIConfigured, disableOpenAI, FREE_MODEL } from './openaiC
  *
  * Strategy (hybrid):
  *  1. Run enhanced pattern matching first (instant, ~0ms).
- *  2. If the result looks good (≥3 items extracted), use it.
- *  3. If the result looks poor (<3 items), fall back to OpenAI API.
+ *  2. If the result looks good (≥1 item extracted), use it.
+ *  3. If the result looks poor (0 items), fall back to OpenAI API.
  *
  * This eliminates the ~5.6s API call for 80%+ of receipts.
  */
@@ -16,19 +16,18 @@ export async function normalizeInputText(rawText: string): Promise<NormalizeInpu
   const patternResult = normalizeWithPatternMatching(rawText);
 
   // Step 2: Validate — if we got reasonable results, skip AI entirely
-  // Require ≥3 items to ensure it's not just noise
-  if (patternResult.items.length >= 3) {
+  if (patternResult.items.length >= 1) {
     console.log(`✅ Pattern matching extracted ${patternResult.items.length} items — skipping AI.`);
     return patternResult;
   }
 
-  // Step 3: Pattern matching found too few — try AI if configured
+  // Step 3: Pattern matching found nothing — try AI if configured
   if (isOpenAIConfigured()) {
-    console.log(`⚠️ Pattern matching found only ${patternResult.items.length} items — falling back to AI.`);
+    console.log('⚠️ Pattern matching found 0 items — falling back to AI.');
     return normalizeWithAI(rawText);
   }
 
-  console.log('⚠️ Few items found and OpenAI not configured.');
+  console.log('⚠️ No items found and OpenAI not configured.');
   return patternResult;
 }
 
@@ -38,9 +37,8 @@ async function normalizeWithAI(rawText: string): Promise<NormalizeInputTextOutpu
   const systemPrompt = `You are a grocery receipt parser. Extract items and purchase date from the given text.
 
 RULES:
-- Extract only food/grocery/household items that were PURCHASED
-- Ignore prices, totals, store names, slogans, tax, sale info, addresses
-- Ignore lines like "Sale 2@ $3.99, Was: $4.99 Each"
+- Extract only food/grocery items
+- Ignore prices, totals, store names, slogans, tax
 - Extract quantity if mentioned (e.g., "2 Apples" → quantity: "2")
 - Find purchase date if present (any format)
 - Return valid JSON only
@@ -119,18 +117,6 @@ const IGNORE_PATTERNS: RegExp[] = [
   /\brefund\b/i,
   /\b(you\s+)?saved\b/i,
 
-  // ── Sale / pricing lines ──
-  /\bsale\b/i,                           // "Sale 2@ $3.99, Was: $4.99 Each"
-  /\bwas\s*:/i,                           // "Was: $4.99"
-  /\bwas\s+\$/i,                          // "Was $4.99"
-  /\d+\s*@/,                              // "2@", "1@" — quantity pricing
-  /\bper\s+(lb|oz|ct|pk|each|unit|item)\b/i, // "Per Lb", "Per Each"
-  /\beach$/i,                             // ends with "Each"
-  /\bnow\s+\$/i,                          // "Now $3.99"
-  /\bprice\b/i,                           // "Price", "Unit Price"
-  /\bwt\b/i,                              // "Net Wt"
-  /\btare\b/i,                            // "Tare:" scale weight
-
   // ── Payment ──
   /\bcash\b/i,
   /\bchange\b/i,
@@ -153,7 +139,6 @@ const IGNORE_PATTERNS: RegExp[] = [
   /\bsequence\b/i,
   /\bapproval\b/i,
   /\bref\s*#/i,
-  /\bpurchase[ds]?\b/i,                   // "Purchase", "Purchased"
 
   // ── Store / header / footer ──
   /\breceipt\b/i,
@@ -174,33 +159,17 @@ const IGNORE_PATTERNS: RegExp[] = [
   /\binvoice\b/i,
   /\b(store|shop)\s*#?\s*\d/i,
   /\blane\s*\d/i,
-  /\bfresh\s*market\b/i,
-  /\bsupermarket\b/i,
-  /\bgrocery\s*store\b/i,
-  /^amazon\s*fresh$/i,                    // "Amazon Fresh" store name
-  /^whole\s*foods/i,                      // "Whole Foods Market"
-  /^trader\s*joe/i,                       // "Trader Joe's"
-  /^aldi\b/i,                             // "ALDI"
-  /^costco\b/i,                           // "Costco"
-  /^walmart\b/i,                          // "Walmart"
-  /^target\b/i,                           // "Target"
-  /^kroger\b/i,                           // "Kroger"
-  /^safeway\b/i,                          // "Safeway"
-  /^publix\b/i,                           // "Publix"
 
-  // ── Address / location / phone / URLs ──
-  /\d{3}[-.\s]?\d{3}[-.\s]?\d{4}/,            // phone numbers
-  /\d{5}(-\d{4})?$/,                            // zip codes (at end of line)
-  /\b\d+\s+(st|nd|rd|th|street|ave|avenue|blvd|boulevard|dr|drive|rd|road|ln|lane|ct|court|way|pkwy|parkway|hwy|highway|se|sw|ne|nw|ste|suite)\b/i,
-  /www\.|\.com|\.net|\.org/i,
-  /\b[A-Z]{2}\s+\d{5}\b/,                      // state + zip (e.g. "CA 90210")
-  /\bmall\b/i,                                  // "Factoria Mall"
-  /\bplaza\b/i,                                 // "Shopping Plaza"
-  /\bcenter\b/i,                                // "Shopping Center"
+  // ── Address / phone / URLs ──
+  /\d{3}[-.\s]?\d{3}[-.\s]?\d{4}/,          // phone numbers
+  /\d{5}(-\d{4})?$/,                          // zip codes (at end of line)
+  /\b\d+\s+(st|nd|rd|th|street|ave|blvd|dr|rd|ln|ct|way|pkwy|hwy)\b/i, // street addresses
+  /www\.|\.com|\.net|\.org/i,                 // URLs
+  /\b[A-Z]{2}\s+\d{5}\b/,                    // state + zip (e.g. "CA 90210")
 
   // ── Barcodes / IDs / SKUs ──
-  /^\d{8,}$/,
-  /^[A-Z0-9]{10,}$/,
+  /^\d{8,}$/,                                  // long number strings (barcodes)
+  /^[A-Z0-9]{10,}$/,                          // long alphanumeric codes
   /\bsku\b/i,
   /\bupc\b/i,
   /\bplu\b/i,
@@ -214,50 +183,40 @@ const IGNORE_PATTERNS: RegExp[] = [
   /\baccount\b/i,
 
   // ── Pure numbers / prices standing alone ──
-  /^\$[\d,.]+$/,                                 // "$3.99"
-  /^[\d,.]+\s*%$/,                               // "8.25%"
-  /^\d+\.\d{2}$/,                                // "3.99" (price without $)
-  /^-?\$?[\d,.]+\s*[A-Z]?\s*-?$/,               // "-$1.50" or "3.99 T"
+  /^\$[\d,.]+$/,                               // "$3.99"
+  /^[\d,.]+\s*%$/,                             // "8.25%"
+  /^\d+\.\d{2}$/,                              // "3.99" (price without $)
+  /^-?\$?[\d,.]+\s*[A-Z]?$/,                  // "-$1.50" or "3.99 T"
 
   // ── Timestamps (but not dates) ──
-  /\d{1,2}:\d{2}(:\d{2})?\s*(am|pm)?/i,
+  /\d{1,2}:\d{2}(:\d{2})?\s*(am|pm)?/i,      // "2:34 PM"
 
   // ── Single characters / too short ──
-  /^.{0,3}$/,                                    // 0–3 chars (noise)
+  /^.{0,2}$/,                                  // 0–2 chars (noise)
 ];
 
 /**
- * Regexes to strip trailing receipt noise from product lines.
- *
- * Receipt format often: "Product Name                Now $3.99 F T"
- * After price stripping, "Now F T" remains — clean it up.
+ * Regex to detect and strip trailing prices from a line.
+ * Handles: "$3.99", "3.99", "$3.99 F", "$3.99 T", "$3.99-", "3.99 N"
  */
-const TRAILING_RECEIPT_NOISE: RegExp[] = [
-  /\.{2,}\s*Now\b.*$/i,                    // "... Now F T"
-  /\s+Now\s*$/i,                            // trailing " Now"
-  /\s+Now\s+[A-Z\s]{1,4}$/,                // " Now F T", " Now F"
-  /\s+[FTN]\s+[FTN]$/,                     // " F T" (tax flags)
-  /\s+[FTN]$/,                              // trailing " F", " T", " N"
-  /\(\s*\.\.\./g,                           // "(..." incomplete parens
-  /\.{3,}\s*/g,                             // "..." ellipsis
-  /\s*\.\.\.\s*/g,                          // " ... " ellipsis with spaces
-];
-
 const TRAILING_PRICE = /\s+\$?[\d,]+\.\d{2}\s*[A-Z]?\s*-?\s*$/;
 const LEADING_PRICE = /^\$?[\d,]+\.\d{2}\s+/;
 const INLINE_PRICE = /\$[\d,]+\.\d{2}/g;
 
+/**
+ * Regex patterns for dates on receipts.
+ */
 const DATE_PATTERNS = [
-  /(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/,
-  /(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/,
-  /\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\w*\s+\d{1,2},?\s+\d{4}\b/i,
+  /(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/,      // MM/DD/YYYY, DD-MM-YYYY
+  /(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/,          // YYYY-MM-DD
+  /\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\w*\s+\d{1,2},?\s+\d{4}\b/i, // "Jan 15, 2024"
 ];
 
 /**
  * Enhanced pattern-matching receipt parser.
  *
- * Handles US grocery receipts (Walmart, Target, Amazon Fresh, Costco, etc.)
- * Aggressively filters receipt noise: sale lines, pricing, store info, addresses.
+ * Much more aggressive at filtering receipt noise than the old version.
+ * Designed to handle US grocery receipts (Walmart, Target, Amazon Fresh, etc.)
  */
 function normalizeWithPatternMatching(rawText: string): NormalizeInputTextOutput {
   const lines = rawText
@@ -274,7 +233,7 @@ function normalizeWithPatternMatching(rawText: string): NormalizeInputTextOutput
       const dateStr = extractDate(line);
       if (dateStr) {
         purchaseDate = dateStr;
-        continue;
+        continue; // Date-only lines shouldn't also be items
       }
     }
 
@@ -290,34 +249,25 @@ function normalizeWithPatternMatching(rawText: string): NormalizeInputTextOutput
     cleaned = cleaned.replace(INLINE_PRICE, '');
     cleaned = cleaned.trim();
 
-    // 4. Strip trailing receipt markers ("... Now F T", "F T", "Now", etc.)
-    for (const pattern of TRAILING_RECEIPT_NOISE) {
-      cleaned = cleaned.replace(pattern, '');
-    }
-    cleaned = cleaned.trim();
+    // 4. Skip if nothing left after price removal
+    if (!cleaned || cleaned.length <= 2) continue;
 
-    // 5. Skip if nothing left after cleanup
-    if (!cleaned || cleaned.length <= 3) continue;
+    // 5. Skip lines that are ALL CAPS and very short (likely headers/footers)
+    if (cleaned.length <= 5 && cleaned === cleaned.toUpperCase() && !/\d/.test(cleaned)) continue;
 
-    // 6. Skip lines that are ALL CAPS and very short (likely headers/footers)
-    if (cleaned.length <= 6 && cleaned === cleaned.toUpperCase() && !/\d/.test(cleaned)) continue;
-
-    // 7. Skip lines that are mostly numbers (weight, code, etc.)
+    // 6. Skip lines that are mostly numbers (weight, code, etc.)
     const digitRatio = (cleaned.match(/\d/g) || []).length / cleaned.length;
     if (digitRatio > 0.5) continue;
 
-    // 8. Skip lines with too few alphabetic characters (noise fragments)
-    const alphaChars = (cleaned.match(/[a-zA-Z]/g) || []).length;
-    if (alphaChars < 3) continue;
-
-    // 9. Extract quantity if present
+    // 7. Extract quantity if present
+    // Patterns: "2 x Milk", "3x Apples", "Qty: 2 Milk", "2 Milk"
     let rawName = cleaned;
     let quantity: string | null = null;
 
     const qtyPatterns = [
-      /^(\d+)\s*[xX]\s+(.+)$/,
-      /^qty:?\s*(\d+)\s+(.+)$/i,
-      /^(\d+)\s+(?!oz\b|lb\b|ml\b|ct\b|pk\b|pc\b|pt\b|qt\b|gal\b|mg\b|kg\b|g\b|l\b)(.{4,})$/i,
+      /^(\d+)\s*[xX]\s+(.+)$/,              // "2 x Milk", "3x Apples"
+      /^qty:?\s*(\d+)\s+(.+)$/i,             // "Qty: 2 Milk"
+      /^(\d+)\s+(?!oz\b|lb\b|ml\b|ct\b|pk\b|pc\b|pt\b|qt\b|gal\b|mg\b|kg\b|g\b|l\b)(.{3,})$/i, // "2 Milk" but NOT "12 oz"
     ];
 
     for (const qp of qtyPatterns) {
@@ -329,15 +279,11 @@ function normalizeWithPatternMatching(rawText: string): NormalizeInputTextOutput
       }
     }
 
-    // 10. Final cleanup — remove trailing weight/unit codes
+    // 8. Final cleanup — remove trailing weight/unit codes like "(2 lb)" or "16 OZ"
     rawName = rawName.replace(/\s*\(?\d+(\.\d+)?\s*(oz|lb|ml|ct|pk|pc|pt|qt|gal|mg|kg|g|l|fl)\b\)?\s*$/i, '').trim();
 
-    // 11. Skip if name is too short after all cleanup
-    if (rawName.length <= 3) continue;
-
-    // 12. Skip if the name doesn't contain at least 2 alpha words (likely noise)
-    const words = rawName.split(/\s+/).filter(w => /[a-zA-Z]{2,}/.test(w));
-    if (words.length < 2 && rawName.length < 8) continue;
+    // 9. Skip if name is too short after all cleanup
+    if (rawName.length <= 2) continue;
 
     items.push({ raw_name: rawName, quantity });
   }
@@ -345,6 +291,10 @@ function normalizeWithPatternMatching(rawText: string): NormalizeInputTextOutput
   return { purchase_date: purchaseDate, items };
 }
 
+/**
+ * Try to extract a date from a receipt line.
+ * Returns ISO string or null.
+ */
 function extractDate(line: string): string | null {
   for (const pattern of DATE_PATTERNS) {
     const match = line.match(pattern);

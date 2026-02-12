@@ -10,7 +10,6 @@ import { saveReceipt, saveItems } from '../firebase/saveReceipt';
 import { getCurrentDateISO } from '../utils/dateHelpers';
 import { normalizeInputText } from '../llm/normalizeInputText';
 import { predictLifecycle } from '../lifecycle/predictLifecycle';
-import { enrichUnknownItems, looksLikeTruncated } from '../llm/enrichUnknownItems';
 import { markRecipesNeedRefresh } from '../firebase/userRecipes';
 import { capitalizeWords } from '../llm/classifyItems';
 
@@ -194,85 +193,6 @@ export function AddItemPage() {
       items.forEach(item => {
         console.log(`  📦 ${item.name} → cat: ${item.ingredientCategory} → loc: ${item.location} → ${item.autoExpireLabel}`);
       });
-
-      // Step 3: AI micro-call for items that are truly unknown OR have truncated names
-      // Pre-filter: only send items that look like real products (not receipt noise)
-      const MAX_ENRICHMENT_BATCH = 15; // Cap to avoid huge AI calls
-
-      const needsEnrichment = items
-        .map((item, i) => ({ item, i }))
-        .filter(({ item }) => {
-          // Only consider items that are unknown OR truncated
-          if (item.ingredientCategory !== 'unknown' && !looksLikeTruncated(item.name)) {
-            return false;
-          }
-          // Pre-filter obvious garbage that shouldn't go to AI
-          const name = item.name.toLowerCase();
-          // Too short to be a real product
-          if (name.length <= 4) return false;
-          // Must have at least 2 alphabetic words
-          const alphaWords = name.split(/\s+/).filter(w => /[a-z]{2,}/i.test(w));
-          if (alphaWords.length < 2) return false;
-          return true;
-        })
-        .slice(0, MAX_ENRICHMENT_BATCH); // Cap batch size
-
-      if (needsEnrichment.length > 0) {
-        console.log(`🔍 [Pipeline] ${needsEnrichment.length}/${items.length} items need AI enrichment (unknown or truncated)`);
-        const tEnrichStart = performance.now();
-
-        const enriched = await enrichUnknownItems(
-          needsEnrichment.map(({ item, i }) => ({ index: i, name: item.name }))
-        );
-
-        console.log(`⏱️ [Pipeline] AI enrichment: ${(performance.now() - tEnrichStart).toFixed(0)}ms (${enriched.length} enriched)`);
-
-        // Apply enrichment results: update name, then re-run predictLifecycle
-        for (const result of enriched) {
-          const item = items[result.index];
-          if (!item) continue;
-
-          const nameChanged = result.fullName !== item.name;
-          const wasUnknown = item.ingredientCategory === 'unknown';
-
-          // Update name if AI provided a better one
-          if (nameChanged) {
-            item.name = capitalizeWords(result.fullName);
-          }
-
-          // Re-run predictLifecycle with corrected name
-          if (nameChanged || wasUnknown) {
-            const lifecycle = predictLifecycle({
-              name: item.name,
-              purchaseDate: purchaseDateYMD,
-            });
-
-            // If rule-based still can't categorize, use AI's category
-            if (lifecycle.ingredientCategory === 'unknown') {
-              item.category = result.category;
-              item.ingredientCategory = 'unknown';
-              item.categorySource = 'inferred';
-            } else {
-              item.category = lifecycle.displayCategory;
-              item.ingredientCategory = lifecycle.ingredientCategory;
-              item.categorySource = lifecycle.categorySource;
-            }
-
-            item.location = lifecycle.recommendedLocation;
-            item.predictionSource = lifecycle.predictionSource;
-            item.autoExpireLabel = lifecycle.autoExpireLabel;
-            item.autoExpireStatus = lifecycle.autoExpireStatus;
-            item.autoExpirationDate = lifecycle.autoExpirationDate
-              ? new Date(lifecycle.autoExpirationDate + 'T00:00:00').toISOString()
-              : getCurrentDateISO();
-          }
-
-          console.log(`  ✨ ${nameChanged ? '📝' : '  '} ${item.name} → cat: ${item.ingredientCategory}/${item.category} → loc: ${item.location}`);
-        }
-      } else {
-        console.log(`✅ [Pipeline] All items categorized — no AI enrichment needed`);
-      }
-
       console.log(`⏱️ [Pipeline] processExtractedText total: ${(performance.now() - tStart).toFixed(0)}ms`);
 
       setProcessedItems(items);
