@@ -466,7 +466,7 @@ export function AddItemPage() {
   }
 
   // Form view
-  const categories: FoodCategory[] = ['Produce', 'Protein', 'Grains', 'Dairy', 'Snacks', 'Condiments', 'Beverages', 'Prepared'];
+  const categories: FoodCategory[] = ['Produce', 'Protein', 'Grains', 'Dairy', 'Snacks', 'Condiments', 'Beverages', 'Prepared', 'Canned', 'Frozen', 'Other'];
   const locations: StorageLocation[] = ['fridge', 'freezer', 'pantry'];
 
   // Shared style objects

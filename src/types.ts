@@ -21,7 +21,10 @@ export type FoodCategory =
   | 'Snacks'
   | 'Condiments'
   | 'Beverages'
-  | 'Prepared';
+  | 'Prepared'
+  | 'Canned'
+  | 'Frozen'
+  | 'Other';
 
 // Storage location
 export type StorageLocation = 'fridge' | 'freezer' | 'pantry';

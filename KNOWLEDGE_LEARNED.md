@@ -531,8 +531,55 @@ API 사용 불가 시 자동으로 키워드 매칭 기반 로직 사용:
 
 ---
 
-**Last Updated**: January 8, 2026  
+## Issue 6: normalizeInputText Pipeline Bottleneck (5.6s)
+
+### Problem
+Receipt OCR pipeline took ~6.5s total. Timing logs showed:
+- Google Vision OCR: 839ms (13%)
+- `normalizeInputText` (OpenAI API): 5647ms (87%)
+- `predictLifecycle`: 3ms (<1%)
+
+### Root Cause
+`normalizeInputText` always called OpenAI API for receipt text parsing, even though pattern matching could handle most common receipt formats.
+
+### Solution Implemented
+**Hybrid approach** — pattern matching first, AI fallback only when needed:
+1. Enhanced pattern matching with 80+ noise/ignore regex patterns (totals, payments, store headers, barcodes, addresses, membership info, etc.)
+2. Aggressive price stripping (trailing, leading, inline `$X.XX` patterns)
+3. Quantity extraction with multiple patterns (`2x Milk`, `Qty: 3 Bread`, etc.)
+4. If pattern matching extracts ≥1 item → skip AI entirely (~0ms)
+5. If 0 items → fall back to OpenAI API (~5.6s)
+
+**Expected improvement**: 5.6s → <10ms for 80%+ of receipts.
+
+### Prevention Strategy
+- Always profile new API-dependent steps with `performance.now()` timing logs
+- Design "instant local first, API fallback" architecture for data parsing
+
+---
+
+## Issue 7: predictLifecycle "unknown" for truncated OCR names
+
+### Problem
+Many items from OCR were classified as "unknown" because OCR text was truncated:
+- "Chobani Less Sugar Greek Yogu" → missing "rt" from "Yogurt"
+- "Rummo Italian Pasta Lasagne N" → truncated
+- "Earthbound Farm Organic Class" → truncated "Classic"
+
+### Root Cause
+`resolveCategoryFromName()` used strict word-boundary regex (`\bkeyword\b`), which doesn't match partial words.
+
+### Solution Implemented
+Added a **Pass 2: Prefix matching** after the strict word-boundary pass:
+- For tokens ≥3 chars: if a name token is a prefix of a keyword (e.g., "yogu" → "yogurt"), it matches
+- Also matches keyword-is-prefix-of-token (e.g., "pasta" → "pastas")
+- Added 100+ new Level-2 categories: grains, snacks, beverages, condiments, canned, frozen, non-food
+- Added `FoodCategory` types: 'Canned', 'Frozen', 'Other'
+
+---
+
+**Last Updated**: February 3, 2026  
 **Status**: MVP Complete ✅  
 **Next Steps**: 
-1. OpenAI 결제 설정 후 AI 기능 테스트
-2. Firebase credentials 추가 후 저장 기능 테스트
+1. Monitor pattern matching accuracy on real receipts
+2. Tune keyword lists based on user feedback

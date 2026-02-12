@@ -109,7 +109,8 @@ OUTPUT FORMAT (JSON array, one entry per item):
 
     const validCategories: FoodCategory[] = [
       'Produce', 'Protein', 'Grains', 'Dairy',
-      'Snacks', 'Condiments', 'Beverages', 'Prepared'
+      'Snacks', 'Condiments', 'Beverages', 'Prepared',
+      'Canned', 'Frozen', 'Other'
     ];
     const validConfidences = ['high', 'medium', 'low'] as const;
 

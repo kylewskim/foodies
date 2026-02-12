@@ -75,6 +75,49 @@ const SHELF_LIFE_DEFAULTS: Record<string, ShelfLife> = {
 
   // Leftovers
   'leftovers-cooked': { fridge: 4,  freezer: 90,  pantry: 0  },
+
+  // Grains / Pasta / Bread
+  'grain-pasta':        { fridge: 0,   freezer: 0,   pantry: 730  },  // dry pasta
+  'grain-rice':         { fridge: 0,   freezer: 0,   pantry: 730  },
+  'grain-bread':        { fridge: 14,  freezer: 90,  pantry: 5   },
+  'grain-cereal':       { fridge: 0,   freezer: 0,   pantry: 180  },
+  'grain-flour':        { fridge: 0,   freezer: 0,   pantry: 365  },
+  'grain-oats':         { fridge: 0,   freezer: 0,   pantry: 365  },
+
+  // Snacks / Packaged
+  'snack-chips':        { fridge: 0,   freezer: 0,   pantry: 60   },
+  'snack-crackers':     { fridge: 0,   freezer: 0,   pantry: 90   },
+  'snack-cookies':      { fridge: 0,   freezer: 90,  pantry: 30   },
+  'snack-candy':        { fridge: 0,   freezer: 0,   pantry: 180  },
+  'snack-nuts':         { fridge: 30,  freezer: 180, pantry: 90   },
+  'snack-bar':          { fridge: 0,   freezer: 0,   pantry: 180  },
+  'snack-popcorn':      { fridge: 0,   freezer: 0,   pantry: 60   },
+  'snack-pastry':       { fridge: 7,   freezer: 90,  pantry: 5    },
+
+  // Beverages
+  'bev-soda':           { fridge: 0,   freezer: 0,   pantry: 270  },
+  'bev-juice':          { fridge: 7,   freezer: 0,   pantry: 180  },
+  'bev-water':          { fridge: 0,   freezer: 0,   pantry: 730  },
+  'bev-coffee-tea':     { fridge: 0,   freezer: 0,   pantry: 365  },
+  'bev-sports-energy':  { fridge: 0,   freezer: 0,   pantry: 270  },
+  'bev-protein':        { fridge: 0,   freezer: 0,   pantry: 270  },
+
+  // Condiments / Sauces
+  'condiment-sauce':    { fridge: 30,  freezer: 0,   pantry: 365  },
+  'condiment-oil':      { fridge: 0,   freezer: 0,   pantry: 365  },
+  'condiment-vinegar':  { fridge: 0,   freezer: 0,   pantry: 730  },
+  'condiment-spice':    { fridge: 0,   freezer: 0,   pantry: 730  },
+
+  // Canned / Preserved
+  'canned-goods':       { fridge: 0,   freezer: 0,   pantry: 730  },
+
+  // Frozen (already frozen at purchase)
+  'frozen-meal':        { fridge: 2,   freezer: 180, pantry: 0    },
+  'frozen-veggies':     { fridge: 2,   freezer: 240, pantry: 0    },
+  'frozen-dessert':     { fridge: 1,   freezer: 120, pantry: 0    },
+
+  // Non-food / Household (tracked but no expiration)
+  'non-food':           { fridge: 0,   freezer: 0,   pantry: 0    },
 };
 
 /** Fallback days when shelf-life value is 0 (not recommended for that location) */
@@ -103,6 +146,32 @@ const LEVEL2_TO_FOOD_CATEGORY: Record<string, FoodCategory> = {
   'eggs-shell': 'Protein',
 
   'leftovers-cooked': 'Prepared',
+
+  // Grains
+  'grain-pasta': 'Grains', 'grain-rice': 'Grains', 'grain-bread': 'Grains',
+  'grain-cereal': 'Grains', 'grain-flour': 'Grains', 'grain-oats': 'Grains',
+
+  // Snacks
+  'snack-chips': 'Snacks', 'snack-crackers': 'Snacks', 'snack-cookies': 'Snacks',
+  'snack-candy': 'Snacks', 'snack-nuts': 'Snacks', 'snack-bar': 'Snacks',
+  'snack-popcorn': 'Snacks', 'snack-pastry': 'Snacks',
+
+  // Beverages
+  'bev-soda': 'Beverages', 'bev-juice': 'Beverages', 'bev-water': 'Beverages',
+  'bev-coffee-tea': 'Beverages', 'bev-sports-energy': 'Beverages', 'bev-protein': 'Beverages',
+
+  // Condiments
+  'condiment-sauce': 'Condiments', 'condiment-oil': 'Condiments',
+  'condiment-vinegar': 'Condiments', 'condiment-spice': 'Condiments',
+
+  // Canned
+  'canned-goods': 'Canned',
+
+  // Frozen
+  'frozen-meal': 'Frozen', 'frozen-veggies': 'Frozen', 'frozen-dessert': 'Frozen',
+
+  // Non-food
+  'non-food': 'Other',
 };
 
 // ─── Recommended Storage Location ─────────────────────────────────────────────
@@ -156,6 +225,49 @@ const CATEGORY_TO_LOCATION: Record<string, StorageLocation> = {
 
   // Leftovers
   'leftovers-cooked': 'fridge',
+
+  // Grains — pantry
+  'grain-pasta': 'pantry',
+  'grain-rice': 'pantry',
+  'grain-bread': 'pantry',
+  'grain-cereal': 'pantry',
+  'grain-flour': 'pantry',
+  'grain-oats': 'pantry',
+
+  // Snacks — pantry
+  'snack-chips': 'pantry',
+  'snack-crackers': 'pantry',
+  'snack-cookies': 'pantry',
+  'snack-candy': 'pantry',
+  'snack-nuts': 'pantry',
+  'snack-bar': 'pantry',
+  'snack-popcorn': 'pantry',
+  'snack-pastry': 'pantry',
+
+  // Beverages — pantry (most are shelf-stable)
+  'bev-soda': 'pantry',
+  'bev-juice': 'fridge',
+  'bev-water': 'pantry',
+  'bev-coffee-tea': 'pantry',
+  'bev-sports-energy': 'pantry',
+  'bev-protein': 'pantry',
+
+  // Condiments — pantry (unopened)
+  'condiment-sauce': 'pantry',
+  'condiment-oil': 'pantry',
+  'condiment-vinegar': 'pantry',
+  'condiment-spice': 'pantry',
+
+  // Canned — pantry
+  'canned-goods': 'pantry',
+
+  // Frozen — freezer
+  'frozen-meal': 'freezer',
+  'frozen-veggies': 'freezer',
+  'frozen-dessert': 'freezer',
+
+  // Non-food — pantry
+  'non-food': 'pantry',
 };
 
 function resolveDefaultLocation(ingredientCategory: string): StorageLocation {
@@ -208,12 +320,64 @@ const CATEGORY_KEYWORDS: Array<[string[], string]> = [
 
   // Leftovers
   [['leftover', 'leftovers', 'meal prep', 'cooked'], 'leftovers-cooked'],
+
+  // Grains / Pasta / Bread
+  [['pasta', 'spaghetti', 'penne', 'rigatoni', 'fusilli', 'fettuccine', 'linguine', 'macaroni', 'lasagne', 'lasagna', 'orzo', 'noodle', 'noodles', 'ramen', 'udon', 'lo mein', 'angel hair', 'rotini', 'farfalle', 'ravioli', 'tortellini', 'gnocchi', 'vermicelli'], 'grain-pasta'],
+  [['rice', 'basmati', 'jasmine rice', 'brown rice', 'wild rice', 'arborio', 'quinoa', 'couscous', 'farro', 'barley', 'bulgur', 'millet', 'polenta', 'grits'], 'grain-rice'],
+  [['bread', 'bagel', 'bagels', 'baguette', 'ciabatta', 'sourdough', 'pita', 'naan', 'tortilla', 'tortillas', 'wrap', 'wraps', 'bun', 'buns', 'roll', 'rolls', 'croissant', 'english muffin', 'flatbread'], 'grain-bread'],
+  [['cereal', 'granola', 'muesli', 'corn flakes', 'cheerios', 'oatmeal'], 'grain-cereal'],
+  [['flour', 'all purpose flour', 'bread flour', 'cake flour', 'wheat flour', 'cornstarch', 'baking mix'], 'grain-flour'],
+  [['oats', 'rolled oats', 'steel cut oats', 'instant oats'], 'grain-oats'],
+
+  // Snacks / Packaged
+  [['chips', 'potato chips', 'tortilla chips', 'doritos', 'lays', 'pringles', 'cheetos', 'fritos', 'tostitos'], 'snack-chips'],
+  [['crackers', 'saltine', 'ritz', 'goldfish', 'wheat thins', 'triscuit', 'cheez-it'], 'snack-crackers'],
+  [['cookie', 'cookies', 'oreo', 'oreos', 'biscuit', 'biscuits', 'wafer', 'wafers', 'pocky'], 'snack-cookies'],
+  [['candy', 'chocolate', 'gummy', 'gummies', 'skittles', 'snickers', 'twix', 'kitkat', 'kit kat', 'reese'], 'snack-candy'],
+  [['nuts', 'peanuts', 'almonds', 'cashews', 'walnuts', 'pecans', 'pistachios', 'macadamia', 'mixed nuts', 'trail mix', 'sunflower seeds'], 'snack-nuts'],
+  [['protein bar', 'granola bar', 'energy bar', 'clif bar', 'kind bar', 'power bar', 'snack bar', 'bar'], 'snack-bar'],
+  [['popcorn', 'microwave popcorn', 'smartfood'], 'snack-popcorn'],
+  [['pop tart', 'pop-tart', 'pop tarts', 'pop-tarts', 'toaster pastry', 'toaster pastries', 'pastry', 'pastries', 'strudel', 'danish', 'turnover'], 'snack-pastry'],
+
+  // Beverages
+  [['coca cola', 'coca-cola', 'pepsi', 'sprite', 'fanta', 'mountain dew', 'dr pepper', 'root beer', 'ginger ale', 'soda', 'cola', 'tonic', 'seltzer', 'sparkling water', 'la croix', 'lacroix', 'club soda', 'diet coke', 'coke zero', 'zero sugar'], 'bev-soda'],
+  [['juice', 'orange juice', 'apple juice', 'grape juice', 'cranberry juice', 'lemonade', 'smoothie', 'simply', 'tropicana', 'minute maid'], 'bev-juice'],
+  [['water', 'purified water', 'spring water', 'distilled water', 'sparkling', 'fiji', 'dasani', 'aquafina', 'evian', 'smart water'], 'bev-water'],
+  [['coffee', 'espresso', 'tea', 'green tea', 'black tea', 'matcha', 'chai', 'cold brew', 'k-cup', 'k cup', 'kcup', 'nespresso', 'folgers', 'starbucks'], 'bev-coffee-tea'],
+  [['gatorade', 'powerade', 'body armor', 'pedialyte', 'liquid iv', 'red bull', 'monster', 'energy drink', 'prime', 'celsius'], 'bev-sports-energy'],
+  [['protein shake', 'protein drink', 'boost', 'ensure', 'muscle milk', 'premier protein', 'fairlife', 'core power'], 'bev-protein'],
+
+  // Condiments / Sauces
+  [['ketchup', 'mustard', 'mayonnaise', 'mayo', 'relish', 'hot sauce', 'sriracha', 'tabasco', 'bbq sauce', 'barbecue sauce', 'steak sauce', 'worcestershire', 'soy sauce', 'teriyaki', 'hoisin', 'fish sauce', 'oyster sauce', 'salsa', 'pesto', 'marinara', 'pasta sauce', 'tomato sauce', 'alfredo', 'ranch', 'dressing', 'vinaigrette'], 'condiment-sauce'],
+  [['olive oil', 'vegetable oil', 'canola oil', 'coconut oil', 'sesame oil', 'avocado oil', 'cooking spray', 'pam'], 'condiment-oil'],
+  [['vinegar', 'balsamic', 'apple cider vinegar', 'white vinegar', 'red wine vinegar', 'rice vinegar'], 'condiment-vinegar'],
+  [['salt', 'pepper', 'spice', 'seasoning', 'cumin', 'paprika', 'oregano', 'basil', 'thyme', 'rosemary', 'cinnamon', 'nutmeg', 'turmeric', 'chili powder', 'garlic powder', 'onion powder', 'cayenne'], 'condiment-spice'],
+
+  // Canned / Preserved
+  [['canned', 'can of', 'soup', 'beans', 'chickpeas', 'lentils', 'tuna can', 'canned tuna', 'tomato paste', 'tomato puree', 'diced tomatoes', 'crushed tomatoes', 'coconut milk', 'condensed', 'evaporated'], 'canned-goods'],
+
+  // Frozen
+  [['frozen pizza', 'frozen dinner', 'frozen meal', 'tv dinner', 'lean cuisine', 'stouffer', 'hungry man', 'hot pocket', 'hot pockets', 'frozen burrito', 'frozen entree'], 'frozen-meal'],
+  [['frozen vegetable', 'frozen vegetables', 'frozen fruit', 'frozen broccoli', 'frozen corn', 'frozen peas', 'frozen berries', 'frozen spinach', 'frozen stir fry'], 'frozen-veggies'],
+  [['ice cream', 'gelato', 'sorbet', 'frozen yogurt', 'popsicle', 'popsicles', 'ice pop', 'fudge bar', 'drumstick', 'magnum'], 'frozen-dessert'],
+
+  // Non-food / Household
+  [['cat food', 'dog food', 'pet food', 'kitty litter', 'cat litter', 'purina', 'pedigree', 'iams', 'meow mix',
+    'detergent', 'fabric softener', 'dryer sheet', 'dryer sheets', 'bleach', 'lysol', 'clorox', 'windex',
+    'paper towel', 'paper towels', 'toilet paper', 'tissue', 'tissues', 'napkin', 'napkins',
+    'trash bag', 'trash bags', 'garbage bag', 'garbage bags', 'ziploc', 'zip lock', 'aluminum foil', 'plastic wrap', 'saran wrap',
+    'soap', 'dish soap', 'hand soap', 'body wash', 'shampoo', 'conditioner', 'lotion', 'deodorant', 'toothpaste',
+    'laundry', 'snuggle', 'tide', 'downy', 'bounce', 'gain',
+    'battery', 'batteries', 'light bulb', 'light bulbs'], 'non-food'],
 ];
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 /**
  * Resolve Level-2 ingredient category from item name via keyword matching.
+ *
+ * Handles truncated OCR names (e.g. "Yogu" matching "yogurt") by also
+ * checking if any keyword STARTS WITH a token or vice versa (≥3 chars).
  */
 export function resolveCategoryFromName(name: string): {
   ingredientCategory: string;
@@ -221,18 +385,37 @@ export function resolveCategoryFromName(name: string): {
 } {
   const normalized = name.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
 
+  // Pass 1: Exact matches (full word boundary or phrase)
   for (const [keywords, category] of CATEGORY_KEYWORDS) {
-    // Check multi-word phrases first (they come first in each keyword list)
     for (const kw of keywords) {
       if (kw.includes(' ')) {
-        // Phrase match
         if (normalized.includes(kw)) {
           return { ingredientCategory: category, categorySource: 'inferred' };
         }
       } else {
-        // Word-boundary match to avoid "ham" matching "shampoo"
         const regex = new RegExp(`\\b${kw}\\b`);
         if (regex.test(normalized)) {
+          return { ingredientCategory: category, categorySource: 'inferred' };
+        }
+      }
+    }
+  }
+
+  // Pass 2: Prefix/partial matching for truncated OCR names
+  // e.g. "Yogu" → matches "yogurt", "Chick" → matches "chicken"
+  // Only considers tokens ≥ 3 chars to avoid false positives
+  const nameTokens = normalized.split(' ').filter(t => t.length >= 3);
+  for (const [keywords, category] of CATEGORY_KEYWORDS) {
+    for (const kw of keywords) {
+      if (kw.includes(' ')) continue; // skip phrases in pass 2
+      if (kw.length < 3) continue;
+      for (const token of nameTokens) {
+        // Token is a prefix of keyword: "yogu" → "yogurt"
+        if (kw.startsWith(token) && token.length >= 3) {
+          return { ingredientCategory: category, categorySource: 'inferred' };
+        }
+        // Keyword is a prefix of token: "pasta" → "pastas"
+        if (token.startsWith(kw)) {
           return { ingredientCategory: category, categorySource: 'inferred' };
         }
       }
@@ -278,6 +461,19 @@ export function predictLifecycle(input: PredictLifecycleInput): LifecyclePredict
       autoExpireStatus: 'unknown',
       displayCategory,
       recommendedLocation: 'fridge', // safe default
+    };
+  }
+
+  // 2c. Non-food items — no expiration tracking
+  if (ingredientCategory === 'non-food') {
+    return {
+      ingredientCategory: 'non-food',
+      categorySource,
+      predictionSource: 'rule_baseline',
+      autoExpireLabel: 'Non-food',
+      autoExpireStatus: 'ok',
+      displayCategory,
+      recommendedLocation: 'pantry',
     };
   }
 

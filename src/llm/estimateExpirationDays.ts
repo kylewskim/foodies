@@ -125,6 +125,9 @@ export function estimateWithRules(
     Condiments: { days: 365, confidence: 'medium' },
     Beverages: { days: 30, confidence: 'medium' },
     Prepared: { days: 3, confidence: 'medium' },
+    Canned: { days: 730, confidence: 'high' },
+    Frozen: { days: 180, confidence: 'medium' },
+    Other: { days: 365, confidence: 'low' },
   };
   
   let result = { ...categoryDefaults[category] };

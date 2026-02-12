@@ -111,7 +111,7 @@ export function EditItemPage() {
     }
   };
 
-  const categories: FoodCategory[] = ['Produce', 'Protein', 'Grains', 'Dairy', 'Snacks', 'Condiments', 'Beverages', 'Prepared'];
+  const categories: FoodCategory[] = ['Produce', 'Protein', 'Grains', 'Dairy', 'Snacks', 'Condiments', 'Beverages', 'Prepared', 'Canned', 'Frozen', 'Other'];
   const locations: StorageLocation[] = ['fridge', 'pantry', 'freezer'];
 
   // Shared style objects

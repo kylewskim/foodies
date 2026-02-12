@@ -404,7 +404,12 @@ export function RecipesPage() {
                       {item.category === 'Dairy' && '🥛'}
                       {item.category === 'Grains' && '🌾'}
                       {item.category === 'Beverages' && '🥤'}
-                      {!['Produce', 'Protein', 'Dairy', 'Grains', 'Beverages'].includes(item.category) && '🍽️'}
+                      {item.category === 'Snacks' && '🍪'}
+                      {item.category === 'Condiments' && '🧂'}
+                      {item.category === 'Canned' && '🥫'}
+                      {item.category === 'Frozen' && '🧊'}
+                      {item.category === 'Other' && '📦'}
+                      {!['Produce', 'Protein', 'Dairy', 'Grains', 'Beverages', 'Snacks', 'Condiments', 'Canned', 'Frozen', 'Other'].includes(item.category) && '🍽️'}
                     </div>
                     <p style={{
                       fontSize: '10px',

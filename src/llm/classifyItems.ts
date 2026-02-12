@@ -89,7 +89,8 @@ OUTPUT FORMAT (JSON array):
     // 카테고리 유효성 검증
     const validCategories: FoodCategory[] = [
       'Produce', 'Protein', 'Grains', 'Dairy', 
-      'Snacks', 'Condiments', 'Beverages', 'Prepared'
+      'Snacks', 'Condiments', 'Beverages', 'Prepared',
+      'Canned', 'Frozen', 'Other'
     ];
     
     return results.map((result, index) => ({
