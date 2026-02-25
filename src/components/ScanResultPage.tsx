@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Item, StorageLocation } from '../types';
-// Helper function is defined inline
 
 interface ScanResultPageProps {
   items: Item[];
@@ -14,6 +13,10 @@ interface ScanResultPageProps {
   isSaving: boolean;
 }
 
+const SWIPE_THRESHOLD = 15;
+const SWIPE_OPEN_THRESHOLD = 60;
+const ACTION_WIDTH = 176;
+
 export function ScanResultPage({
   items,
   receiptDate,
@@ -22,41 +25,48 @@ export function ScanResultPage({
   onSaveAll,
   onAddItem,
   onDateChange,
-  isSaving
+  isSaving,
 }: ScanResultPageProps) {
   const navigate = useNavigate();
-  const [showMoreModal, setShowMoreModal] = useState(false);
+
   const [selectMode, setSelectMode] = useState(false);
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const [showMoveToModal, setShowMoveToModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [editableDate, setEditableDate] = useState<string>(
-    receiptDate ? new Date(receiptDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]
+    receiptDate ? new Date(receiptDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
   );
 
-  // Group items by location
+  const [swipedItemId, setSwipedItemId] = useState<string | null>(null);
+  const [touchStart, setTouchStart] = useState<number>(0);
+  const [touchCurrent, setTouchCurrent] = useState<number>(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const [isSwipeActive, setIsSwipeActive] = useState(false);
+  const [touchedItemId, setTouchedItemId] = useState<string | null>(null);
+
   const groupedItems = items.reduce((acc, item) => {
-    const location = item.location;
-    if (!acc[location]) {
-      acc[location] = [];
-    }
-    acc[location].push(item);
+    if (!acc[item.location]) acc[item.location] = [];
+    acc[item.location].push(item);
     return acc;
   }, {} as Record<StorageLocation, Item[]>);
 
+  const locationLabels: Record<StorageLocation, string> = {
+    fridge: 'Fridge',
+    freezer: 'Freezer',
+    pantry: 'Pantry',
+  };
+
+  const validItemCount = items.length;
+
   const formatDate = (dateString?: string) => {
-    // If no date, use today's date
     const date = dateString ? new Date(dateString) : new Date();
     return date.toLocaleDateString('en-US', {
       month: '2-digit',
       day: '2-digit',
-      year: 'numeric'
+      year: 'numeric',
     });
   };
-
-  // Display date: use editableDate (which is kept in sync with receiptDate)
-  const displayDate = formatDate(editableDate);
 
   const getExpirationText = (item: Item) => {
     const expirationDate = item.manualExpirationDate || item.autoExpirationDate;
@@ -71,18 +81,28 @@ export function ScanResultPage({
     return `Expires in ${days} ds`;
   };
 
+  const openEditItem = (item: Item) => {
+    navigate('/edit-item', {
+      state: {
+        item,
+        returnPath: '/add-item?method=review',
+        processedItems: items,
+      },
+    });
+  };
+
   const toggleItemSelection = (itemId: string) => {
-    const newSelection = new Set(selectedItems);
-    if (newSelection.has(itemId)) {
-      newSelection.delete(itemId);
+    const next = new Set(selectedItems);
+    if (next.has(itemId)) {
+      next.delete(itemId);
     } else {
-      newSelection.add(itemId);
+      next.add(itemId);
     }
-    setSelectedItems(newSelection);
+    setSelectedItems(next);
   };
 
   const handleMoveSelected = (newLocation: StorageLocation) => {
-    items.forEach(item => {
+    items.forEach((item) => {
       if (selectedItems.has(item.itemId)) {
         onItemUpdate({ ...item, location: newLocation });
       }
@@ -93,346 +113,542 @@ export function ScanResultPage({
   };
 
   const handleDeleteSelected = () => {
-    // Actually delete items from the list
-    onDeleteItems(Array.from(selectedItems));
+    if (selectedItems.size > 0) {
+      onDeleteItems(Array.from(selectedItems));
+    }
     setShowDeleteModal(false);
     setSelectedItems(new Set());
+    setSwipedItemId(null);
     setSelectMode(false);
   };
 
-  const handleItemClick = (item: Item) => {
-    if (selectMode) {
-      toggleItemSelection(item.itemId);
-    } else {
-      // Navigate to edit item
-      navigate('/edit-item', { 
-        state: { 
-          item, 
-          returnPath: '/add-item?method=review',
-          processedItems: items 
-        } 
-      });
+  const closeDeleteModal = () => {
+    setShowDeleteModal(false);
+    setSwipedItemId(null);
+    if (!selectMode) {
+      setSelectedItems(new Set());
     }
   };
 
-  const locationLabels: Record<StorageLocation, string> = {
-    fridge: 'Fridge',
-    freezer: 'Freezer',
-    pantry: 'Pantry',
+  const handleTrashItem = (itemId: string) => {
+    onDeleteItems([itemId]);
+    setSwipedItemId(null);
   };
 
-  const currentLocation = items.length > 0 ? items[0].location : 'fridge';
+  const handleUsedItem = (itemId: string) => {
+    // In scan-review state, "used" means exclude from items to save.
+    onDeleteItems([itemId]);
+    setSwipedItemId(null);
+  };
+
+  const handleTouchStart = (e: React.TouchEvent, itemId: string) => {
+    if (selectMode) return;
+    setTouchStart(e.touches[0].clientX);
+    setTouchCurrent(e.touches[0].clientX);
+    setTouchedItemId(itemId);
+    setIsDragging(true);
+    setIsSwipeActive(false);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isDragging || selectMode) return;
+    const currentX = e.touches[0].clientX;
+    setTouchCurrent(currentX);
+
+    const moveDistance = Math.abs(touchStart - currentX);
+    if (moveDistance > SWIPE_THRESHOLD && !isSwipeActive) {
+      setIsSwipeActive(true);
+      setSwipedItemId(touchedItemId);
+    }
+  };
+
+  const handleTouchEnd = (itemId: string) => {
+    if (selectMode) return;
+
+    const swipeDistance = touchStart - touchCurrent;
+    if (isSwipeActive) {
+      if (swipeDistance > SWIPE_OPEN_THRESHOLD) {
+        setSwipedItemId(itemId);
+      } else {
+        setSwipedItemId(null);
+      }
+    }
+
+    setIsDragging(false);
+    setTouchStart(0);
+    setTouchCurrent(0);
+    setTouchedItemId(null);
+    setIsSwipeActive(false);
+  };
+
+  const displayDate = formatDate(editableDate);
+  const singleSelectedItem =
+    selectedItems.size === 1 ? items.find((item) => selectedItems.has(item.itemId)) ?? null : null;
 
   return (
-    <div style={{
-      minHeight: '100vh',
-      backgroundColor: '#f7f6ef',
-      display: 'flex',
-      flexDirection: 'column',
-    }}>
-      {/* Header */}
-      <div style={{
-        padding: '16px',
-        paddingTop: 'max(16px, env(safe-area-inset-top))',
-      }}>
-        <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'flex-start',
-        }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {/* Back button */}
-            <button
-              onClick={() => selectMode ? setSelectMode(false) : navigate('/')}
-              style={{
-                width: '40px',
-                height: '40px',
-                border: 'none',
-                background: 'none',
-                cursor: 'pointer',
-                padding: 0,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <svg width="16" height="19" viewBox="0 0 16 19" fill="none">
-                <path d="M8 1L1 9.5L8 18" stroke="#073d35" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            </button>
+    <div
+      style={{
+        minHeight: '100vh',
+        backgroundColor: '#f7f6ef',
+        display: 'flex',
+        flexDirection: 'column',
+      }}
+    >
+      <div
+        style={{
+          padding: '16px 20px',
+          paddingTop: 'max(16px, env(safe-area-inset-top))',
+          borderBottom: '1px solid rgba(17,19,11,0.08)',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <button
+            onClick={() => (selectMode ? setSelectMode(false) : navigate('/'))}
+            style={{
+              width: '40px',
+              height: '40px',
+              border: 'none',
+              background: 'none',
+              cursor: 'pointer',
+              padding: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <svg width="16" height="19" viewBox="0 0 16 19" fill="none">
+              <path d="M8 1L1 9.5L8 18" stroke="#073d35" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
 
-            {/* Title */}
-            <h1 style={{
-              fontFamily: '"Poppins", sans-serif',
-              fontSize: '28px',
-              fontWeight: '400',
-              color: '#11130b',
-              margin: 0,
-            }}>
-              {selectMode ? 'Select Items' : 'Scan Result'}
-            </h1>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            {/* Receipt date - clickable to edit */}
+          <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
             {!selectMode && (
               <button
-                onClick={() => setShowDatePicker(true)}
+                onClick={onAddItem}
                 style={{
-                  fontFamily: '"Poppins", sans-serif',
-                  fontSize: '16px',
-                  fontStyle: 'italic',
-                  color: '#333',
-                  opacity: 0.5,
-                  background: 'none',
+                  width: '24px',
+                  height: '24px',
                   border: 'none',
+                  background: 'none',
+                  padding: 0,
                   cursor: 'pointer',
-                  padding: '4px 8px',
-                  borderRadius: '8px',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '4px',
+                  justifyContent: 'center',
                 }}
+                aria-label="Add item"
               >
-                {displayDate}
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                  <path d="M9 1.5L10.5 3L4.5 9H3V7.5L9 1.5Z" stroke="#333" strokeOpacity="0.5" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"/>
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                  <path d="M7 1V13M1 7H13" stroke="#11130b" strokeWidth="1.8" strokeLinecap="round" />
                 </svg>
               </button>
             )}
 
-            {/* 3-dot menu button */}
             <button
-              onClick={() => setShowMoreModal(true)}
+              onClick={() => {
+                setSwipedItemId(null);
+                setSelectedItems(new Set());
+                setSelectMode((prev) => !prev);
+              }}
               style={{
-                width: '32px',
-                height: '32px',
+                width: '24px',
+                height: '24px',
                 border: 'none',
                 background: 'none',
-                cursor: 'pointer',
                 padding: 0,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
               }}
+              aria-label="Toggle bulk mode"
             >
-              <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
-                <circle cx="16" cy="8" r="2" fill="#073d35"/>
-                <circle cx="16" cy="16" r="2" fill="#073d35"/>
-                <circle cx="16" cy="24" r="2" fill="#073d35"/>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="6" r="1.8" fill="#11130b" />
+                <circle cx="12" cy="12" r="1.8" fill="#11130b" />
+                <circle cx="12" cy="18" r="1.8" fill="#11130b" />
               </svg>
             </button>
           </div>
         </div>
+
+        <h1
+          style={{
+            margin: '8px 0 0 0',
+            fontFamily: '"Poppins", sans-serif',
+            fontSize: '28px',
+            fontWeight: '400',
+            color: '#11130b',
+          }}
+        >
+          My Household
+        </h1>
+
+        <div style={{ marginTop: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          {!selectMode ? (
+            <button
+              onClick={() => setShowDatePicker(true)}
+              style={{
+                border: 'none',
+                background: 'none',
+                padding: 0,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+              }}
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <rect x="2" y="3" width="12" height="11" rx="2" stroke="#333" strokeOpacity="0.5" />
+                <path d="M5 1.5V4M11 1.5V4M2 6H14" stroke="#333" strokeOpacity="0.5" strokeLinecap="round" />
+              </svg>
+              <span
+                style={{
+                  fontFamily: '"Poppins", sans-serif',
+                  fontSize: '16px',
+                  fontStyle: 'italic',
+                  color: 'rgba(51,51,51,0.5)',
+                }}
+              >
+                {displayDate}
+              </span>
+            </button>
+          ) : (
+            <div
+              style={{
+                fontFamily: '"Poppins", sans-serif',
+                fontSize: '14px',
+                color: 'rgba(17,19,11,0.6)',
+              }}
+            >
+              {selectedItems.size} selected
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Items list */}
-      <div style={{
-        flex: 1,
-        padding: '0 20px',
-        paddingBottom: selectMode ? '94px' : '140px',
-        overflow: 'auto',
-      }}>
+      <div
+        style={{
+          flex: 1,
+          padding: '16px 0',
+          paddingBottom: selectMode ? '94px' : '140px',
+          overflowY: 'auto',
+        }}
+      >
         {Object.entries(groupedItems).map(([location, locationItems]) => (
           <div key={location} style={{ marginBottom: '24px' }}>
-            {/* Location title */}
-            <h2 style={{
+            <h2
+              style={{
               fontFamily: '"Poppins", sans-serif',
               fontSize: '20px',
               fontWeight: '400',
               color: '#1a1a1a',
-              marginBottom: '12px',
-            }}>
-              {locationLabels[location as StorageLocation]}
-            </h2>
+              margin: '0 0 12px 0',
+              padding: '0 20px',
+            }}
+          >
+            {locationLabels[location as StorageLocation]}
+          </h2>
 
-            {/* Items */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
-              {locationItems.map((item) => (
-                <div 
-                  key={item.itemId}
-                  onClick={() => handleItemClick(item)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    cursor: 'pointer',
-                  }}
-                >
-                  <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                    {/* Item image placeholder */}
-                    <div style={{
-                      width: '60px',
-                      height: '60px',
-                      borderRadius: '12px',
-                      backgroundColor: '#d3e2d0',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: '24px',
-                    }}>
-                      🥬
-                    </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+              {locationItems.map((item) => {
+                const isSwipedOpen = swipedItemId === item.itemId;
+                const isCurrentlyDragging = isDragging && touchedItemId === item.itemId && isSwipeActive;
+                const dragOffset = Math.min(0, touchCurrent - touchStart);
+                const swipeOffset = isCurrentlyDragging ? Math.max(-ACTION_WIDTH, dragOffset) : isSwipedOpen ? -ACTION_WIDTH : 0;
 
-                    {/* Item info */}
-                    <div>
-                      <p style={{
-                        fontFamily: '"Poppins", sans-serif',
-                        fontSize: '16px',
-                        color: '#000',
-                        margin: 0,
-                        textTransform: 'capitalize',
-                      }}>
-                        {item.name}
-                      </p>
-                      <p style={{
-                        fontFamily: '"Poppins", sans-serif',
-                        fontSize: '12px',
-                        color: 'rgba(0,0,0,0.4)',
-                        margin: 0,
-                      }}>
-                        In {location} | {getExpirationText(item)}
-                      </p>
-                    </div>
-                  </div>
+                return (
+                  <div
+                    key={item.itemId}
+                    style={{
+                      position: 'relative',
+                      width: '100%',
+                      height: '92px',
+                      overflow: 'hidden',
+                    }}
+                  >
+                    {!selectMode && (
+                      <div
+                        style={{
+                          position: 'absolute',
+                          right: 0,
+                          top: 0,
+                          height: '92px',
+                          display: 'flex',
+                          zIndex: 1,
+                        }}
+                      >
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleTrashItem(item.itemId);
+                            setSwipedItemId(null);
+                          }}
+                          style={{
+                            width: '88px',
+                            height: '92px',
+                            border: 'none',
+                            backgroundColor: '#a9a8a4',
+                            color: 'white',
+                            fontFamily: '"Poppins", sans-serif',
+                            fontSize: '12px',
+                            fontWeight: '500',
+                            cursor: 'pointer',
+                            textTransform: 'capitalize',
+                          }}
+                        >
+                          trash
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleUsedItem(item.itemId);
+                          }}
+                          style={{
+                            width: '88px',
+                            height: '92px',
+                            border: 'none',
+                            backgroundColor: '#d8654a',
+                            color: 'white',
+                            fontFamily: '"Poppins", sans-serif',
+                            fontSize: '12px',
+                            fontWeight: '500',
+                            cursor: 'pointer',
+                            textTransform: 'capitalize',
+                          }}
+                        >
+                          used
+                        </button>
+                      </div>
+                    )}
 
-                  {/* Selection circle or edit button */}
-                  {selectMode ? (
-                    <div style={{
-                      width: '40px',
-                      height: '40px',
-                      borderRadius: '50%',
-                      border: `2px solid ${selectedItems.has(item.itemId) ? '#073d35' : '#ccc'}`,
-                      backgroundColor: selectedItems.has(item.itemId) ? '#073d35' : 'transparent',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}>
-                      {selectedItems.has(item.itemId) && (
-                        <svg width="16" height="12" viewBox="0 0 16 12" fill="none">
-                          <path d="M1 6L6 11L15 1" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                        </svg>
+                    <div
+                      onTouchStart={(e) => handleTouchStart(e, item.itemId)}
+                      onTouchMove={handleTouchMove}
+                      onTouchEnd={() => handleTouchEnd(item.itemId)}
+                      onClick={() => {
+                        if (selectMode) {
+                          toggleItemSelection(item.itemId);
+                          return;
+                        }
+                        if (isSwipeActive) return;
+                        if (isSwipedOpen) {
+                          setSwipedItemId(null);
+                          return;
+                        }
+                        openEditItem(item);
+                      }}
+                      style={{
+                        position: 'absolute',
+                        left: 0,
+                        top: 0,
+                        width: '100%',
+                        height: '92px',
+                        backgroundColor: '#f7f6ef',
+                        borderBottom: '1px solid rgba(51,51,51,0.1)',
+                        boxSizing: 'border-box',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        paddingTop: '16px',
+                        paddingBottom: '16px',
+                        paddingLeft: '20px',
+                        paddingRight: '20px',
+                        transform: `translateX(${selectMode ? 0 : swipeOffset}px)`,
+                        transition: isCurrentlyDragging ? 'none' : 'transform 0.28s ease',
+                        zIndex: 2,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <div
+                          style={{
+                            width: '60px',
+                            height: '60px',
+                            borderRadius: '8px',
+                            backgroundColor: '#d3e2d0',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: '24px',
+                            overflow: 'hidden',
+                            flexShrink: 0,
+                          }}
+                        >
+                          {item.imageUrl ? (
+                            <img
+                              src={item.imageUrl}
+                              alt={item.name}
+                              style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                            />
+                          ) : (
+                            {
+                              Produce: '🥬',
+                              Protein: '🍖',
+                              Dairy: '🥛',
+                              Grains: '🌾',
+                              Beverages: '🥤',
+                              Snacks: '🍪',
+                              Condiments: '🧂',
+                              Canned: '🥫',
+                              Frozen: '🧊',
+                              Other: '📦',
+                              Prepared: '🍱',
+                            }[item.category] ?? '🍽️'
+                          )}
+                        </div>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          <p
+                            style={{
+                              fontFamily: '"Poppins", sans-serif',
+                              fontSize: '16px',
+                              color: '#000',
+                              margin: 0,
+                              textTransform: 'capitalize',
+                            }}
+                          >
+                            {item.name}
+                          </p>
+                          <p
+                            style={{
+                              fontFamily: '"Poppins", sans-serif',
+                              fontSize: '12px',
+                              color: 'rgba(0,0,0,0.4)',
+                              margin: 0,
+                            }}
+                          >
+                            In {location} | {getExpirationText(item)}
+                          </p>
+                        </div>
+                      </div>
+
+                      {selectMode ? (
+                        <div
+                          style={{
+                            width: '24px',
+                            height: '24px',
+                            borderRadius: '50%',
+                            border: `1.5px solid ${selectedItems.has(item.itemId) ? '#073d35' : '#b8b8b3'}`,
+                            backgroundColor: selectedItems.has(item.itemId) ? '#073d35' : 'transparent',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            flexShrink: 0,
+                          }}
+                        >
+                          {selectedItems.has(item.itemId) && (
+                            <svg width="12" height="9" viewBox="0 0 12 9" fill="none">
+                              <path d="M1 4.5L4.5 8L11 1" stroke="white" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                          )}
+                        </div>
+                      ) : (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSwipedItemId(null);
+                            setSelectedItems(new Set([item.itemId]));
+                            setShowMoveToModal(true);
+                          }}
+                          style={{
+                            width: '24px',
+                            height: '24px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            flexShrink: 0,
+                            border: 'none',
+                            background: 'none',
+                            padding: 0,
+                            cursor: 'pointer',
+                          }}
+                          aria-label="Move item"
+                        >
+                          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                            <path d="M3 4H13" stroke="#11130b" strokeOpacity="0.5" strokeWidth="1.6" strokeLinecap="round" />
+                            <path d="M3 8H13" stroke="#11130b" strokeOpacity="0.5" strokeWidth="1.6" strokeLinecap="round" />
+                            <path d="M3 12H13" stroke="#11130b" strokeOpacity="0.5" strokeWidth="1.6" strokeLinecap="round" />
+                          </svg>
+                        </button>
                       )}
                     </div>
-                  ) : (
-                    <div style={{
-                      width: '40px',
-                      height: '40px',
-                      borderRadius: '50%',
-                      backgroundColor: '#d3e2d0',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}>
-                      {/* Pencil/Edit icon */}
-                      <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                        <path d="M14.166 2.5009C14.3849 2.28203 14.6447 2.10842 14.9307 1.98996C15.2167 1.87151 15.5232 1.81055 15.8327 1.81055C16.1422 1.81055 16.4487 1.87151 16.7347 1.98996C17.0206 2.10842 17.2805 2.28203 17.4993 2.5009C17.7182 2.71977 17.8918 2.97961 18.0103 3.26558C18.1287 3.55154 18.1897 3.85804 18.1897 4.16757C18.1897 4.4771 18.1287 4.7836 18.0103 5.06956C17.8918 5.35553 17.7182 5.61537 17.4993 5.83424L6.24935 17.0842L1.66602 18.3342L2.91602 13.7509L14.166 2.5009Z" stroke="#073d35" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                      </svg>
-                    </div>
-                  )}
-                </div>
-              ))}
+                  </div>
+                );
+              })}
             </div>
           </div>
         ))}
       </div>
 
-      {/* Bottom action bar */}
       {selectMode ? (
-        // Select mode bottom bar
-        <div style={{
-          position: 'fixed',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          backgroundColor: '#f7f6ef',
-          borderTop: '1px solid rgba(0,0,0,0.08)',
-          display: 'flex',
-          height: '74px',
-          paddingBottom: 'env(safe-area-inset-bottom)',
-        }}>
+        <div
+          style={{
+            position: 'fixed',
+            left: 0,
+            right: 0,
+            bottom: 0,
+            height: '74px',
+            paddingBottom: 'env(safe-area-inset-bottom)',
+            backgroundColor: '#f7f6ef',
+            borderTop: '1px solid rgba(0,0,0,0.08)',
+            display: 'flex',
+            zIndex: 30,
+          }}
+        >
           <button
             onClick={() => setShowMoveToModal(true)}
             disabled={selectedItems.size === 0}
             style={{
               flex: 1,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '4px',
               border: 'none',
               background: 'none',
               cursor: selectedItems.size === 0 ? 'not-allowed' : 'pointer',
-              opacity: selectedItems.size === 0 ? 0.5 : 1,
+              opacity: selectedItems.size === 0 ? 0.45 : 1,
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'center',
+              alignItems: 'center',
+              gap: '4px',
             }}
           >
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-              <path d="M5 9L12 2L19 9" stroke="#073d35" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              <path d="M12 2V16" stroke="#073d35" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              <path d="M5 22H19" stroke="#073d35" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-            <span style={{
-              fontFamily: '"Poppins", sans-serif',
-              fontSize: '12px',
-              fontWeight: '500',
-              color: '#073d35',
-              textTransform: 'capitalize',
-            }}>
-              move to
-            </span>
+            <span style={{ fontFamily: '"Poppins", sans-serif', fontSize: '12px', color: '#073d35' }}>Move To</span>
           </button>
           <button
             onClick={() => setShowDeleteModal(true)}
             disabled={selectedItems.size === 0}
             style={{
               flex: 1,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '4px',
               border: 'none',
               background: 'none',
               cursor: selectedItems.size === 0 ? 'not-allowed' : 'pointer',
-              opacity: selectedItems.size === 0 ? 0.5 : 1,
+              opacity: selectedItems.size === 0 ? 0.45 : 1,
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'center',
+              alignItems: 'center',
+              gap: '4px',
             }}
           >
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-              <path d="M2.5 5H17.5" stroke="#073d35" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-              <path d="M8 9V14" stroke="#073d35" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-              <path d="M12 9V14" stroke="#073d35" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-              <path d="M3.5 5L4.5 17C4.5 17.5 5 18 5.5 18H14.5C15 18 15.5 17.5 15.5 17L16.5 5" stroke="#073d35" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-              <path d="M7 5V3C7 2.5 7.5 2 8 2H12C12.5 2 13 2.5 13 3V5" stroke="#073d35" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-            <span style={{
-              fontFamily: '"Poppins", sans-serif',
-              fontSize: '12px',
-              fontWeight: '500',
-              color: '#073d35',
-              textTransform: 'capitalize',
-            }}>
-              Delete
-            </span>
+            <span style={{ fontFamily: '"Poppins", sans-serif', fontSize: '12px', color: '#073d35' }}>Delete</span>
           </button>
         </div>
       ) : (
-        // Normal bottom bar
-        <div style={{
-          position: 'fixed',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          backgroundColor: '#f7f6ef',
-          borderTop: '1px solid #c6c6c6',
-          padding: '12px 20px',
-          paddingBottom: 'calc(12px + env(safe-area-inset-bottom))',
-        }}>
-          <div style={{ marginBottom: '10px' }}>
-            <span style={{
-              fontFamily: '"Poppins", sans-serif',
-              fontSize: '20px',
-              color: '#1a1a1a',
-            }}>
-              {items.filter(i => !i.itemId.startsWith('deleted_')).length} foods found
-            </span>
+        <div
+          style={{
+            position: 'fixed',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            backgroundColor: '#f7f6ef',
+            borderTop: '1px solid #c6c6c6',
+            padding: '12px 20px',
+            paddingBottom: 'calc(12px + env(safe-area-inset-bottom))',
+            zIndex: 30,
+          }}
+        >
+          <div style={{ marginBottom: '10px', fontFamily: '"Poppins", sans-serif', fontSize: '20px', color: '#1a1a1a' }}>
+            {validItemCount} foods found
           </div>
           <button
             onClick={onSaveAll}
@@ -440,132 +656,23 @@ export function ScanResultPage({
             style={{
               width: '100%',
               padding: '15px',
-              backgroundColor: isSaving ? '#ccc' : '#073d35',
-              color: '#f7f6ef',
-              border: 'none',
               borderRadius: '9999px',
+              border: 'none',
+              cursor: isSaving || items.length === 0 ? 'not-allowed' : 'pointer',
+              backgroundColor: isSaving || items.length === 0 ? '#ccc' : '#073d35',
+              color: '#f7f6ef',
               fontFamily: '"Poppins", sans-serif',
               fontSize: '16px',
               fontWeight: '500',
-              cursor: isSaving ? 'not-allowed' : 'pointer',
             }}
           >
-            {isSaving ? 'Adding...' : 'Add To Items'}
+            {isSaving ? 'Saving...' : 'Save'}
           </button>
         </div>
       )}
 
-      {/* More Modal */}
-      {showMoreModal && (
-        <div 
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'rgba(0,0,0,0.5)',
-            zIndex: 1000,
-          }}
-          onClick={() => setShowMoreModal(false)}
-        >
-          <div 
-            style={{
-              position: 'absolute',
-              bottom: 0,
-              left: 0,
-              right: 0,
-              backgroundColor: '#f7f6ef',
-              borderTopLeftRadius: '20px',
-              borderTopRightRadius: '20px',
-              paddingBottom: 'env(safe-area-inset-bottom)',
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Modal header */}
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              padding: '20px',
-              borderBottom: '1px solid #ccc',
-            }}>
-              <span style={{
-                fontFamily: '"Poppins", sans-serif',
-                fontSize: '20px',
-                color: '#1a1a1a',
-              }}>
-                More
-              </span>
-              <button
-                onClick={() => setShowMoreModal(false)}
-                style={{
-                  width: '32px',
-                  height: '32px',
-                  border: 'none',
-                  background: 'none',
-                  cursor: 'pointer',
-                }}
-              >
-                <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
-                  <path d="M10 10L22 22M22 10L10 22" stroke="#073d35" strokeWidth="2" strokeLinecap="round"/>
-                </svg>
-              </button>
-            </div>
-
-            {/* Modal buttons */}
-            <div style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '12px',
-              padding: '12px',
-            }}>
-              <button
-                onClick={() => {
-                  setShowMoreModal(false);
-                  onAddItem();
-                }}
-                style={{
-                  width: '100%',
-                  padding: '15px 50px',
-                  backgroundColor: '#d3e2d0',
-                  color: '#484f46',
-                  border: '1.5px solid #073d35',
-                  borderRadius: '9999px',
-                  fontFamily: '"Poppins", sans-serif',
-                  fontSize: '16px',
-                  cursor: 'pointer',
-                }}
-              >
-                Add an Item
-              </button>
-              <button
-                onClick={() => {
-                  setShowMoreModal(false);
-                  setSelectMode(true);
-                }}
-                style={{
-                  width: '100%',
-                  padding: '15px 50px',
-                  backgroundColor: '#d3e2d0',
-                  color: '#484f46',
-                  border: '1.5px solid #073d35',
-                  borderRadius: '9999px',
-                  fontFamily: '"Poppins", sans-serif',
-                  fontSize: '16px',
-                  cursor: 'pointer',
-                }}
-              >
-                Select Items
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Move To Modal */}
       {showMoveToModal && (
-        <div 
+        <div
           style={{
             position: 'fixed',
             top: 0,
@@ -577,12 +684,12 @@ export function ScanResultPage({
           }}
           onClick={() => setShowMoveToModal(false)}
         >
-          <div 
+          <div
             style={{
               position: 'absolute',
-              bottom: 0,
               left: 0,
               right: 0,
+              bottom: 0,
               backgroundColor: '#f7f6ef',
               borderTopLeftRadius: '20px',
               borderTopRightRadius: '20px',
@@ -590,21 +697,16 @@ export function ScanResultPage({
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Modal header */}
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              padding: '20px',
-              borderBottom: '1px solid #ccc',
-            }}>
-              <span style={{
-                fontFamily: '"Poppins", sans-serif',
-                fontSize: '20px',
-                color: '#1a1a1a',
-              }}>
-                Move To
-              </span>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '20px',
+                borderBottom: '1px solid #ddd',
+              }}
+            >
+              <span style={{ fontFamily: '"Poppins", sans-serif', fontSize: '20px', color: '#1a1a1a' }}>Move To</span>
               <button
                 onClick={() => setShowMoveToModal(false)}
                 style={{
@@ -613,38 +715,36 @@ export function ScanResultPage({
                   border: 'none',
                   background: 'none',
                   cursor: 'pointer',
+                  padding: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
                 }}
               >
-                <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
-                  <path d="M10 10L22 22M22 10L10 22" stroke="#073d35" strokeWidth="2" strokeLinecap="round"/>
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                  <path d="M5 5L15 15M15 5L5 15" stroke="#073d35" strokeWidth="1.8" strokeLinecap="round" />
                 </svg>
               </button>
             </div>
 
-            {/* Location options */}
-            <div style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '12px',
-              padding: '12px',
-            }}>
+            <div style={{ padding: '12px' }}>
               {(['fridge', 'freezer', 'pantry'] as StorageLocation[])
-                .filter(loc => loc !== currentLocation)
-                .map(location => (
+                .filter((loc) => (singleSelectedItem ? loc !== singleSelectedItem.location : true))
+                .map((location) => (
                   <button
                     key={location}
                     onClick={() => handleMoveSelected(location)}
                     style={{
                       width: '100%',
-                      padding: '15px 50px',
+                      height: '56px',
+                      marginBottom: '12px',
+                      borderRadius: '9999px',
+                      border: '1.5px solid #073d35',
                       backgroundColor: '#d3e2d0',
                       color: '#484f46',
-                      border: '1.5px solid #073d35',
-                      borderRadius: '9999px',
                       fontFamily: '"Poppins", sans-serif',
                       fontSize: '16px',
                       cursor: 'pointer',
-                      textTransform: 'capitalize',
                     }}
                   >
                     {locationLabels[location]}
@@ -655,9 +755,8 @@ export function ScanResultPage({
         </div>
       )}
 
-      {/* Delete Confirmation Modal */}
       {showDeleteModal && (
-        <div 
+        <div
           style={{
             position: 'fixed',
             top: 0,
@@ -667,14 +766,14 @@ export function ScanResultPage({
             backgroundColor: 'rgba(0,0,0,0.5)',
             zIndex: 1000,
           }}
-          onClick={() => setShowDeleteModal(false)}
+          onClick={closeDeleteModal}
         >
-          <div 
+          <div
             style={{
               position: 'absolute',
-              bottom: 0,
               left: 0,
               right: 0,
+              bottom: 0,
               backgroundColor: '#f7f6ef',
               borderTopLeftRadius: '20px',
               borderTopRightRadius: '20px',
@@ -682,68 +781,55 @@ export function ScanResultPage({
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Modal header */}
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              padding: '20px',
-              borderBottom: '1px solid #ccc',
-            }}>
-              <span style={{
-                fontFamily: '"Poppins", sans-serif',
-                fontSize: '20px',
-                color: '#1a1a1a',
-              }}>
-                Delete item?
-              </span>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '20px',
+                borderBottom: '1px solid #ddd',
+              }}
+            >
+              <span style={{ fontFamily: '"Poppins", sans-serif', fontSize: '20px', color: '#1a1a1a' }}>Delete item?</span>
               <button
-                onClick={() => setShowDeleteModal(false)}
+                onClick={closeDeleteModal}
                 style={{
                   width: '32px',
                   height: '32px',
                   border: 'none',
                   background: 'none',
                   cursor: 'pointer',
+                  padding: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
                 }}
               >
-                <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
-                  <path d="M10 10L22 22M22 10L10 22" stroke="#073d35" strokeWidth="2" strokeLinecap="round"/>
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                  <path d="M5 5L15 15M15 5L5 15" stroke="#073d35" strokeWidth="1.8" strokeLinecap="round" />
                 </svg>
               </button>
             </div>
 
-            {/* Warning text */}
             <div style={{ padding: '20px' }}>
-              <p style={{
-                fontFamily: '"Poppins", sans-serif',
-                fontSize: '14px',
-                color: '#073d35',
-                margin: 0,
-                lineHeight: '1.5',
-              }}>
+              <p style={{ margin: 0, fontFamily: '"Poppins", sans-serif', fontSize: '14px', color: '#073d35', lineHeight: '1.5' }}>
                 This item will be removed from your inventory.
                 <br />
-                You can't undo this action.
+                You can’t undo this action.
               </p>
             </div>
 
-            {/* Action buttons */}
-            <div style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '12px',
-              padding: '12px',
-            }}>
+            <div style={{ padding: '12px' }}>
               <button
                 onClick={handleDeleteSelected}
                 style={{
                   width: '100%',
-                  padding: '15px',
+                  height: '56px',
+                  marginBottom: '12px',
+                  borderRadius: '9999px',
+                  border: 'none',
                   backgroundColor: '#073d35',
                   color: '#f7f6ef',
-                  border: 'none',
-                  borderRadius: '9999px',
                   fontFamily: '"Poppins", sans-serif',
                   fontSize: '16px',
                   fontWeight: '500',
@@ -753,14 +839,14 @@ export function ScanResultPage({
                 Delete
               </button>
               <button
-                onClick={() => setShowDeleteModal(false)}
+                onClick={closeDeleteModal}
                 style={{
                   width: '100%',
-                  padding: '15px 50px',
+                  height: '56px',
+                  borderRadius: '9999px',
+                  border: '1.5px solid #073d35',
                   backgroundColor: '#d3e2d0',
                   color: '#484f46',
-                  border: '1.5px solid #073d35',
-                  borderRadius: '9999px',
                   fontFamily: '"Poppins", sans-serif',
                   fontSize: '16px',
                   cursor: 'pointer',
@@ -773,7 +859,6 @@ export function ScanResultPage({
         </div>
       )}
 
-      {/* Date Picker Modal */}
       {showDatePicker && (
         <div
           style={{
@@ -790,9 +875,9 @@ export function ScanResultPage({
           <div
             style={{
               position: 'absolute',
-              bottom: 0,
               left: 0,
               right: 0,
+              bottom: 0,
               backgroundColor: '#f7f6ef',
               borderTopLeftRadius: '20px',
               borderTopRightRadius: '20px',
@@ -800,21 +885,16 @@ export function ScanResultPage({
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Modal header */}
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              padding: '20px',
-              borderBottom: '1px solid #ccc',
-            }}>
-              <span style={{
-                fontFamily: '"Poppins", sans-serif',
-                fontSize: '20px',
-                color: '#1a1a1a',
-              }}>
-                Purchase Date
-              </span>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '20px',
+                borderBottom: '1px solid #ddd',
+              }}
+            >
+              <span style={{ fontFamily: '"Poppins", sans-serif', fontSize: '20px', color: '#1a1a1a' }}>Purchase Date</span>
               <button
                 onClick={() => setShowDatePicker(false)}
                 style={{
@@ -823,22 +903,20 @@ export function ScanResultPage({
                   border: 'none',
                   background: 'none',
                   cursor: 'pointer',
+                  padding: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
                 }}
               >
-                <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
-                  <path d="M10 10L22 22M22 10L10 22" stroke="#073d35" strokeWidth="2" strokeLinecap="round"/>
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                  <path d="M5 5L15 15M15 5L5 15" stroke="#073d35" strokeWidth="1.8" strokeLinecap="round" />
                 </svg>
               </button>
             </div>
 
-            {/* Date picker */}
             <div style={{ padding: '20px' }}>
-              <p style={{
-                fontFamily: '"Poppins", sans-serif',
-                fontSize: '14px',
-                color: '#666',
-                margin: '0 0 12px 0',
-              }}>
+              <p style={{ margin: '0 0 12px 0', fontFamily: '"Poppins", sans-serif', fontSize: '14px', color: '#666' }}>
                 Edit the purchase date for all items
               </p>
               <input
@@ -847,38 +925,31 @@ export function ScanResultPage({
                 onChange={(e) => setEditableDate(e.target.value)}
                 style={{
                   width: '100%',
-                  padding: '14px 16px',
-                  fontSize: '16px',
-                  fontFamily: '"Poppins", sans-serif',
-                  border: '1px solid #ccc',
+                  height: '48px',
                   borderRadius: '12px',
-                  backgroundColor: 'white',
+                  border: '1px solid #ccc',
+                  padding: '0 16px',
                   boxSizing: 'border-box',
+                  fontFamily: '"Poppins", sans-serif',
+                  fontSize: '16px',
                 }}
               />
             </div>
 
-            {/* Action buttons */}
-            <div style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '12px',
-              padding: '12px 20px 20px',
-            }}>
+            <div style={{ padding: '12px' }}>
               <button
                 onClick={() => {
-                  if (onDateChange) {
-                    onDateChange(new Date(editableDate).toISOString());
-                  }
+                  if (onDateChange) onDateChange(new Date(editableDate).toISOString());
                   setShowDatePicker(false);
                 }}
                 style={{
                   width: '100%',
-                  padding: '15px',
+                  height: '56px',
+                  marginBottom: '12px',
+                  borderRadius: '9999px',
+                  border: 'none',
                   backgroundColor: '#073d35',
                   color: '#f7f6ef',
-                  border: 'none',
-                  borderRadius: '9999px',
                   fontFamily: '"Poppins", sans-serif',
                   fontSize: '16px',
                   fontWeight: '500',
@@ -891,11 +962,11 @@ export function ScanResultPage({
                 onClick={() => setShowDatePicker(false)}
                 style={{
                   width: '100%',
-                  padding: '15px 50px',
+                  height: '56px',
+                  borderRadius: '9999px',
+                  border: '1.5px solid #073d35',
                   backgroundColor: '#d3e2d0',
                   color: '#484f46',
-                  border: '1.5px solid #073d35',
-                  borderRadius: '9999px',
                   fontFamily: '"Poppins", sans-serif',
                   fontSize: '16px',
                   cursor: 'pointer',
