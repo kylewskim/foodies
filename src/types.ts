@@ -55,6 +55,8 @@ export interface Item {
   predictionSource?: 'rule_baseline';
   autoExpireLabel?: string;                      // "Use by Feb 10" / "Unknown"
   autoExpireStatus?: 'ok' | 'urgent' | 'expired' | 'unknown';
+
+  imageUrl?: string | null;  // Product image URL (from Kroger or Open Food Facts)
 }
 
 // LLM function input/output types
