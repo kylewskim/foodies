@@ -9,9 +9,13 @@ import type { Item, StorageLocation, FoodCategory } from '../types';
 import { saveReceipt, saveItems } from '../firebase/saveReceipt';
 import { getCurrentDateISO } from '../utils/dateHelpers';
 import { normalizeInputText } from '../llm/normalizeInputText';
+import { parseReceiptWithVision } from '../llm/parseReceiptWithVision';
+import { isOpenAIConfigured } from '../llm/openaiClient';
 import { predictLifecycle } from '../lifecycle/predictLifecycle';
 import { markRecipesNeedRefresh } from '../firebase/userRecipes';
 import { capitalizeWords } from '../llm/classifyItems';
+import type { NormalizeInputTextOutput } from '../types';
+import { fetchProductImage } from '../services/productImageService';
 
 type InputMethod = 'image' | 'manual' | 'form' | 'review';
 
@@ -78,19 +82,105 @@ export function AddItemPage() {
     }
   }, [selectedFile, autoProcessStarted]);
 
+  // Core pipeline step: items (already normalized) → lifecycle → filter → display
+  const processNormalized = async (normalized: NormalizeInputTextOutput) => {
+    const purchaseDateRaw = normalized.purchase_date || getCurrentDateISO();
+    const purchaseDateYMD = purchaseDateRaw.includes('T')
+      ? purchaseDateRaw.split('T')[0]
+      : purchaseDateRaw;
+
+    const tempReceiptId = `temp_${Date.now()}`;
+    setReceiptDate(purchaseDateRaw);
+
+    const tLifecycleStart = performance.now();
+    const items: Item[] = normalized.items.map((rawItem, i) => {
+      const itemName = capitalizeWords(rawItem.raw_name);
+      const lifecycle = predictLifecycle({
+        name: itemName,
+        purchaseDate: purchaseDateYMD,
+      });
+
+      return {
+        itemId: `temp_${i}_${Date.now()}`,
+        userId: user?.uid || '',
+        receiptId: tempReceiptId,
+        name: itemName,
+        quantity: rawItem.quantity,
+        category: lifecycle.displayCategory,
+        location: lifecycle.recommendedLocation,
+        purchaseDate: purchaseDateRaw,
+        autoExpirationDate: lifecycle.autoExpirationDate
+          ? new Date(lifecycle.autoExpirationDate + 'T00:00:00').toISOString()
+          : getCurrentDateISO(),
+        manualExpirationDate: null,
+        expirationSource: 'auto' as const,
+        ingredientCategory: lifecycle.ingredientCategory,
+        categorySource: lifecycle.categorySource,
+        predictionSource: lifecycle.predictionSource,
+        autoExpireLabel: lifecycle.autoExpireLabel,
+        autoExpireStatus: lifecycle.autoExpireStatus,
+      };
+    });
+
+    console.log(`⏱️ [Pipeline] predictLifecycle (${items.length} items): ${(performance.now() - tLifecycleStart).toFixed(0)}ms`);
+
+    const foodItems = items.filter(item =>
+      item.ingredientCategory !== 'unknown' && item.ingredientCategory !== 'non-food'
+    );
+    const filtered = items.filter(item =>
+      item.ingredientCategory === 'unknown' || item.ingredientCategory === 'non-food'
+    );
+    if (filtered.length > 0) {
+      console.log(`🚫 Filtered ${filtered.length} non-food/unknown items:`);
+      filtered.forEach(item => console.log(`  ❌ ${item.name} (${item.ingredientCategory})`));
+    }
+    foodItems.forEach(item => {
+      console.log(`  📦 ${item.name} → cat: ${item.ingredientCategory} → loc: ${item.location} → ${item.autoExpireLabel}`);
+    });
+
+    setProcessedItems(foodItems);
+    setInputMethod('review');
+
+    // Background image fetch — fire-and-forget, never blocks UI
+    foodItems.forEach(async (item) => {
+      const url = await fetchProductImage(item.name);
+      if (url) {
+        setProcessedItems(prev =>
+          prev.map(p => p.itemId === item.itemId ? { ...p, imageUrl: url } : p)
+        );
+      }
+    });
+  };
+
   const processSelectedFile = async (file: File) => {
     setProcessing(true);
     const t0 = performance.now();
     try {
-      // Import OCR functions
+      // Primary path: GPT-4o Vision — parses image directly, no OCR needed
+      if (isOpenAIConfigured()) {
+        console.log('🔍 [Pipeline] Trying GPT-4o Vision direct parse...');
+        const tVisionStart = performance.now();
+        const visionResult = await parseReceiptWithVision(file);
+        console.log(`⏱️ [Pipeline] Vision parse: ${(performance.now() - tVisionStart).toFixed(0)}ms`);
+
+        if (visionResult && visionResult.items.length > 0) {
+          console.log(`✅ [Pipeline] Vision extracted ${visionResult.items.length} items — skipping OCR`);
+          await processNormalized(visionResult);
+          console.log(`⏱️ [Pipeline] Full pipeline (Vision → save-ready): ${(performance.now() - t0).toFixed(0)}ms`);
+          return;
+        }
+        console.warn('⚠️ [Pipeline] Vision returned 0 items — falling back to OCR');
+      }
+
+      // Fallback path: OCR → normalizeInputText
       const tImportStart = performance.now();
       const { extractTextWithGoogleVision, isGoogleVisionConfigured } = await import('../utils/googleVisionOCR');
       const Tesseract = (await import('tesseract.js')).default;
       console.log(`⏱️ [Pipeline] Dynamic imports: ${(performance.now() - tImportStart).toFixed(0)}ms`);
-      
+
       let extractedText: string;
       const tOcrStart = performance.now();
-      
+
       if (isGoogleVisionConfigured()) {
         try {
           extractedText = await extractTextWithGoogleVision(file);
@@ -106,20 +196,19 @@ export function AddItemPage() {
         extractedText = result.data.text;
         console.log(`⏱️ [Pipeline] Tesseract OCR: ${(performance.now() - tOcrStart).toFixed(0)}ms`);
       }
-      
+
       if (!extractedText.trim()) {
         alert('Could not extract text from image. Please try again.');
-        setProcessing(false);
         return;
       }
-      
+
       console.log(`⏱️ [Pipeline] OCR total (import+recognize): ${(performance.now() - t0).toFixed(0)}ms`);
-      // Process the extracted text
       await handleImageUpload(extractedText);
       console.log(`⏱️ [Pipeline] Full pipeline (OCR → save-ready): ${(performance.now() - t0).toFixed(0)}ms`);
     } catch (error) {
       console.error('Error processing file:', error);
       alert('Failed to process image. Please try again.');
+    } finally {
       setProcessing(false);
     }
   };
@@ -140,76 +229,11 @@ export function AddItemPage() {
     setProcessing(true);
     const tStart = performance.now();
     try {
-      // Step 1: Extract items + purchase date from raw text (1 API call or pattern matching)
       const tNormStart = performance.now();
       const normalized = await normalizeInputText(extractedText);
       console.log(`⏱️ [Pipeline] normalizeInputText: ${(performance.now() - tNormStart).toFixed(0)}ms (${normalized.items.length} items extracted)`);
-
-      const purchaseDateRaw = normalized.purchase_date || getCurrentDateISO();
-      // Convert to YYYY-MM-DD for lifecycle prediction
-      const purchaseDateYMD = purchaseDateRaw.includes('T')
-        ? purchaseDateRaw.split('T')[0]
-        : purchaseDateRaw;
-
-      const tempReceiptId = `temp_${Date.now()}`;
-      setReceiptDate(purchaseDateRaw);
-
-      // Step 2: For each item, predict lifecycle using rule-based engine (instant, no API)
-      // Location is auto-predicted from category (no need to default everything to fridge)
-      const tLifecycleStart = performance.now();
-      const items: Item[] = normalized.items.map((rawItem, i) => {
-        const itemName = capitalizeWords(rawItem.raw_name);
-        const lifecycle = predictLifecycle({
-          name: itemName,
-          purchaseDate: purchaseDateYMD,
-          // Don't pass storageLocation — let predictLifecycle pick the best one
-        });
-
-        return {
-          itemId: `temp_${i}_${Date.now()}`,
-          userId: user?.uid || '',
-          receiptId: tempReceiptId,
-          name: itemName,
-          quantity: rawItem.quantity,
-          category: lifecycle.displayCategory,
-          location: lifecycle.recommendedLocation,
-          purchaseDate: purchaseDateRaw,
-          autoExpirationDate: lifecycle.autoExpirationDate
-            ? new Date(lifecycle.autoExpirationDate + 'T00:00:00').toISOString()
-            : getCurrentDateISO(),
-          manualExpirationDate: null,
-          expirationSource: 'auto' as const,
-          // Lifecycle prediction fields
-          ingredientCategory: lifecycle.ingredientCategory,
-          categorySource: lifecycle.categorySource,
-          predictionSource: lifecycle.predictionSource,
-          autoExpireLabel: lifecycle.autoExpireLabel,
-          autoExpireStatus: lifecycle.autoExpireStatus,
-        };
-      });
-
-      console.log(`⏱️ [Pipeline] predictLifecycle (${items.length} items): ${(performance.now() - tLifecycleStart).toFixed(0)}ms`);
-
-      // Step 3: Filter out non-food & unrecognized items (receipt noise)
-      const foodItems = items.filter(item =>
-        item.ingredientCategory !== 'unknown' && item.ingredientCategory !== 'non-food'
-      );
-
-      // Log filtering results
-      const filtered = items.filter(item =>
-        item.ingredientCategory === 'unknown' || item.ingredientCategory === 'non-food'
-      );
-      if (filtered.length > 0) {
-        console.log(`🚫 Filtered ${filtered.length} non-food/unknown items:`);
-        filtered.forEach(item => console.log(`  ❌ ${item.name} (${item.ingredientCategory})`));
-      }
-      foodItems.forEach(item => {
-        console.log(`  📦 ${item.name} → cat: ${item.ingredientCategory} → loc: ${item.location} → ${item.autoExpireLabel}`);
-      });
       console.log(`⏱️ [Pipeline] processExtractedText total: ${(performance.now() - tStart).toFixed(0)}ms`);
-
-      setProcessedItems(foodItems);
-      setInputMethod('review');
+      await processNormalized(normalized);
     } catch (error) {
       console.error('Error processing input:', error);
       alert('Failed to process input. Please try again.');
@@ -301,8 +325,8 @@ export function AddItemPage() {
       // Mark recipes for refresh since new items were added
       markRecipesNeedRefresh();
 
-      // Navigate to home page to show updated inventory
-      navigate('/');
+      // After saving scanned items, move to inventory ("At Home") view
+      navigate('/inventory');
     } catch (error) {
       console.error('Error saving items:', error);
       alert('Failed to save items. Please try again.');
@@ -435,7 +459,7 @@ export function AddItemPage() {
         >
           ← Back
         </button>
-        <ImageUpload onTextExtracted={handleImageUpload} useCamera={useCamera} />
+        <ImageUpload onFileSelected={processSelectedFile} useCamera={useCamera} />
       </div>
     );
   }

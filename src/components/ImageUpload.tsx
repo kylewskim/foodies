@@ -3,11 +3,12 @@ import Tesseract from 'tesseract.js';
 import { extractTextWithGoogleVision, isGoogleVisionConfigured } from '../utils/googleVisionOCR';
 
 interface ImageUploadProps {
-  onTextExtracted: (text: string) => void;
+  onTextExtracted?: (text: string) => void;
+  onFileSelected?: (file: File) => void; // If provided, skips OCR and hands the raw file to the caller
   useCamera?: boolean; // true: 카메라 직접 실행, false: 앨범에서 선택
 }
 
-export function ImageUpload({ onTextExtracted, useCamera = true }: ImageUploadProps) {
+export function ImageUpload({ onTextExtracted, onFileSelected, useCamera = true }: ImageUploadProps) {
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -23,6 +24,13 @@ export function ImageUpload({ onTextExtracted, useCamera = true }: ImageUploadPr
     const objectUrl = URL.createObjectURL(file);
     setPreviewUrl(objectUrl);
     setError(null);
+
+    // If caller handles the full pipeline (Vision LLM path), hand off the file directly
+    if (onFileSelected) {
+      onFileSelected(file);
+      return;
+    }
+
     setUploading(true);
     setProgress(0);
 
@@ -55,7 +63,7 @@ export function ImageUpload({ onTextExtracted, useCamera = true }: ImageUploadPr
         return;
       }
 
-      onTextExtracted(extractedText);
+      onTextExtracted?.(extractedText);
     } catch (err) {
       console.error('OCR Error:', err);
       setError('이미지 인식에 실패했습니다. 다시 시도해주세요.');

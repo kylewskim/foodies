@@ -4,6 +4,16 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vitejs.dev/config/
 export default defineConfig({
+  server: {
+    proxy: {
+      // Proxies /api/off-search → search.openfoodfacts.org in dev (bypasses CORS)
+      '/api/off-search': {
+        target: 'https://search.openfoodfacts.org',
+        changeOrigin: true,
+        rewrite: (path) => path.replace('/api/off-search', '/search'),
+      },
+    },
+  },
   plugins: [
     react(),
     VitePWA({

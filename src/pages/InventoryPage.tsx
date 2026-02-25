@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { getItemsByLocation, getItemsByUser, markItemAsTrashed, markItemAsUsed } from '../firebase/saveReceipt';
+import { getItemsByLocation, getItemsByUser, markItemAsTrashed, markItemAsUsed, updateItem } from '../firebase/saveReceipt';
 import type { Item, StorageLocation } from '../types';
+import { fetchProductImage } from '../services/productImageService';
 import { getDaysUntilExpiration } from '../utils/dateHelpers';
 import { BottomNavigation } from '../components/BottomNavigation';
 
@@ -48,6 +49,18 @@ export function InventoryPage() {
       });
 
       setItems(locationItems);
+
+      // Background image fetch for items without imageUrl — fire-and-forget
+      locationItems
+        .filter(item => !item.imageUrl)
+        .forEach(async (item) => {
+          const url = await fetchProductImage(item.name);
+          if (url) {
+            const updated = { ...item, imageUrl: url };
+            setItems(prev => prev.map(p => p.itemId === item.itemId ? updated : p));
+            updateItem(updated).catch(console.warn);
+          }
+        });
     } catch (error) {
       console.error('Error loading items:', error);
     } finally {
@@ -447,7 +460,7 @@ export function InventoryPage() {
           fontFamily: '"Poppins", sans-serif',
           color: '#11130b',
         }}>
-          My Food
+          At Home
         </h1>
         <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
           {/* Search Icon */}
@@ -737,17 +750,27 @@ export function InventoryPage() {
                       overflow: 'hidden',
                       flexShrink: 0,
                     }}>
-                      {item.category === 'Produce' && '🥬'}
-                      {item.category === 'Protein' && '🍖'}
-                      {item.category === 'Dairy' && '🥛'}
-                      {item.category === 'Grains' && '🌾'}
-                      {item.category === 'Beverages' && '🥤'}
-                      {item.category === 'Snacks' && '🍪'}
-                      {item.category === 'Condiments' && '🧂'}
-                      {item.category === 'Canned' && '🥫'}
-                      {item.category === 'Frozen' && '🧊'}
-                      {item.category === 'Other' && '📦'}
-                      {!['Produce', 'Protein', 'Dairy', 'Grains', 'Beverages', 'Snacks', 'Condiments', 'Canned', 'Frozen', 'Other'].includes(item.category) && '🍽️'}
+                      {item.imageUrl ? (
+                        <img
+                          src={item.imageUrl}
+                          alt={item.name}
+                          style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                        />
+                      ) : (
+                        <>
+                          {item.category === 'Produce' && '🥬'}
+                          {item.category === 'Protein' && '🍖'}
+                          {item.category === 'Dairy' && '🥛'}
+                          {item.category === 'Grains' && '🌾'}
+                          {item.category === 'Beverages' && '🥤'}
+                          {item.category === 'Snacks' && '🍪'}
+                          {item.category === 'Condiments' && '🧂'}
+                          {item.category === 'Canned' && '🥫'}
+                          {item.category === 'Frozen' && '🧊'}
+                          {item.category === 'Other' && '📦'}
+                          {!['Produce', 'Protein', 'Dairy', 'Grains', 'Beverages', 'Snacks', 'Condiments', 'Canned', 'Frozen', 'Other'].includes(item.category) && '🍽️'}
+                        </>
+                      )}
                     </div>
 
                     {/* Item Info */}

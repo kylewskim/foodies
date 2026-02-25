@@ -273,9 +273,18 @@ export function ItemDetailPage() {
             alignItems: 'center',
             justifyContent: 'center',
             fontSize: '40px',
+            overflow: 'hidden',
             flexShrink: 0,
           }}>
-            {getCategoryEmoji(item.category)}
+            {item.imageUrl ? (
+              <img
+                src={item.imageUrl}
+                alt={item.name}
+                style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+              />
+            ) : (
+              getCategoryEmoji(item.category)
+            )}
           </div>
 
           {/* Item Details */}
