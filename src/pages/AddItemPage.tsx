@@ -156,55 +156,26 @@ export function AddItemPage() {
     setProcessing(true);
     const t0 = performance.now();
     try {
-      // Primary path: GPT-4o Vision — parses image directly, no OCR needed
-      if (isOpenAIConfigured()) {
-        console.log('🔍 [Pipeline] Trying GPT-4o Vision direct parse...');
-        const tVisionStart = performance.now();
-        const visionResult = await parseReceiptWithVision(file);
-        console.log(`⏱️ [Pipeline] Vision parse: ${(performance.now() - tVisionStart).toFixed(0)}ms`);
-
-        if (visionResult && visionResult.items.length > 0) {
-          console.log(`✅ [Pipeline] Vision extracted ${visionResult.items.length} items — skipping OCR`);
-          await processNormalized(visionResult);
-          console.log(`⏱️ [Pipeline] Full pipeline (Vision → save-ready): ${(performance.now() - t0).toFixed(0)}ms`);
-          return;
-        }
-        console.warn('⚠️ [Pipeline] Vision returned 0 items — falling back to OCR');
-      }
-
-      // Fallback path: OCR → normalizeInputText
-      const tImportStart = performance.now();
-      const { extractTextWithGoogleVision, isGoogleVisionConfigured } = await import('../utils/googleVisionOCR');
-      const Tesseract = (await import('tesseract.js')).default;
-      console.log(`⏱️ [Pipeline] Dynamic imports: ${(performance.now() - tImportStart).toFixed(0)}ms`);
-
-      let extractedText: string;
-      const tOcrStart = performance.now();
-
-      if (isGoogleVisionConfigured()) {
-        try {
-          extractedText = await extractTextWithGoogleVision(file);
-          console.log(`⏱️ [Pipeline] Google Vision OCR: ${(performance.now() - tOcrStart).toFixed(0)}ms`);
-        } catch (googleError) {
-          console.warn('Google Vision API failed, falling back to Tesseract:', googleError);
-          const result = await Tesseract.recognize(file, 'eng+kor');
-          extractedText = result.data.text;
-          console.log(`⏱️ [Pipeline] Tesseract OCR (fallback): ${(performance.now() - tOcrStart).toFixed(0)}ms`);
-        }
-      } else {
-        const result = await Tesseract.recognize(file, 'eng+kor');
-        extractedText = result.data.text;
-        console.log(`⏱️ [Pipeline] Tesseract OCR: ${(performance.now() - tOcrStart).toFixed(0)}ms`);
-      }
-
-      if (!extractedText.trim()) {
-        alert('Could not extract text from image. Please try again.');
+      if (!isOpenAIConfigured()) {
+        console.error('[Vision] VITE_OPENAI_API_KEY is missing or unavailable. Receipt scan requires GPT-4o Vision.');
+        alert('AI receipt scan is not configured. Please set VITE_OPENAI_API_KEY and redeploy.');
         return;
       }
 
-      console.log(`⏱️ [Pipeline] OCR total (import+recognize): ${(performance.now() - t0).toFixed(0)}ms`);
-      await handleImageUpload(extractedText);
-      console.log(`⏱️ [Pipeline] Full pipeline (OCR → save-ready): ${(performance.now() - t0).toFixed(0)}ms`);
+      console.log('🔍 [Pipeline] Trying GPT-4o Vision direct parse...');
+      const tVisionStart = performance.now();
+      const visionResult = await parseReceiptWithVision(file);
+      console.log(`⏱️ [Pipeline] Vision parse: ${(performance.now() - tVisionStart).toFixed(0)}ms`);
+
+      if (!visionResult || visionResult.items.length === 0) {
+        console.error('[Vision] GPT-4o Vision could not parse this receipt image. OCR fallback is disabled.');
+        alert('Could not parse this receipt with AI. Please retake the photo and try again.');
+        return;
+      }
+
+      console.log(`✅ [Pipeline] Vision extracted ${visionResult.items.length} items`);
+      await processNormalized(visionResult);
+      console.log(`⏱️ [Pipeline] Full pipeline (Vision → save-ready): ${(performance.now() - t0).toFixed(0)}ms`);
     } catch (error) {
       console.error('Error processing file:', error);
       alert('Failed to process image. Please try again.');
@@ -242,7 +213,6 @@ export function AddItemPage() {
     }
   };
 
-  const handleImageUpload = (extractedText: string) => processExtractedText(extractedText);
   const handleManualInput = (text: string) => processExtractedText(text);
 
   const handleAddNewItem = () => {
