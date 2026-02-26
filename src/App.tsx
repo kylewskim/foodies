@@ -7,6 +7,7 @@ import { AddItemPage } from './pages/AddItemPage';
 import { RecipesPage } from './pages/RecipesPage';
 import { RecipeDetailPage } from './pages/RecipeDetailPage';
 import { CollectionPage } from './pages/CollectionPage';
+import { LocationDetailPage } from './pages/LocationDetailPage';
 import { ItemDetailPage } from './pages/ItemDetailPage';
 import { EditItemPage } from './pages/EditItemPage';
 import { LoginPage } from './pages/LoginPage';
@@ -142,6 +143,7 @@ function App() {
       <Route path="/login" element={<AuthRoute><LoginPage /></AuthRoute>} />
       <Route path="/onboarding" element={<OnboardingRoute><OnboardingPage /></OnboardingRoute>} />
       <Route path="/" element={<ProtectedRoute><HomePage /></ProtectedRoute>} />
+      <Route path="/location/:locationName" element={<ProtectedRoute><LocationDetailPage /></ProtectedRoute>} />
       <Route path="/inventory" element={<ProtectedRoute><InventoryPage /></ProtectedRoute>} />
       <Route path="/add-item" element={<ProtectedRoute><AddItemPage /></ProtectedRoute>} />
       <Route path="/recipes" element={<ProtectedRoute><RecipesPage /></ProtectedRoute>} />

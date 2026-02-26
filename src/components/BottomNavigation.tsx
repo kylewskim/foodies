@@ -3,33 +3,29 @@ import { Link, useLocation } from 'react-router-dom';
 // Import icons
 import homeIcon from '../assets/icon/home.svg';
 import homeFillIcon from '../assets/icon/home_fill.svg';
-import itemsIcon from '../assets/icon/item.svg';
-import itemsFillIcon from '../assets/icon/items_fill.svg';
 import recipesIcon from '../assets/icon/recipes.svg';
 import recipesFillIcon from '../assets/icon/recipes_fill.svg';
 import settingsIcon from '../assets/icon/settings.svg';
 import settingsFillIcon from '../assets/icon/settings_fill.svg';
 
-type NavItem = 'home' | 'items' | 'recipes' | 'settings';
+type NavItem = 'home' | 'recipes' | 'profile';
 
 export function BottomNavigation() {
   const location = useLocation();
-  
+
   const getActiveTab = (): NavItem => {
     if (location.pathname === '/') return 'home';
-    if (location.pathname === '/inventory' || location.pathname.startsWith('/item/')) return 'items';
-    if (location.pathname === '/recipes') return 'recipes';
-    if (location.pathname === '/settings') return 'settings';
+    if (location.pathname.startsWith('/recipes') || location.pathname === '/collection') return 'recipes';
+    if (location.pathname === '/settings') return 'profile';
     return 'home';
   };
-  
+
   const activeTab = getActiveTab();
 
   const navItems: { id: NavItem; label: string; path: string; icon: string; iconFill: string }[] = [
     { id: 'home', label: 'Home', path: '/', icon: homeIcon, iconFill: homeFillIcon },
-    { id: 'items', label: 'Food', path: '/inventory', icon: itemsIcon, iconFill: itemsFillIcon },
     { id: 'recipes', label: 'Recipes', path: '/recipes', icon: recipesIcon, iconFill: recipesFillIcon },
-    { id: 'settings', label: 'Settings', path: '/settings', icon: settingsIcon, iconFill: settingsFillIcon },
+    { id: 'profile', label: 'Profile', path: '/settings', icon: settingsIcon, iconFill: settingsFillIcon },
   ];
 
   return (

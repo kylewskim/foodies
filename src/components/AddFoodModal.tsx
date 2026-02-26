@@ -277,7 +277,7 @@ export function AddFoodModal({ isOpen, onClose }: AddFoodModalProps) {
                 marginBottom: '4px',
                 color: '#000'
               }}>
-                Manual entry
+                Type It In
               </div>
               <div style={{
                 fontSize: '14px',
