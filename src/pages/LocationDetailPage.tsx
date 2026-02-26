@@ -74,7 +74,7 @@ export function LocationDetailPage() {
     if (daysUntil < 0) return { text: 'Expired', bgColor: 'rgba(17,19,11,0.2)', textColor: '#333' };
     if (daysUntil === 0) return { text: 'Expires today', bgColor: 'rgba(252,238,117,0.75)', textColor: '#756900' };
     if (daysUntil <= 3) return { text: `${daysUntil} days left`, bgColor: 'rgba(215,237,100,0.75)', textColor: '#516c00' };
-    return { text: `${daysUntil} days left`, bgColor: '#d3e2d0', textColor: '#333' };
+    return null; // No badge for items with >3 days remaining
   };
 
   const toggleSelect = (id: string) => {
@@ -333,16 +333,17 @@ export function LocationDetailPage() {
                   }}>
                     {item.imageUrl ? (
                       <img src={item.imageUrl} alt={item.name}
-                        style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                     ) : (
                       CATEGORY_EMOJI[item.category] ?? '🍽️'
                     )}
                   </div>
                   {/* Info */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0 }}>
                     <span style={{
                       fontFamily: '"Poppins", sans-serif', fontSize: '18px',
                       color: '#11130b', textTransform: 'capitalize',
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                     }}>
                       {item.name}
                     </span>
@@ -359,16 +360,18 @@ export function LocationDetailPage() {
                     </span>
                   </div>
                 </div>
-                {/* Expiry badge */}
-                <div style={{
-                  backgroundColor: badge.bgColor, borderRadius: '8px',
-                  padding: '0 8px', height: '20px',
-                  display: 'flex', alignItems: 'center', flexShrink: 0,
-                }}>
-                  <span style={{ fontFamily: '"Poppins", sans-serif', fontSize: '10px', color: badge.textColor }}>
-                    {badge.text}
-                  </span>
-                </div>
+                {/* Expiry badge — only for expired / today / ≤3 days */}
+                {badge && (
+                  <div style={{
+                    backgroundColor: badge.bgColor, borderRadius: '8px',
+                    padding: '0 8px', height: '20px',
+                    display: 'flex', alignItems: 'center', flexShrink: 0, marginLeft: '8px',
+                  }}>
+                    <span style={{ fontFamily: '"Poppins", sans-serif', fontSize: '10px', color: badge.textColor }}>
+                      {badge.text}
+                    </span>
+                  </div>
+                )}
               </div>
             );
           })
