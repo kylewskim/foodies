@@ -135,12 +135,6 @@ export function ScanResultPage({
     setSwipedItemId(null);
   };
 
-  const handleUsedItem = (itemId: string) => {
-    // In scan-review state, "used" means exclude from items to save.
-    onDeleteItems([itemId]);
-    setSwipedItemId(null);
-  };
-
   const handleTouchStart = (e: React.TouchEvent, itemId: string) => {
     if (selectMode) return;
     setTouchStart(e.touches[0].clientX);
@@ -281,7 +275,7 @@ export function ScanResultPage({
             color: '#11130b',
           }}
         >
-          My Household
+          Scan Result
         </h1>
 
         <div style={{ marginTop: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -381,15 +375,14 @@ export function ScanResultPage({
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleTrashItem(item.itemId);
-                            setSwipedItemId(null);
+                            openEditItem(item);
                           }}
                           style={{
                             width: '88px',
                             height: '92px',
                             border: 'none',
-                            backgroundColor: '#a9a8a4',
-                            color: 'white',
+                            backgroundColor: '#d7ed64',
+                            color: '#073d33',
                             fontFamily: '"Poppins", sans-serif',
                             fontSize: '12px',
                             fontWeight: '500',
@@ -397,12 +390,12 @@ export function ScanResultPage({
                             textTransform: 'capitalize',
                           }}
                         >
-                          trash
+                          Edit
                         </button>
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleUsedItem(item.itemId);
+                            handleTrashItem(item.itemId);
                           }}
                           style={{
                             width: '88px',
@@ -417,7 +410,7 @@ export function ScanResultPage({
                             textTransform: 'capitalize',
                           }}
                         >
-                          used
+                          Delete
                         </button>
                       </div>
                     )}
