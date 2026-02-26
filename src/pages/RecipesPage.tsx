@@ -6,14 +6,21 @@ import type { Item, StoredRecipe } from '../types';
 import { BottomNavigation } from '../components/BottomNavigation';
 import { RecipeCardSkeleton } from '../components/RecipeCardSkeleton';
 import { fetchRecipeImages } from '../utils/fetchRecipeImage';
+import { getRecommendations } from '../services/recommendationService';
 import {
-  getRecommendations,
-  type ShoppingListItem,
-} from '../services/recommendationService';
+  addFavoriteRecipe,
+  removeFavoriteRecipe,
+  isRecipeFavorited,
+  generateRecipeId,
+} from '../firebase/favoriteRecipes';
 
 interface Recipe extends StoredRecipe {
-  userItems: Item[];  // User's items that match this recipe
+  userItems: Item[];
 }
+
+type FilterTag = 'All' | 'Quick and easy' | 'Use my food' | 'Vegetarian' | 'Protein max';
+
+const TAGS: FilterTag[] = ['All', 'Quick and easy', 'Use my food', 'Vegetarian', 'Protein max'];
 
 export function RecipesPage() {
   const navigate = useNavigate();
@@ -21,55 +28,35 @@ export function RecipesPage() {
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [userItems, setUserItems] = useState<Item[]>([]);
-  const [selectedIngredient, setSelectedIngredient] = useState<string | null>(null);
-  const [shoppingList, setShoppingList] = useState<ShoppingListItem[]>([]);
-  const [mode, setMode] = useState<string>('abundant');
+  const [activeTag, setActiveTag] = useState<FilterTag>('All');
+  const [favoritedIds, setFavoritedIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    if (user) {
-      loadRecipes();
-    }
+    if (user) loadRecipes();
   }, [user]);
 
-  const loadRecipes = async (forceRegenerate: boolean = false) => {
+  const loadRecipes = async () => {
     if (!user) return;
-
     try {
-      // Fetch user's current inventory
       const items = await getItemsByUser(user.uid);
-
-      // Sort items by expiration date (earliest first)
       items.sort((a, b) => {
         const expA = new Date(a.manualExpirationDate || a.autoExpirationDate);
         const expB = new Date(b.manualExpirationDate || b.autoExpirationDate);
         return expA.getTime() - expB.getTime();
       });
 
-      setUserItems(items);
-
       if (items.length === 0) {
         setRecipes([]);
-        setShoppingList([]);
-        setMode('empty_fridge');
         setLoading(false);
         setIsRefreshing(false);
         return;
       }
 
       setIsRefreshing(true);
-
-      // Call the deterministic recommendation engine
-      const result = await getRecommendations(user.uid, items, forceRegenerate);
-
-      setMode(result.mode);
-      setShoppingList(result.shoppingList);
-
-      // Fetch images for recipe names
+      const result = await getRecommendations(user.uid, items, false);
       const recipeNames = result.recipes.map(r => r.name);
       const images = await fetchRecipeImages(recipeNames);
 
-      // Map to UI format with user items
       const recipesWithUI: Recipe[] = result.recipes.map(stored => {
         const matchedUserItems = items.filter(item =>
           stored.matchedIngredients.some(ing =>
@@ -77,21 +64,20 @@ export function RecipesPage() {
             ing.toLowerCase().includes(item.name.toLowerCase())
           )
         );
-
         matchedUserItems.sort((a, b) => {
           const expA = new Date(a.manualExpirationDate || a.autoExpirationDate);
           const expB = new Date(b.manualExpirationDate || b.autoExpirationDate);
           return expA.getTime() - expB.getTime();
         });
-
-        return {
-          ...stored,
-          image: stored.image || images.get(stored.name),
-          userItems: matchedUserItems,
-        };
+        return { ...stored, image: stored.image || images.get(stored.name), userItems: matchedUserItems };
       });
 
       setRecipes(recipesWithUI);
+
+      // Load favorite status
+      const recipeIds = recipesWithUI.map(r => generateRecipeId(r.name));
+      const checks = await Promise.all(recipeIds.map(id => isRecipeFavorited(user.uid, id)));
+      setFavoritedIds(new Set(recipeIds.filter((_, i) => checks[i])));
     } catch (error) {
       console.error('Error loading recipes:', error);
     } finally {
@@ -100,101 +86,66 @@ export function RecipesPage() {
     }
   };
 
-  // Filter recipes based on selected ingredient
-  const filteredRecipes = selectedIngredient
-    ? recipes.filter(recipe =>
-        recipe.userItems.some(item => item.itemId === selectedIngredient)
-      )
-    : recipes;
-
-  const selectedItem = selectedIngredient
-    ? userItems.find(item => item.itemId === selectedIngredient)
-    : null;
-
-  const pulseKeyframes = `
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.5; }
+  const toggleFavorite = async (recipe: Recipe, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!user) return;
+    const recipeId = generateRecipeId(recipe.name);
+    const wasFav = favoritedIds.has(recipeId);
+    const newFavs = new Set(favoritedIds);
+    if (wasFav) {
+      newFavs.delete(recipeId);
+      setFavoritedIds(newFavs);
+      await removeFavoriteRecipe(user.uid, recipeId);
+    } else {
+      newFavs.add(recipeId);
+      setFavoritedIds(newFavs);
+      await addFavoriteRecipe(user.uid, {
+        recipeName: recipe.name,
+        recipeDescription: recipe.description,
+        recipeImage: recipe.image,
+        ingredients: recipe.ingredients,
+        instructions: recipe.instructions,
+        prepTime: recipe.prepTime,
+      });
     }
-  `;
+  };
+
+  const parseMinutes = (prepTime: string): number => {
+    const match = prepTime.match(/(\d+)/);
+    return match ? parseInt(match[1]) : 60;
+  };
+
+  const filteredRecipes = recipes.filter(recipe => {
+    if (activeTag === 'All') return true;
+    if (activeTag === 'Quick and easy') return parseMinutes(recipe.prepTime) <= 30;
+    if (activeTag === 'Use my food') return recipe.matchedIngredients.length > 0;
+    return true;
+  });
 
   return (
-    <div style={{
-      minHeight: '100vh',
-      backgroundColor: '#f7f6ef',
-      paddingBottom: '100px'
-    }}>
-      <style>{pulseKeyframes}</style>
+    <div style={{ minHeight: '100vh', backgroundColor: '#f7f6ef', paddingBottom: '100px' }}>
       {/* Header */}
-      <div style={{
-        padding: '16px 20px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-      }}>
+      <div style={{ padding: '14px 20px 0 20px' }}>
         <h1 style={{
           margin: 0,
           fontSize: '28px',
           fontWeight: '400',
           fontFamily: '"Poppins", sans-serif',
           color: '#11130b',
+          letterSpacing: '-0.39px',
         }}>
           Recipe
         </h1>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          {isRefreshing && (
-            <div style={{
-              fontSize: '10px',
-              color: '#666',
-              fontFamily: '"Poppins", sans-serif',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px',
-            }}>
-              <div style={{
-                width: '8px',
-                height: '8px',
-                borderRadius: '50%',
-                backgroundColor: '#98a93c',
-              }} />
-              생성 중...
-            </div>
-          )}
-          {!loading && !isRefreshing && (
-            <div
-              onClick={() => loadRecipes(true)}
-              style={{
-                width: '32px',
-                height: '32px',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                borderRadius: '8px',
-                backgroundColor: '#f0f0f0',
-              }}
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#11130b" strokeWidth="2">
-                <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
-              </svg>
-            </div>
-          )}
-        </div>
       </div>
 
-      {/* Magic Kitchen & Collection Buttons */}
-      <div style={{
-        padding: '0 20px',
-        marginBottom: '24px',
-        display: 'flex',
-        gap: '12px',
-      }}>
-        {/* Magic Kitchen Button */}
+      {/* Magic Kitchen & Collection */}
+      <div style={{ padding: '16px 20px 0', display: 'flex', gap: '12px' }}>
+        {/* Magic Kitchen */}
         <div
           onClick={() => navigate('/magic-kitchen')}
           style={{
             flex: 1,
-            background: 'linear-gradient(90deg, #b8f3d8 0%, #f3f5b8 100%)',
+            background: 'linear-gradient(135deg, #b8f3d8 0%, #daf4d5 50%, #f3f5b8 100%)',
             borderRadius: '16px',
             padding: '8px',
             height: '66px',
@@ -208,56 +159,32 @@ export function RecipesPage() {
             cursor: 'pointer',
           }}
         >
-          {/* Magic Wand Icon */}
-          <svg
-            width="24"
-            height="24"
-            viewBox="0 0 24 24"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-            style={{ position: 'relative', zIndex: 1 }}
-          >
-            <path d="M15 4V2M15 16V14M8 9H10M20 9H22M17.8 11.8L19 13M17.8 6.2L19 5M12.2 6.2L11 5M12.2 11.8L11 13M3 21L12 12" stroke="#333" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" style={{ position: 'relative', zIndex: 1 }}>
+            <path d="M15 4V2M15 16V14M8 9H10M20 9H22M17.8 11.8L19 13M17.8 6.2L19 5M12.2 6.2L11 5M12.2 11.8L11 13M3 21L12 12"
+              stroke="#333" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
-
-          {/* Text */}
           <p style={{
-            fontSize: '10px',
-            fontWeight: '500',
-            fontFamily: '"Poppins", sans-serif',
-            color: '#333',
-            margin: 0,
-            position: 'relative',
-            zIndex: 1,
+            fontSize: '10px', fontWeight: '500', fontFamily: '"Poppins", sans-serif',
+            color: '#333', margin: 0, position: 'relative', zIndex: 1,
           }}>
             Magic Kitchen
           </p>
-
-          {/* Beta Label */}
           <div style={{
-            position: 'absolute',
-            top: 0,
-            right: 0,
-            backgroundColor: 'rgba(255, 255, 255, 0.5)',
-            padding: '2px 10px',
-            height: '19px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            borderBottomLeftRadius: '8px',
+            position: 'absolute', top: 0, right: 0,
+            backgroundColor: 'rgba(255,255,255,0.5)',
+            padding: '2px 10px', height: '19px',
+            display: 'flex', alignItems: 'center', borderBottomLeftRadius: '8px',
           }}>
             <p style={{
-              fontSize: '10px',
-              fontWeight: '800',
-              fontStyle: 'italic',
-              fontFamily: '"Poppins", sans-serif',
-              color: '#98a93c',
-              margin: 0,
+              fontSize: '10px', fontWeight: '800', fontStyle: 'italic',
+              fontFamily: '"Poppins", sans-serif', color: '#98a93c', margin: 0,
             }}>
               Beta
             </p>
           </div>
         </div>
+
+        {/* Collection */}
         <div
           onClick={() => navigate('/collection')}
           style={{
@@ -274,399 +201,197 @@ export function RecipesPage() {
             cursor: 'pointer',
           }}
         >
-          <div style={{ fontSize: '24px' }}>⭐</div>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+            <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"
+              stroke="#333" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
           <p style={{
-            fontSize: '10px',
-            fontWeight: '500',
-            fontFamily: '"Poppins", sans-serif',
-            color: '#333',
-            margin: 0,
+            fontSize: '10px', fontWeight: '500', fontFamily: '"Poppins", sans-serif',
+            color: '#333', margin: 0,
           }}>
             Collection
           </p>
         </div>
       </div>
 
-      {/* Based on what you have */}
-      {(userItems.length > 0 || loading) && (
-        <div style={{ padding: '0 20px', marginBottom: '32px' }}>
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            marginBottom: '12px',
-          }}>
-            <h2 style={{
-              fontSize: '20px',
-              fontWeight: '400',
+      {/* Tag Filter Chips */}
+      <div style={{
+        display: 'flex', gap: '8px', overflowX: 'auto',
+        padding: '16px 20px', scrollbarWidth: 'none',
+      }}>
+        {TAGS.map(tag => (
+          <button
+            key={tag}
+            onClick={() => setActiveTag(tag)}
+            style={{
+              flexShrink: 0,
+              backgroundColor: activeTag === tag ? '#e3e9e3' : '#efeee7',
+              color: activeTag === tag ? '#073d33' : '#11130b',
+              border: 'none',
+              borderRadius: '16px',
+              padding: '6px 12px',
               fontFamily: '"Poppins", sans-serif',
-              color: '#1a1a1a',
-              margin: 0,
-            }}>
-              Based on what you have
-            </h2>
-            {selectedIngredient && (
-              <button
-                onClick={() => setSelectedIngredient(null)}
-                style={{
-                  fontSize: '12px',
-                  fontFamily: '"Poppins", sans-serif',
-                  color: '#073d35',
-                  backgroundColor: 'transparent',
-                  border: 'none',
-                  cursor: 'pointer',
-                  textDecoration: 'underline',
-                }}
-              >
-                Clear
-              </button>
-            )}
-          </div>
-          <div style={{
-            display: 'flex',
-            gap: '8px',
-            overflowX: 'auto',
-            paddingBottom: '8px',
-          }}>
-            {loading ? (
-              // Skeleton for ingredient chips
-              Array.from({ length: 4 }).map((_, index) => (
-                <div
-                  key={index}
-                  style={{
-                    minWidth: '96px',
-                    width: '96px',
-                    height: '93px',
-                    backgroundColor: 'white',
-                    borderRadius: '16px',
-                    padding: '8px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '4px',
-                  }}
-                >
-                  <div style={{
-                    width: '60px',
-                    height: '60px',
-                    borderRadius: '8px',
-                    backgroundColor: '#e0e0e0',
-                    animation: 'pulse 1.5s ease-in-out infinite',
-                  }} />
-                  <div style={{
-                    width: '50px',
-                    height: '12px',
-                    borderRadius: '4px',
-                    backgroundColor: '#e0e0e0',
-                    animation: 'pulse 1.5s ease-in-out infinite',
-                  }} />
-                </div>
-              ))
-            ) : (
-              userItems.slice(0, 12).map((item) => {
-                const isSelected = selectedIngredient === item.itemId;
+              fontSize: '12px',
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {tag}
+          </button>
+        ))}
+      </div>
 
-                return (
-                  <div
-                    key={item.itemId}
-                    onClick={() => setSelectedIngredient(isSelected ? null : item.itemId)}
-                    style={{
-                      minWidth: '96px',
-                      width: '96px',
-                      height: '93px',
-                      backgroundColor: isSelected ? '#d3e2d0' : 'white',
-                      border: isSelected ? '1px solid #073d35' : 'none',
-                      borderRadius: '16px',
-                      padding: '8px',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '4px',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <div style={{
-                      width: '60px',
-                      height: '60px',
-                      borderRadius: '8px',
-                      backgroundColor: '#f5f5f5',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: '32px',
-                      overflow: 'hidden',
-                    }}>
-                      {/* Placeholder for ingredient image */}
-                      {item.category === 'Produce' && '🥬'}
-                      {item.category === 'Protein' && '🍖'}
-                      {item.category === 'Dairy' && '🥛'}
-                      {item.category === 'Grains' && '🌾'}
-                      {item.category === 'Beverages' && '🥤'}
-                      {item.category === 'Snacks' && '🍪'}
-                      {item.category === 'Condiments' && '🧂'}
-                      {item.category === 'Canned' && '🥫'}
-                      {item.category === 'Frozen' && '🧊'}
-                      {item.category === 'Other' && '📦'}
-                      {!['Produce', 'Protein', 'Dairy', 'Grains', 'Beverages', 'Snacks', 'Condiments', 'Canned', 'Frozen', 'Other'].includes(item.category) && '🍽️'}
-                    </div>
-                    <p style={{
-                      fontSize: '10px',
-                      fontWeight: isSelected ? '600' : '400',
-                      fontFamily: '"Sora", sans-serif',
-                      color: 'black',
-                      margin: 0,
-                      textAlign: 'center',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                      maxWidth: '100%',
-                    }}>
-                      {item.name}
-                    </p>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Filter Info */}
-      {selectedItem && (
+      {/* Refreshing indicator */}
+      {isRefreshing && (
         <div style={{
-          padding: '0 20px',
-          marginBottom: '16px',
+          padding: '0 20px 12px',
+          display: 'flex', alignItems: 'center', gap: '6px',
         }}>
-          <div style={{
-            backgroundColor: '#d3e2d0',
-            borderRadius: '12px',
-            padding: '12px 16px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-          }}>
-            <span style={{
-              fontSize: '14px',
-              fontFamily: '"Poppins", sans-serif',
-              color: '#11130b',
-            }}>
-              Showing recipes with <strong>{selectedItem.name}</strong> ({filteredRecipes.length} {filteredRecipes.length === 1 ? 'recipe' : 'recipes'})
-            </span>
-          </div>
-        </div>
-      )}
-
-      {/* Shopping List — only for low_stock / empty_fridge */}
-      {shoppingList.length > 0 && (mode === 'low_stock' || mode === 'empty_fridge') && (
-        <div style={{ padding: '0 20px', marginBottom: '24px' }}>
-          <h2 style={{
-            fontSize: '20px',
-            fontWeight: '400',
-            fontFamily: '"Poppins", sans-serif',
-            color: '#1a1a1a',
-            margin: '0 0 12px 0',
-          }}>
-            Quick shopping list
-          </h2>
-          <div style={{
-            backgroundColor: '#fff',
-            borderRadius: '16px',
-            padding: '16px',
-            display: 'flex',
-            flexWrap: 'wrap',
-            gap: '8px',
-          }}>
-            {shoppingList.slice(0, 8).map((item) => (
-              <div
-                key={item.item}
-                style={{
-                  backgroundColor: '#f5f5f0',
-                  borderRadius: '20px',
-                  padding: '6px 14px',
-                  fontSize: '13px',
-                  fontFamily: '"Poppins", sans-serif',
-                  color: '#333',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                }}
-              >
-                <span style={{ color: '#98a93c', fontWeight: '600' }}>+</span>
-                {item.item}
-              </div>
-            ))}
-          </div>
+          <div style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#98a93c' }} />
+          <span style={{ fontFamily: '"Poppins", sans-serif', fontSize: '11px', color: '#666' }}>
+            Updating recipes...
+          </span>
         </div>
       )}
 
       {/* Recipe Cards */}
-      <div style={{ padding: '0 20px' }}>
+      <div style={{ padding: '0 20px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
         {loading ? (
           <RecipeCardSkeleton count={3} />
-        ) : filteredRecipes.length === 0 && selectedIngredient ? (
-          <div style={{
-            backgroundColor: '#fff',
-            borderRadius: '16px',
-            textAlign: 'center',
-            padding: '60px 20px',
-            color: '#999',
-          }}>
-            <div style={{ fontSize: '48px', marginBottom: '16px' }}>🔍</div>
-            <div style={{
-              fontSize: '18px',
-              marginBottom: '8px',
-              fontFamily: '"Poppins", sans-serif'
-            }}>
-              No recipes found
-            </div>
-            <div style={{
-              fontSize: '14px',
-              fontFamily: '"Poppins", sans-serif'
-            }}>
-              No recipes use {selectedItem?.name}
-            </div>
-          </div>
-        ) : recipes.length === 0 ? (
-          <div style={{
-            backgroundColor: '#fff',
-            borderRadius: '16px',
-            textAlign: 'center',
-            padding: '60px 20px',
-            color: '#999',
-          }}>
+        ) : filteredRecipes.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '60px 0' }}>
             <div style={{ fontSize: '48px', marginBottom: '16px' }}>🍳</div>
-            <div style={{
-              fontSize: '18px',
-              marginBottom: '8px',
-              fontFamily: '"Poppins", sans-serif'
-            }}>
+            <p style={{ fontFamily: '"Poppins", sans-serif', fontSize: '16px', color: '#666', margin: '0 0 8px' }}>
               No recipes found
-            </div>
-            <div style={{
-              fontSize: '14px',
-              fontFamily: '"Poppins", sans-serif'
-            }}>
-              Add more items to your inventory to get recipe suggestions
-            </div>
+            </p>
+            <p style={{ fontFamily: '"Poppins", sans-serif', fontSize: '14px', color: '#999', margin: 0 }}>
+              Add items to your inventory to get suggestions
+            </p>
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-            {filteredRecipes.map((recipe) => (
+          filteredRecipes.map(recipe => {
+            const recipeId = generateRecipeId(recipe.name);
+            const isFav = favoritedIds.has(recipeId);
+            const tagLabel = recipe.matchedIngredients.length > 0 ? 'Use my food' : null;
+
+            return (
               <div
                 key={recipe.id}
-                onClick={() => {
-                  navigate(`/recipes/${recipe.id}`, {
-                    state: {
-                      name: recipe.name,
-                      description: recipe.description,
-                      image: recipe.image,
-                      ingredients: recipe.ingredients,
-                      matchedIngredients: recipe.matchedIngredients,
-                      missingIngredients: recipe.missingIngredients,
-                      prepTime: recipe.prepTime,
-                      calories: recipe.calories,
-                      difficulty: recipe.difficulty,
-                      instructions: recipe.instructions,
-                      url: recipe.url || null,
-                    }
-                  });
-                }}
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '9px',
-                    cursor: 'pointer',
-                  }}
-                >
-                  {/* Recipe Image */}
-                  <div style={{
-                    width: '100%',
-                    height: '152px',
-                    borderRadius: '16px',
-                    overflow: 'hidden',
-                    position: 'relative',
-                  }}>
-                    {recipe.image ? (
-                      <img
-                        src={recipe.image}
-                        alt={recipe.name}
-                        style={{
-                          width: '100%',
-                          height: '100%',
-                          objectFit: 'cover',
-                        }}
-                      />
-                    ) : (
-                      <div style={{
-                        width: '100%',
-                        height: '100%',
-                        backgroundColor: '#f5f5f5',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: '64px',
-                      }}>
-                        🍽️
-                      </div>
-                    )}
-                  </div>
+                onClick={() => navigate(`/recipes/${recipe.id}`, {
+                  state: {
+                    name: recipe.name,
+                    description: recipe.description,
+                    image: recipe.image,
+                    ingredients: recipe.ingredients,
+                    matchedIngredients: recipe.matchedIngredients,
+                    missingIngredients: recipe.missingIngredients,
+                    prepTime: recipe.prepTime,
+                    calories: recipe.calories,
+                    difficulty: recipe.difficulty,
+                    instructions: recipe.instructions,
+                    url: recipe.url || null,
+                  }
+                })}
+                style={{ display: 'flex', flexDirection: 'column', gap: '12px', cursor: 'pointer' }}
+              >
+                {/* Image */}
+                <div style={{
+                  width: '100%', height: '152px',
+                  borderRadius: '16px', overflow: 'hidden',
+                }}>
+                  {recipe.image ? (
+                    <img src={recipe.image} alt={recipe.name}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  ) : (
+                    <div style={{
+                      width: '100%', height: '100%',
+                      backgroundColor: '#e8e8e0',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: '48px',
+                    }}>
+                      🍽️
+                    </div>
+                  )}
+                </div>
 
-                  {/* Recipe Info */}
-                  <div style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '4px',
-                  }}>
-                    <h3 style={{
+                {/* Info */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  {/* Name + bookmark */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{
+                      fontFamily: '"Canela", Georgia, serif',
                       fontSize: '14px',
-                      fontWeight: '500',
-                      fontFamily: '"Canela", serif',
                       color: 'black',
-                      margin: 0,
-                    }}>
-                      {recipe.name}
-                    </h3>
-                    <p style={{
-                      fontSize: '11px',
-                      fontFamily: '"Poppins", sans-serif',
-                      color: 'rgba(0, 0, 0, 0.4)',
-                      margin: 0,
-                    }}>
-                      By Jamie Oliver
-                    </p>
-                    <p style={{
-                      fontSize: '12px',
-                      fontFamily: '"Poppins", sans-serif',
-                      color: 'rgba(0, 0, 0, 0.8)',
-                      margin: 0,
-                    }}>
-                      {recipe.matchedIngredients.length} ingredients matched
-                    </p>
-                    <p style={{
-                      fontSize: '12px',
-                      fontFamily: '"Poppins", sans-serif',
-                      color: 'rgba(0, 0, 0, 0.4)',
-                      margin: 0,
+                      flex: 1,
+                      minWidth: 0,
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
-                      display: '-webkit-box',
-                      WebkitLineClamp: 3,
-                      WebkitBoxOrient: 'vertical',
-                      lineHeight: '18px',
-                      maxHeight: '54px',
+                      whiteSpace: 'nowrap',
+                      marginRight: '8px',
                     }}>
-                      {recipe.description}
-                    </p>
+                      {recipe.name}
+                    </span>
+                    <div
+                      onClick={(e) => toggleFavorite(recipe, e)}
+                      style={{ cursor: 'pointer', width: '16px', height: '16px', flexShrink: 0 }}
+                    >
+                      {isFav ? (
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="#FFD700">
+                          <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"
+                            stroke="#FFD700" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      ) : (
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                          <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"
+                            stroke="#333" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      )}
+                    </div>
                   </div>
+
+                  {/* Clock + uses */}
+                  <div style={{ display: 'flex', gap: '4px', alignItems: 'center', opacity: 0.6 }}>
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                      <circle cx="8" cy="8" r="6.5" stroke="#333" strokeWidth="1.2" />
+                      <path d="M8 4.5V8L10.5 10" stroke="#333" strokeWidth="1.2" strokeLinecap="round" />
+                    </svg>
+                    <span style={{ fontFamily: '"Poppins", sans-serif', fontSize: '12px', color: '#333' }}>
+                      {recipe.prepTime}
+                    </span>
+                    <span style={{ fontFamily: '"Poppins", sans-serif', fontSize: '12px', color: '#333' }}>·</span>
+                    <span style={{ fontFamily: '"Poppins", sans-serif', fontSize: '12px', color: '#333' }}>
+                      Uses <strong>{recipe.matchedIngredients.length}</strong> of your items
+                    </span>
+                  </div>
+
+                  {/* Tag badge */}
+                  {tagLabel && (
+                    <div style={{ display: 'flex' }}>
+                      <div style={{
+                        backgroundColor: '#d3e2d0',
+                        borderRadius: '8px',
+                        padding: '0 8px',
+                        height: '20px',
+                        display: 'flex',
+                        alignItems: 'center',
+                      }}>
+                        <span style={{
+                          fontFamily: '"Poppins", sans-serif',
+                          fontSize: '10px',
+                          color: '#073d33',
+                        }}>
+                          {tagLabel}
+                        </span>
+                      </div>
+                    </div>
+                  )}
                 </div>
-            ))}
-          </div>
+              </div>
+            );
+          })
         )}
       </div>
 
-      {/* Bottom Navigation */}
       <BottomNavigation />
     </div>
   );

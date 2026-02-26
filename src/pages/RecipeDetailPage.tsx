@@ -22,6 +22,41 @@ interface RecipeDetailState {
   url?: string | null;
 }
 
+const INGREDIENT_EMOJI: Record<string, string> = {
+  chicken: '🍗', beef: '🥩', pork: '🥓', fish: '🐟', salmon: '🐟',
+  egg: '🥚', eggs: '🥚', milk: '🥛', cheese: '🧀', butter: '🧈',
+  yogurt: '🥛', broccoli: '🥦', carrot: '🥕', onion: '🧅', garlic: '🧄',
+  tomato: '🍅', potato: '🥔', rice: '🍚', bread: '🍞', pasta: '🍝',
+  apple: '🍎', banana: '🍌', lemon: '🍋', orange: '🍊', spinach: '🥬',
+  lettuce: '🥬', pepper: '🫑', mushroom: '🍄', corn: '🌽', avocado: '🥑',
+};
+
+function getIngredientEmoji(name: string): string {
+  const lower = name.toLowerCase();
+  for (const [key, emoji] of Object.entries(INGREDIENT_EMOJI)) {
+    if (lower.includes(key)) return emoji;
+  }
+  return '🥘';
+}
+
+function parseIngredient(ingredient: string): { name: string; quantity: string } {
+  // "Name (quantity)" format
+  const parenMatch = ingredient.match(/^(.+?)\s*\(([^)]+)\)\s*$/);
+  if (parenMatch) return { name: parenMatch[1].trim(), quantity: parenMatch[2].trim() };
+
+  // "Name - quantity" format
+  const dashMatch = ingredient.match(/^(.+?)\s+-\s+(.+)$/);
+  if (dashMatch) return { name: dashMatch[1].trim(), quantity: dashMatch[2].trim() };
+
+  // "Number/fraction unit Name" at start
+  const qtyFirstMatch = ingredient.match(
+    /^(\d+(?:[./]\d+)?\s*(?:cups?|tbsp|tsp|oz|g|kg|lb|ml|l|pcs?|cloves?|slices?|pieces?)(?:\s+of)?)\s+(.+)$/i
+  );
+  if (qtyFirstMatch) return { name: qtyFirstMatch[2].trim(), quantity: qtyFirstMatch[1].trim() };
+
+  return { name: ingredient, quantity: '' };
+}
+
 export function RecipeDetailPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -31,21 +66,16 @@ export function RecipeDetailPage() {
   const [isFavorited, setIsFavorited] = useState(false);
   const [isTogglingFavorite, setIsTogglingFavorite] = useState(false);
 
-  // Generate consistent recipe ID
   const recipeId = recipe ? generateRecipeId(recipe.name) : '';
 
   useEffect(() => {
-    if (user && recipeId) {
-      loadFavoriteStatus();
-    }
+    if (user && recipeId) loadFavoriteStatus();
   }, [user, recipeId]);
 
   const loadFavoriteStatus = async () => {
     if (!user || !recipeId) return;
     try {
-      console.log('Loading favorite status for:', recipeId);
       const favorited = await isRecipeFavorited(user.uid, recipeId);
-      console.log('Is favorited:', favorited);
       setIsFavorited(favorited);
     } catch (error) {
       console.error('Error loading favorite status:', error);
@@ -54,18 +84,12 @@ export function RecipeDetailPage() {
 
   const handleToggleFavorite = async () => {
     if (!user || !recipe || isTogglingFavorite) return;
-
-    console.log('Toggling favorite, current state:', isFavorited);
     setIsTogglingFavorite(true);
-
     try {
       if (isFavorited) {
-        console.log('Removing from favorites...');
         await removeFavoriteRecipe(user.uid, recipeId);
         setIsFavorited(false);
-        console.log('Removed successfully');
       } else {
-        console.log('Adding to favorites...');
         await addFavoriteRecipe(user.uid, {
           recipeName: recipe.name,
           recipeDescription: recipe.description,
@@ -75,173 +99,121 @@ export function RecipeDetailPage() {
           prepTime: recipe.prepTime,
         });
         setIsFavorited(true);
-        console.log('Added successfully');
       }
     } catch (error) {
       console.error('Error toggling favorite:', error);
-      alert('별 추가/제거 중 오류가 발생했습니다. 다시 시도해주세요.');
     } finally {
       setIsTogglingFavorite(false);
     }
   };
 
+  const isInFridge = (ingredientName: string): boolean => {
+    if (!recipe.matchedIngredients || recipe.matchedIngredients.length === 0) return false;
+    const lower = ingredientName.toLowerCase();
+    return recipe.matchedIngredients.some(matched => {
+      const ml = matched.toLowerCase();
+      return lower.includes(ml) || ml.includes(lower) ||
+        lower.split(/[\s,]+/).some(word => word.length > 2 && ml.includes(word));
+    });
+  };
+
   if (!recipe) {
     return (
       <div style={{
-        minHeight: '100vh',
-        backgroundColor: '#f7f6ef',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
+        minHeight: '100vh', backgroundColor: '#f7f6ef',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}>
-        <p style={{ fontFamily: '"Poppins", sans-serif', color: '#666' }}>
-          Recipe not found
-        </p>
+        <p style={{ fontFamily: '"Poppins", sans-serif', color: '#666' }}>Recipe not found</p>
       </div>
     );
   }
 
+  const validInstructions = recipe.instructions?.filter(i => !i.startsWith('Full recipe:')) ?? [];
+
   return (
-    <div style={{
-      minHeight: '100vh',
-      backgroundColor: '#f7f6ef',
-      position: 'relative',
-    }}>
-      {/* Recipe Image with Gradient Overlay */}
-      <div style={{
-        position: 'relative',
-        width: '100%',
-        height: '240px',
-        overflow: 'hidden',
-      }}>
+    <div style={{ minHeight: '100vh', backgroundColor: '#f7f6ef', position: 'relative' }}>
+      {/* Hero image */}
+      <div style={{ position: 'relative', width: '100%', height: '240px', overflow: 'hidden' }}>
         {recipe.image ? (
-          <img
-            src={recipe.image}
-            alt={recipe.name}
-            style={{
-              width: '100%',
-              height: '100%',
-              objectFit: 'cover',
-            }}
-          />
+          <img src={recipe.image} alt={recipe.name}
+            style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
         ) : (
           <div style={{
-            width: '100%',
-            height: '100%',
-            backgroundColor: '#f5f5f5',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: '64px',
+            width: '100%', height: '100%', backgroundColor: '#e8e8e0',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '64px',
           }}>
             🍽️
           </div>
         )}
 
-        {/* Black gradient overlay */}
+        {/* Gradient overlay — transparent top → black bottom */}
         <div style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: 'linear-gradient(180deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.8) 100%)',
+          position: 'absolute', inset: 0,
+          background: 'linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.85) 100%)',
         }} />
 
-        {/* Back Button */}
+        {/* Back button */}
         <div
           onClick={() => navigate(-1)}
           style={{
-            position: 'absolute',
-            top: '60px',
-            left: '20px',
-            width: '40px',
-            height: '40px',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
+            position: 'absolute', top: '60px', left: '20px',
+            width: '40px', height: '40px',
+            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}
         >
           <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-            <path
-              d="M15 10H5M5 10L10 15M5 10L10 5"
-              stroke="white"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
+            <path d="M15 10H5M5 10L10 15M5 10L10 5"
+              stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </div>
 
-        {/* Star Button */}
+        {/* Favorite star */}
         <div
           onClick={handleToggleFavorite}
           style={{
-            position: 'absolute',
-            top: '60px',
-            right: '20px',
-            width: '24px',
-            height: '24px',
+            position: 'absolute', top: '60px', right: '20px',
+            width: '24px', height: '24px',
             cursor: isTogglingFavorite ? 'wait' : 'pointer',
             opacity: isTogglingFavorite ? 0.5 : 1,
           }}
         >
           {isFavorited ? (
-            // Filled yellow star
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-              <path
-                d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"
-                fill="#FFD700"
-                stroke="#FFD700"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="#FFD700">
+              <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"
+                stroke="#FFD700" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           ) : (
-            // Outline star
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-              <path
-                d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"
-                stroke="white"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
+              <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"
+                stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           )}
         </div>
       </div>
 
-      {/* White Content Container */}
+      {/* Content panel */}
       <div style={{
         position: 'relative',
         backgroundColor: '#f7f6ef',
         borderTopLeftRadius: '40px',
         borderTopRightRadius: '40px',
         marginTop: '-59px',
-        padding: '48px 20px 40px',
+        padding: '48px 20px 60px',
         minHeight: 'calc(100vh - 181px)',
       }}>
-        {/* Recipe Header */}
-        <div style={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '8px',
-          marginBottom: '28px',
-        }}>
+        {/* Recipe header */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '28px' }}>
           <h1 style={{
             margin: 0,
             fontSize: '24px',
             fontWeight: '300',
-            fontFamily: '"Canela", serif',
+            fontFamily: '"Canela", Georgia, serif',
             color: '#333',
             letterSpacing: '-0.036px',
-            lineHeight: 'normal',
           }}>
             {recipe.name}
           </h1>
+
           <p style={{
             margin: 0,
             fontSize: '12px',
@@ -250,68 +222,42 @@ export function RecipeDetailPage() {
             opacity: 0.4,
             lineHeight: '1.35',
           }}>
-            By Jamie Oliver
+            By Freshli
           </p>
 
-          {/* Recipe Stats */}
-          <div style={{
-            display: 'flex',
-            gap: '20px',
-            alignItems: 'center',
-          }}>
+          {/* Stats row */}
+          <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
             {recipe.prepTime && (
-              <div style={{
-                display: 'flex',
-                gap: '4px',
-                alignItems: 'center',
-              }}>
-                <p style={{
-                  margin: 0,
-                  fontSize: '12px',
-                  fontFamily: '"Sora", sans-serif',
-                  color: '#333',
-                }}>
+              <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                <span style={{ fontFamily: '"Poppins", sans-serif', fontSize: '12px', color: '#333' }}>
                   {recipe.prepTime}
-                </p>
-                <div style={{ width: '16px', height: '16px', fontSize: '12px' }}>⏱️</div>
+                </span>
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                  <circle cx="8" cy="8" r="6.5" stroke="#333" strokeWidth="1.2" />
+                  <path d="M8 4.5V8L10.5 10" stroke="#333" strokeWidth="1.2" strokeLinecap="round" />
+                </svg>
               </div>
             )}
-
-            {recipe.calories && (
-              <div style={{
-                display: 'flex',
-                gap: '4px',
-                alignItems: 'center',
-              }}>
-                <p style={{
-                  margin: 0,
-                  fontSize: '12px',
-                  fontFamily: '"Sora", sans-serif',
-                  color: '#333',
-                }}>
+            {recipe.calories != null && (
+              <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                <span style={{ fontFamily: '"Poppins", sans-serif', fontSize: '12px', color: '#333' }}>
                   {recipe.calories} Cal
-                </p>
-                <div style={{ width: '16px', height: '16px', fontSize: '12px' }}>🔥</div>
+                </span>
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                  <path d="M8 2C8 2 5 6 5 9a3 3 0 0 0 6 0c0-3-3-7-3-7z"
+                    stroke="#333" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
               </div>
             )}
-
             {recipe.difficulty && (
-              <div style={{
-                display: 'flex',
-                gap: '4px',
-                alignItems: 'center',
-              }}>
-                <p style={{
-                  margin: 0,
-                  fontSize: '12px',
-                  fontFamily: '"Sora", sans-serif',
-                  color: '#333',
-                }}>
+              <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                <span style={{ fontFamily: '"Poppins", sans-serif', fontSize: '12px', color: '#333' }}>
                   {recipe.difficulty}
-                </p>
-                <div style={{ width: '16px', height: '16px', fontSize: '12px' }}>
-                  {recipe.difficulty === 'Easy' ? '✓' : recipe.difficulty === 'Medium' ? '⚡' : '⭐'}
-                </div>
+                </span>
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                  <path d="M8 2l1.5 3.5 3.5.5-2.5 2.5.5 3.5L8 10.5 5 12l.5-3.5L3 6l3.5-.5L8 2z"
+                    stroke="#333" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
               </div>
             )}
           </div>
@@ -320,26 +266,23 @@ export function RecipeDetailPage() {
         {/* Description */}
         {recipe.description && (
           <div style={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '12px',
+            display: 'flex', flexDirection: 'column', gap: '12px',
+            paddingBottom: '12px',
+            borderBottom: '1px solid rgba(51,51,51,0.1)',
             marginBottom: '28px',
           }}>
             <h2 style={{
-              margin: 0,
-              fontSize: '16px',
+              margin: 0, fontSize: '16px',
               fontFamily: '"Poppins", sans-serif',
-              color: '#333',
-              textTransform: 'capitalize',
+              color: '#333', textTransform: 'capitalize',
+              fontWeight: '400',
             }}>
               Description
             </h2>
             <p style={{
-              margin: 0,
-              fontSize: '12px',
+              margin: 0, fontSize: '12px',
               fontFamily: '"Poppins", sans-serif',
-              color: 'rgba(0, 0, 0, 0.4)',
-              lineHeight: 'normal',
+              color: 'rgba(0,0,0,0.4)',
             }}>
               {recipe.description}
             </p>
@@ -347,107 +290,117 @@ export function RecipeDetailPage() {
         )}
 
         {/* Ingredients */}
-        <div style={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '12px',
-          marginBottom: '28px',
-        }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '28px' }}>
           <h2 style={{
-            margin: 0,
-            fontSize: '16px',
+            margin: 0, fontSize: '16px',
             fontFamily: '"Poppins", sans-serif',
-            color: '#333',
-            textTransform: 'capitalize',
+            color: '#333', textTransform: 'capitalize',
+            fontWeight: '400',
           }}>
             Ingredients
           </h2>
-          {recipe.ingredients.map((ingredient, idx) => (
-            <div
-              key={idx}
-              style={{
-                backgroundColor: '#d3e2d0',
-                borderRadius: '8px',
-                padding: '8px 16px 8px 8px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-              }}
-            >
-              <div style={{
-                display: 'flex',
-                gap: '8px',
-                alignItems: 'center',
-              }}>
-                <div style={{
-                  width: '60px',
-                  height: '60px',
-                  backgroundColor: '#f5f5f5',
-                  borderRadius: '4px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: '32px',
-                }}>
-                  🥗
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            {recipe.ingredients.map((ingredient, idx) => {
+              const { name, quantity } = parseIngredient(ingredient);
+              const inFridge = isInFridge(name);
+              return (
+                <div
+                  key={idx}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    paddingTop: '8px',
+                    paddingBottom: '8px',
+                    borderBottom: '1px solid rgba(51,51,51,0.1)',
+                  }}
+                >
+                  {/* Left: image + name + amount */}
+                  <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flex: 1, minWidth: 0 }}>
+                    <div style={{
+                      width: '60px', height: '60px',
+                      backgroundColor: '#efefeb',
+                      borderRadius: '8px',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: '28px', flexShrink: 0,
+                    }}>
+                      {getIngredientEmoji(name)}
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0 }}>
+                      <span style={{
+                        fontFamily: '"Poppins", sans-serif',
+                        fontSize: '18px',
+                        color: 'black',
+                        textTransform: 'capitalize',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}>
+                        {name}
+                      </span>
+                      {quantity && (
+                        <span style={{
+                          fontFamily: '"Poppins", sans-serif',
+                          fontSize: '12px',
+                          color: 'black',
+                          opacity: 0.5,
+                        }}>
+                          {quantity}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Right: In fridge / Unstocked badge */}
+                  <div style={{
+                    backgroundColor: '#d3e2d0',
+                    borderRadius: '8px',
+                    padding: '0 8px',
+                    height: '20px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    flexShrink: 0,
+                    marginLeft: '8px',
+                  }}>
+                    <span style={{
+                      fontFamily: '"Poppins", sans-serif',
+                      fontSize: '10px',
+                      color: '#073d33',
+                    }}>
+                      {inFridge ? 'In fridge' : 'Unstocked'}
+                    </span>
+                  </div>
                 </div>
-                <p style={{
-                  margin: 0,
-                  fontSize: '16px',
-                  fontFamily: '"Poppins", sans-serif',
-                  color: 'black',
-                }}>
-                  {ingredient}
-                </p>
-              </div>
-            </div>
-          ))}
+              );
+            })}
+          </div>
         </div>
 
-        {/* Steps – only show if there are real instructions (not just a URL link) */}
-        {recipe.instructions && recipe.instructions.length > 0 &&
-          !recipe.instructions.every(i => i.startsWith('Full recipe:')) && (
-          <div style={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '20px',
-            marginBottom: '28px',
-          }}>
+        {/* Steps */}
+        {validInstructions.length > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', marginBottom: '28px' }}>
             <h2 style={{
-              margin: 0,
-              fontSize: '16px',
+              margin: 0, fontSize: '16px',
               fontFamily: '"Poppins", sans-serif',
-              color: '#333',
-              textTransform: 'capitalize',
+              color: '#333', textTransform: 'capitalize',
+              fontWeight: '400',
             }}>
               Steps
             </h2>
-            {recipe.instructions
-              .filter(i => !i.startsWith('Full recipe:'))
-              .map((instruction, idx) => (
-              <div
-                key={idx}
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '12px',
-                }}
-              >
+            {validInstructions.map((instruction, idx) => (
+              <div key={idx} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 <h3 style={{
-                  margin: 0,
-                  fontSize: '16px',
-                  fontFamily: '"Canela", serif',
-                  color: '#11130b',
-                  textTransform: 'capitalize',
+                  margin: 0, fontSize: '16px',
+                  fontFamily: '"Canela", Georgia, serif',
+                  color: '#11130b', textTransform: 'capitalize',
+                  fontWeight: '400',
                 }}>
                   Step {idx + 1}
                 </h3>
                 <p style={{
-                  margin: 0,
-                  fontSize: '12px',
+                  margin: 0, fontSize: '12px',
                   fontFamily: '"Poppins", sans-serif',
-                  color: 'rgba(0, 0, 0, 0.4)',
-                  lineHeight: 'normal',
+                  color: 'rgba(0,0,0,0.4)',
                 }}>
                   {instruction}
                 </p>
@@ -456,47 +409,28 @@ export function RecipeDetailPage() {
           </div>
         )}
 
-        {/* View Original Recipe Button */}
+        {/* View Original Recipe */}
         {recipe.url && (
-          <div style={{
-            marginTop: '8px',
-            marginBottom: '40px',
-          }}>
-            <a
-              href={recipe.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '8px',
-                width: '100%',
-                padding: '14px 0',
-                backgroundColor: '#4a7c59',
-                color: '#fff',
-                borderRadius: '12px',
-                border: 'none',
-                fontSize: '14px',
-                fontFamily: '"Poppins", sans-serif',
-                fontWeight: '500',
-                textDecoration: 'none',
-                cursor: 'pointer',
-                boxSizing: 'border-box',
-              }}
-            >
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <path
-                  d="M6 3.5H3.5C2.94772 3.5 2.5 3.94772 2.5 4.5V12.5C2.5 13.0523 2.94772 13.5 3.5 13.5H11.5C12.0523 13.5 12.5 13.0523 12.5 12.5V10M9.5 2.5H13.5M13.5 2.5V6.5M13.5 2.5L6.5 9.5"
-                  stroke="white"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-              View Original Recipe
-            </a>
-          </div>
+          <a
+            href={recipe.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              gap: '8px', width: '100%', padding: '14px 0',
+              backgroundColor: '#073d33', color: '#fff',
+              borderRadius: '12px', border: 'none',
+              fontSize: '14px', fontFamily: '"Poppins", sans-serif',
+              fontWeight: '500', textDecoration: 'none',
+              cursor: 'pointer', boxSizing: 'border-box',
+            }}
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M6 3.5H3.5C2.948 3.5 2.5 3.948 2.5 4.5V12.5C2.5 13.052 2.948 13.5 3.5 13.5H11.5C12.052 13.5 12.5 13.052 12.5 12.5V10M9.5 2.5H13.5M13.5 2.5V6.5M13.5 2.5L6.5 9.5"
+                stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            View Original Recipe
+          </a>
         )}
       </div>
     </div>
