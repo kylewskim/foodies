@@ -18,11 +18,9 @@ export function SettingsPage() {
   const [showFoodPrefs, setShowFoodPrefs] = useState(false);
   const [showImpactModal, setShowImpactModal] = useState(false);
 
-  // Impact stats
-  const [itemsUsed, setItemsUsed] = useState(0);
+  const [itemsWasted, setItemsWasted] = useState(0);
   const [valueSaved, setValueSaved] = useState(0);
 
-  // Food preferences
   const [dietaryPreferences, setDietaryPreferences] = useState<string[]>([]);
   const [allergies, setAllergies] = useState<string[]>([]);
   const [ingredientExclusions, setIngredientExclusions] = useState<string[]>([]);
@@ -38,10 +36,8 @@ export function SettingsPage() {
     try {
       const now = new Date();
       const usedItems = await getUsedItems(user.uid, now.getMonth() + 1, now.getFullYear());
-      const totalValue = usedItems.reduce((sum, item) => {
-        return sum + (item.price ? item.price / 100 : 2.5);
-      }, 0);
-      setItemsUsed(usedItems.length);
+      const totalValue = usedItems.reduce((sum, item) => sum + (item.price ? item.price / 100 : 2.5), 0);
+      setItemsWasted(usedItems.length);
       setValueSaved(Math.round(totalValue));
     } catch (err) {
       console.error('Error loading impact stats:', err);
@@ -96,166 +92,129 @@ export function SettingsPage() {
   };
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#f7f6ef', paddingBottom: '92px' }}>
-      {/* Header */}
-      <div style={{ padding: '16px 20px', backgroundColor: '#f7f6ef' }}>
-        <h1
-          style={{
-            fontFamily: '"Poppins", sans-serif',
-            fontSize: '28px',
-            fontWeight: '400',
-            color: '#11130b',
-            margin: 0,
-          }}
-        >
-          Profile
-        </h1>
+    <div style={{ minHeight: '100vh', backgroundColor: '#f7f6ef', paddingBottom: '100px' }}>
+
+      {/* Profile — centered on cream bg, no card */}
+      <div style={{
+        paddingTop: '56px',
+        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px',
+      }}>
+        {/* Avatar */}
+        <div style={{
+          width: '60px', height: '60px', borderRadius: '50%', backgroundColor: '#073d33',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
+        }}>
+          {user?.photoURL ? (
+            <img src={user.photoURL} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          ) : (
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"
+                stroke="rgba(255,255,255,0.8)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              <circle cx="12" cy="7" r="4"
+                stroke="rgba(255,255,255,0.8)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          )}
+        </div>
+        {/* Name + email */}
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+          <span style={{ fontFamily: '"Poppins", sans-serif', fontSize: '18px', fontWeight: '600', color: '#1a1a1a' }}>
+            {user?.displayName || 'User'}
+          </span>
+          <span style={{ fontFamily: '"Poppins", sans-serif', fontSize: '14px', color: 'rgba(51,51,51,0.6)' }}>
+            {user?.email || ''}
+          </span>
+        </div>
       </div>
 
-      <div style={{ padding: '0 20px' }}>
-        {/* Profile Section — centered */}
-        <div
-          style={{
-            backgroundColor: 'white',
-            borderRadius: '16px',
-            padding: '32px 20px 24px',
-            marginBottom: '16px',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: '8px',
-          }}
-        >
-          <div
-            style={{
-              width: '80px',
-              height: '80px',
-              borderRadius: '50%',
-              backgroundColor: '#073d33',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              overflow: 'hidden',
-            }}
+      {/* Impact card */}
+      <div style={{
+        margin: '24px 20px 0',
+        border: '1px solid #d3e2d0',
+        borderRadius: '12px',
+        padding: '20px 24px',
+        display: 'flex', flexDirection: 'column', gap: '16px',
+      }}>
+        {/* Title row */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <span style={{ fontFamily: '"Poppins", sans-serif', fontSize: '14px', fontWeight: '500', color: '#073d33' }}>
+            Impact in {getCurrentMonth()}
+          </span>
+          <button
+            onClick={() => setShowImpactModal(true)}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}
+            aria-label="Impact info"
           >
-            {user?.photoURL ? (
-              <img src={user.photoURL} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-            ) : (
-              <span style={{ color: '#fff', fontSize: '32px', fontWeight: '500', fontFamily: '"Poppins", sans-serif' }}>
-                {user?.displayName?.charAt(0) || user?.email?.charAt(0) || '?'}
-              </span>
-            )}
-          </div>
-          <div
-            style={{
-              fontFamily: '"Poppins", sans-serif',
-              fontSize: '18px',
-              fontWeight: '600',
-              color: '#11130b',
-              textAlign: 'center',
-            }}
-          >
-            {user?.displayName || 'User'}
-          </div>
-          <div
-            style={{
-              fontFamily: '"Poppins", sans-serif',
-              fontSize: '14px',
-              color: 'rgba(0,0,0,0.5)',
-              textAlign: 'center',
-            }}
-          >
-            {user?.email || ''}
-          </div>
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+              <circle cx="8" cy="8" r="6.5" stroke="#073d33" strokeOpacity="0.6" />
+              <path d="M8 7V11" stroke="#073d33" strokeOpacity="0.6" strokeWidth="1.4" strokeLinecap="round" />
+              <circle cx="8" cy="5.5" r="0.7" fill="#073d33" fillOpacity="0.6" />
+            </svg>
+          </button>
         </div>
-
-        {/* Impact in [Month] Card */}
-        <div
-          style={{
-            backgroundColor: 'white',
-            borderRadius: '16px',
-            padding: '20px',
-            marginBottom: '16px',
-            border: '1px solid #e8e8e5',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-            <span style={{ fontFamily: '"Poppins", sans-serif', fontSize: '14px', fontWeight: '500', color: '#11130b' }}>
-              Impact in {getCurrentMonth()}
+        {/* Stats row */}
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+          {/* Left stat */}
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <span style={{
+              fontFamily: '"Canela", Georgia, serif', fontSize: '48px', fontWeight: '300',
+              color: '#073d33', lineHeight: '1',
+            }}>
+              {itemsWasted}
             </span>
-            <button
-              onClick={() => setShowImpactModal(true)}
-              style={{
-                background: 'none',
-                border: 'none',
-                cursor: 'pointer',
-                padding: '4px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-              aria-label="Impact info"
-            >
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <circle cx="8" cy="8" r="6.5" stroke="#11130b" strokeOpacity="0.4" />
-                <path d="M8 7V11" stroke="#11130b" strokeOpacity="0.4" strokeWidth="1.4" strokeLinecap="round" />
-                <circle cx="8" cy="5.5" r="0.7" fill="#11130b" fillOpacity="0.4" />
-              </svg>
-            </button>
+            <span style={{ fontFamily: '"Poppins", sans-serif', fontSize: '14px', color: '#073d33', marginTop: '4px' }}>
+              Items are wasted
+            </span>
           </div>
-
-          <div style={{ display: 'flex', alignItems: 'stretch', gap: '0' }}>
-            {/* Left stat */}
-            <div style={{ flex: 1 }}>
-              <div style={{ display: 'flex', alignItems: 'flex-end', gap: '4px', marginBottom: '4px' }}>
-                <span style={{ fontFamily: '"Canela", Georgia, serif', fontSize: '40px', fontWeight: '300', color: '#11130b', lineHeight: '1' }}>
-                  {itemsUsed}
-                </span>
-                <span style={{ fontFamily: '"Poppins", sans-serif', fontSize: '12px', color: 'rgba(17,19,11,0.4)', marginBottom: '6px' }}>
-                  items
-                </span>
-              </div>
-              <div style={{ fontFamily: '"Poppins", sans-serif', fontSize: '12px', color: 'rgba(17,19,11,0.6)' }}>
-                Used just in time
-              </div>
+          {/* Vertical divider */}
+          <div style={{ width: '1px', height: '60px', backgroundColor: '#d3e2d0' }} />
+          {/* Right stat */}
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start' }}>
+              <span style={{
+                fontFamily: '"Canela", Georgia, serif', fontSize: '20px', fontWeight: '300',
+                color: '#073d33', lineHeight: '1.4',
+              }}>$</span>
+              <span style={{
+                fontFamily: '"Canela", Georgia, serif', fontSize: '48px', fontWeight: '300',
+                color: '#073d33', lineHeight: '1',
+              }}>
+                {valueSaved}
+              </span>
             </div>
-
-            <div style={{ width: '1px', backgroundColor: 'rgba(17,19,11,0.1)', margin: '0 16px' }} />
-
-            {/* Right stat */}
-            <div style={{ flex: 1 }}>
-              <div style={{ display: 'flex', alignItems: 'flex-end', gap: '4px', marginBottom: '4px' }}>
-                <span style={{ fontFamily: '"Canela", Georgia, serif', fontSize: '40px', fontWeight: '300', color: '#11130b', lineHeight: '1' }}>
-                  ${valueSaved}
-                </span>
-              </div>
-              <div style={{ fontFamily: '"Poppins", sans-serif', fontSize: '12px', color: 'rgba(17,19,11,0.6)' }}>
-                Est. value saved
-              </div>
-            </div>
+            <span style={{ fontFamily: '"Poppins", sans-serif', fontSize: '14px', color: '#073d33', marginTop: '4px' }}>
+              Est. value saved
+            </span>
           </div>
         </div>
+      </div>
 
-        {/* Menu items */}
-        <div style={{ backgroundColor: 'white', borderRadius: '16px', overflow: 'hidden', marginBottom: '16px' }}>
-          <SettingsItem label="Food preferences" onClick={() => setShowFoodPrefs(true)} />
-          <SettingsItem label="Collected Recipes" onClick={() => navigate('/collection')} />
-          <SettingsItem label="Notifications" onClick={() => setShowNotifications(true)} />
-          <SettingsItem label="Sign Out" onClick={handleLogout} isDestructive showBorder={false} />
-        </div>
-
-        {/* Version */}
-        <div
-          style={{
-            textAlign: 'center',
-            marginTop: '24px',
-            fontFamily: '"Poppins", sans-serif',
-            fontSize: '12px',
-            color: 'rgba(0,0,0,0.3)',
-          }}
-        >
-          Freshli v1.0.0
-        </div>
+      {/* Menu items — directly on cream bg with dividers */}
+      <div style={{ marginTop: '24px' }}>
+        <MenuRow
+          icon={<BookIcon />}
+          title="Food Rules"
+          subtitle="Dietary preferences & restrictions"
+          onClick={() => setShowFoodPrefs(true)}
+        />
+        <MenuRow
+          icon={<StarIcon />}
+          title="Collected Recipes"
+          subtitle="Recipes you've saved"
+          onClick={() => navigate('/collection')}
+        />
+        <MenuRow
+          icon={<BellIcon />}
+          title="Notification"
+          subtitle="When we notify you"
+          onClick={() => setShowNotifications(true)}
+        />
+        <MenuRow
+          icon={<LogoutIcon />}
+          title="Sign Out"
+          onClick={handleLogout}
+          isDestructive
+          showBorder={false}
+        />
       </div>
 
       <BottomNavigation />
@@ -268,25 +227,21 @@ export function SettingsPage() {
         >
           <div
             style={{
-              position: 'absolute',
-              left: 0,
-              right: 0,
-              bottom: 0,
+              position: 'absolute', left: 0, right: 0, bottom: 0,
               backgroundColor: '#f7f6ef',
-              borderTopLeftRadius: '20px',
-              borderTopRightRadius: '20px',
+              borderTopLeftRadius: '20px', borderTopRightRadius: '20px',
               paddingBottom: 'env(safe-area-inset-bottom)',
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px', borderBottom: '1px solid #ddd' }}>
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '20px', borderBottom: '1px solid rgba(0,0,0,0.08)',
+            }}>
               <span style={{ fontFamily: '"Poppins", sans-serif', fontSize: '18px', fontWeight: '500', color: '#11130b' }}>
                 How Impact Is Calculated
               </span>
-              <button
-                onClick={() => setShowImpactModal(false)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
-              >
+              <button onClick={() => setShowImpactModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
                 <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
                   <path d="M5 5L15 15M15 5L5 15" stroke="#073d33" strokeWidth="1.8" strokeLinecap="round" />
                 </svg>
@@ -294,10 +249,10 @@ export function SettingsPage() {
             </div>
             <div style={{ padding: '20px 20px 32px' }}>
               <p style={{ fontFamily: '"Poppins", sans-serif', fontSize: '14px', color: '#073d33', lineHeight: '1.6', margin: '0 0 16px' }}>
-                <strong>Items used just in time:</strong> Items you marked as used during the current month before they expired.
+                <strong>Items wasted:</strong> Items that expired during the current month.
               </p>
               <p style={{ fontFamily: '"Poppins", sans-serif', fontSize: '14px', color: '#073d33', lineHeight: '1.6', margin: 0 }}>
-                <strong>Est. value saved:</strong> The estimated dollar value of items you used before they were discarded, based on purchase price or an average of $2.50 per item.
+                <strong>Est. value saved:</strong> The estimated dollar value of items you used before they expired, based on purchase price or an average of $2.50 per item.
               </p>
             </div>
           </div>
@@ -313,15 +268,10 @@ export function SettingsPage() {
 
       {/* Food Preferences Overlay */}
       {showFoodPrefs && (
-        <div
-          style={{
-            position: 'fixed',
-            top: 0, left: 0, right: 0, bottom: 0,
-            zIndex: 100,
-            backgroundColor: '#f7f6ef',
-            overflowY: 'auto',
-          }}
-        >
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          zIndex: 100, backgroundColor: '#f7f6ef', overflowY: 'auto',
+        }}>
           <div style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', gap: '12px' }}>
             <button
               onClick={() => setShowFoodPrefs(false)}
@@ -361,16 +311,66 @@ export function SettingsPage() {
   );
 }
 
-// ─── Sub-components ──────────────────────────────────────────────────────────
+// ─── Icons ────────────────────────────────────────────────────────────────────
 
-interface SettingsItemProps {
-  label: string;
+function BookIcon() {
+  return (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+      <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"
+        stroke="#11130b" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"
+        stroke="#11130b" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function StarIcon() {
+  return (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+      <polygon
+        points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"
+        stroke="#11130b" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function BellIcon() {
+  return (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+      <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"
+        stroke="#11130b" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M13.73 21a2 2 0 0 1-3.46 0"
+        stroke="#11130b" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function LogoutIcon() {
+  return (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"
+        stroke="#bb0003" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      <polyline points="16 17 21 12 16 7"
+        stroke="#bb0003" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      <line x1="21" y1="12" x2="9" y2="12"
+        stroke="#bb0003" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+// ─── Sub-components ────────────────────────────────────────────────────────────
+
+interface MenuRowProps {
+  icon: React.ReactNode;
+  title: string;
+  subtitle?: string;
   onClick: () => void;
   showBorder?: boolean;
   isDestructive?: boolean;
 }
 
-function SettingsItem({ label, onClick, showBorder = true, isDestructive = false }: SettingsItemProps) {
+function MenuRow({ icon, title, subtitle, onClick, showBorder = true, isDestructive = false }: MenuRowProps) {
   return (
     <button
       onClick={onClick}
@@ -378,25 +378,36 @@ function SettingsItem({ label, onClick, showBorder = true, isDestructive = false
         width: '100%',
         display: 'flex',
         alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: '16px 20px',
+        gap: '16px',
+        padding: subtitle ? '16px 20px 17px' : '24px 20px',
         backgroundColor: 'transparent',
         border: 'none',
-        borderBottom: showBorder ? '1px solid #f0f0f0' : 'none',
+        borderBottom: showBorder ? '1px solid #e5e5e0' : 'none',
         cursor: 'pointer',
         textAlign: 'left',
+        boxSizing: 'border-box',
       }}
     >
-      <span style={{
-        fontFamily: '"Poppins", sans-serif',
-        fontSize: '16px',
-        color: isDestructive ? '#e53935' : '#11130b',
-      }}>
-        {label}
-      </span>
+      <div style={{ flexShrink: 0 }}>{icon}</div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{
+          fontFamily: '"Poppins", sans-serif', fontSize: '18px',
+          color: isDestructive ? '#bb0003' : '#1a1a1a',
+        }}>
+          {title}
+        </div>
+        {subtitle && (
+          <div style={{
+            fontFamily: '"Poppins", sans-serif', fontSize: '14px',
+            color: 'rgba(51,51,51,0.6)', marginTop: '4px',
+          }}>
+            {subtitle}
+          </div>
+        )}
+      </div>
       {!isDestructive && (
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth="2">
-          <polyline points="9,18 15,12 9,6" />
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0 }}>
+          <path d="M9 18L15 12 9 6" stroke="#073d33" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       )}
     </button>
