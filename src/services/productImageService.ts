@@ -153,34 +153,6 @@ async function searchKrogerImage(name: string): Promise<string | null> {
   }
 }
 
-// ─── Open Food Facts ───────────────────────────────────────────────────────
-// Proxied via /api/off-search to bypass CORS (dev: Vite proxy, prod: Vercel function).
-async function searchOpenFoodFactsImage(name: string): Promise<string | null> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 5000);
-  try {
-    const params = new URLSearchParams({
-      q:          name,
-      fields:     'product_name,image_front_url',
-      page_size:  '3',
-    });
-    const res = await fetch(`/api/off-search?${params}`, { signal: controller.signal });
-    if (!res.ok) return null;
-
-    const data = await res.json() as {
-      hits?: Array<{ image_front_url?: string }>;
-    };
-    for (const p of data.hits ?? []) {
-      if (p.image_front_url) return p.image_front_url;
-    }
-    return null;
-  } catch {
-    return null;
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
 // ─── Public API ────────────────────────────────────────────────────────────
 /**
  * Look up a product image by name.
@@ -192,7 +164,7 @@ export async function fetchProductImage(name: string): Promise<string | null> {
   const key = name.trim().toLowerCase();
   if (cache.has(key)) return cache.get(key) as string | null;
 
-  const url = (await searchKrogerImage(name)) ?? (await searchOpenFoodFactsImage(name));
+  const url = await searchKrogerImage(name);
   cache.set(key, url);
   return url;
 }
