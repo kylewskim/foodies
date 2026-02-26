@@ -7,6 +7,7 @@ import { getUserRecipes } from '../firebase/userRecipes';
 import type { Item, StoredRecipe } from '../types';
 import { getDaysUntilExpiration } from '../utils/dateHelpers';
 import { useAuth } from '../contexts/AuthContext';
+import { ProductImage } from '../components/ProductImage';
 
 export function ItemDetailPage() {
   const { itemId } = useParams<{ itemId: string }>();
@@ -145,19 +146,6 @@ export function ItemDetailPage() {
     return diffDays;
   };
 
-  const getCategoryEmoji = (category: string) => {
-    const emojis: Record<string, string> = {
-      'Produce': '🥬',
-      'Protein': '🍖',
-      'Grains': '🌾',
-      'Dairy': '🥛',
-      'Snacks': '🍪',
-      'Condiments': '🧂',
-      'Beverages': '🥤',
-      'Prepared': '🍱',
-    };
-    return emojis[category] || '🍽️';
-  };
 
   if (loading || !item) {
     return (
@@ -264,28 +252,7 @@ export function ItemDetailPage() {
           alignItems: 'flex-start',
         }}>
           {/* Item Image */}
-          <div style={{
-            width: '75px',
-            height: '75px',
-            borderRadius: '8px',
-            backgroundColor: '#f5f5f5',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: '40px',
-            overflow: 'hidden',
-            flexShrink: 0,
-          }}>
-            {item.imageUrl ? (
-              <img
-                src={item.imageUrl}
-                alt={item.name}
-                style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-              />
-            ) : (
-              getCategoryEmoji(item.category)
-            )}
-          </div>
+          <ProductImage imageUrl={item.imageUrl} name={item.name} category={item.category} size={75} />
 
           {/* Item Details */}
           <div style={{

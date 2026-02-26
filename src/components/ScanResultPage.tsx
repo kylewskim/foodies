@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Item, StorageLocation } from '../types';
+import { ProductImage } from './ProductImage';
 
 interface ScanResultPageProps {
   items: Item[];
@@ -454,42 +455,7 @@ export function ScanResultPage({
                       }}
                     >
                       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <div
-                          style={{
-                            width: '60px',
-                            height: '60px',
-                            borderRadius: '8px',
-                            backgroundColor: '#d3e2d0',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            fontSize: '24px',
-                            overflow: 'hidden',
-                            flexShrink: 0,
-                          }}
-                        >
-                          {item.imageUrl ? (
-                            <img
-                              src={item.imageUrl}
-                              alt={item.name}
-                              style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-                            />
-                          ) : (
-                            {
-                              Produce: '🥬',
-                              Protein: '🍖',
-                              Dairy: '🥛',
-                              Grains: '🌾',
-                              Beverages: '🥤',
-                              Snacks: '🍪',
-                              Condiments: '🧂',
-                              Canned: '🥫',
-                              Frozen: '🧊',
-                              Other: '📦',
-                              Prepared: '🍱',
-                            }[item.category] ?? '🍽️'
-                          )}
-                        </div>
+                        <ProductImage imageUrl={item.imageUrl} name={item.name} category={item.category} size={60} />
 
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                           <p

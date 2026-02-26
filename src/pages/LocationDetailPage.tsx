@@ -11,11 +11,8 @@ const LOCATION_LABELS: Record<StorageLocation, string> = {
   pantry: 'Pantry',
 };
 
-const CATEGORY_EMOJI: Record<string, string> = {
-  Produce: '🥬', Protein: '🍖', Dairy: '🥛', Grains: '🌾',
-  Beverages: '🥤', Snacks: '🍪', Condiments: '🧂', Canned: '🥫',
-  Frozen: '🧊', Other: '📦', Prepared: '🍱',
-};
+import { ProductImage } from '../components/ProductImage';
+
 
 const FILTER_CATEGORIES = ['All', 'Produce', 'Dairy', 'Protein', 'Grains', 'Snacks', 'Frozen'];
 
@@ -325,19 +322,7 @@ export function LocationDetailPage() {
                     </div>
                   )}
                   {/* Image */}
-                  <div style={{
-                    width: '60px', height: '60px', borderRadius: '8px',
-                    backgroundColor: '#f5f5f5',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: '28px', overflow: 'hidden', flexShrink: 0,
-                  }}>
-                    {item.imageUrl ? (
-                      <img src={item.imageUrl} alt={item.name}
-                        style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    ) : (
-                      CATEGORY_EMOJI[item.category] ?? '🍽️'
-                    )}
-                  </div>
+                  <ProductImage imageUrl={item.imageUrl} name={item.name} category={item.category} size={60} />
                   {/* Info */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0 }}>
                     <span style={{

@@ -6,6 +6,7 @@ import type { Item, StorageLocation } from '../types';
 import { fetchProductImage } from '../services/productImageService';
 import { getDaysUntilExpiration } from '../utils/dateHelpers';
 import { BottomNavigation } from '../components/BottomNavigation';
+import { ProductImage } from '../components/ProductImage';
 
 export function InventoryPage() {
   const navigate = useNavigate();
@@ -738,40 +739,7 @@ export function InventoryPage() {
                     }}
                   >
                     {/* Item Image */}
-                    <div style={{
-                      width: '60px',
-                      height: '60px',
-                      borderRadius: '8px',
-                      backgroundColor: '#f5f5f5',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: '32px',
-                      overflow: 'hidden',
-                      flexShrink: 0,
-                    }}>
-                      {item.imageUrl ? (
-                        <img
-                          src={item.imageUrl}
-                          alt={item.name}
-                          style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-                        />
-                      ) : (
-                        <>
-                          {item.category === 'Produce' && '🥬'}
-                          {item.category === 'Protein' && '🍖'}
-                          {item.category === 'Dairy' && '🥛'}
-                          {item.category === 'Grains' && '🌾'}
-                          {item.category === 'Beverages' && '🥤'}
-                          {item.category === 'Snacks' && '🍪'}
-                          {item.category === 'Condiments' && '🧂'}
-                          {item.category === 'Canned' && '🥫'}
-                          {item.category === 'Frozen' && '🧊'}
-                          {item.category === 'Other' && '📦'}
-                          {!['Produce', 'Protein', 'Dairy', 'Grains', 'Beverages', 'Snacks', 'Condiments', 'Canned', 'Frozen', 'Other'].includes(item.category) && '🍽️'}
-                        </>
-                      )}
-                    </div>
+                    <ProductImage imageUrl={item.imageUrl} name={item.name} category={item.category} size={60} />
 
                     {/* Item Info */}
                     <div style={{
