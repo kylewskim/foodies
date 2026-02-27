@@ -74,15 +74,15 @@ export default async function handler(req: any, res: any) {
     };
 
     // Prefer single-unit products over multi-packs (stable sort keeps Kroger relevance within each tier)
-    const BULK_RE = /\b(\d+\s*(?:ct|pk|pack|count|case|pieces?|units?)|variety\s*pack|\d+-pack)\b/i;
+    const BULK_RE = /\b(\d+\s*(?:ct|pk|pack|packs?|count|case|cans?|bottles?|pieces?|units?)|variety\s*pack|\d+-pack)\b/i;
     const sorted = [...(data.data ?? [])].sort((a, b) => {
       const aIsBulk = BULK_RE.test(a.description ?? '') ? 0 : 1;
       const bIsBulk = BULK_RE.test(b.description ?? '') ? 0 : 1;
       return bIsBulk - aIsBulk;
     });
 
-    // Preferred sizes: smaller sizes are plain product shots without editorial callout bars
-    const SIZE_PREF = ['thumbnail', 'small', 'medium', 'large'];
+    // Prefer large images — they scale down cleanly; thumbnail/small are too small and blur when upscaled
+    const SIZE_PREF = ['large', 'medium', 'small'];
 
     let imageUrl: string | null = null;
     for (const product of sorted) {

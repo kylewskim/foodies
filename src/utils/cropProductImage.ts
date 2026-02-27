@@ -79,7 +79,8 @@ export async function cropProductImage(
 
         const padding = outputSize * 0.05;
         const available = outputSize - padding * 2;
-        const scale = Math.min(available / cropW, available / cropH);
+        // Never upscale — only scale down (large images look sharp when reduced)
+        const scale = Math.min(1.0, available / cropW, available / cropH);
         const dw = cropW * scale;
         const dh = cropH * scale;
         const dx = (outputSize - dw) / 2;
