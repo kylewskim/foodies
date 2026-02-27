@@ -65,6 +65,7 @@ export default async function handler(req: any, res: any) {
 
     const data = await response.json() as {
       data?: Array<{
+        description?: string;
         images?: Array<{
           perspective: string;
           sizes: Array<{ size: string; url: string }>;
@@ -72,14 +73,29 @@ export default async function handler(req: any, res: any) {
       }>;
     };
 
+    // Prefer single-unit products over multi-packs (stable sort keeps Kroger relevance within each tier)
+    const BULK_RE = /\b(\d+\s*(?:ct|pk|pack|count|case|pieces?|units?)|variety\s*pack|\d+-pack)\b/i;
+    const sorted = [...(data.data ?? [])].sort((a, b) => {
+      const aIsBulk = BULK_RE.test(a.description ?? '') ? 0 : 1;
+      const bIsBulk = BULK_RE.test(b.description ?? '') ? 0 : 1;
+      return bIsBulk - aIsBulk;
+    });
+
+    // Preferred sizes: smaller sizes are plain product shots without editorial callout bars
+    const SIZE_PREF = ['thumbnail', 'small', 'medium', 'large'];
+
     let imageUrl: string | null = null;
-    for (const product of data.data ?? []) {
+    for (const product of sorted) {
       const images = product.images ?? [];
       const front = images.filter(i => i.perspective === 'front');
       const candidates = front.length > 0 ? front : images;
       for (const img of candidates) {
-        const large = img.sizes?.find(s => s.size === 'large') ?? img.sizes?.[0];
-        if (large?.url) { imageUrl = large.url; break; }
+        // Pick the smallest preferred size that exists, fall back to first available
+        const preferred = SIZE_PREF.reduce<{ size: string; url: string } | undefined>(
+          (best, sizeName) => best ?? img.sizes?.find(s => s.size === sizeName),
+          undefined,
+        ) ?? img.sizes?.[0];
+        if (preferred?.url) { imageUrl = preferred.url; break; }
       }
       if (imageUrl) break;
     }
