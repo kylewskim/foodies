@@ -2,24 +2,31 @@
  * Canvas-based product image cropper.
  *
  * Kroger product images often include colored text-label strips at the edges
- * (e.g. "ZERO SUGAR" bar, "Orchard Peach" pink bar, "24 Cans" blue bar).
+ * (e.g. "Zero Sugar" bar, "Orchard Peach" pink bar, "24 Cans" blue bar).
  *
- * This utility:
- *  1. Loads the image via /api/kroger-img-proxy (CORS-safe for canvas pixel reads)
- *  2. Detects and removes both:
- *     - White/near-white border padding
- *     - Colored callout bands (text bars at edges)
- *  3. Renders the remaining product centered on a square white canvas
- *  4. Returns a dataURL — or null on any failure
+ * Algorithm: Edge-Color-Anchored Scanning
  *
- * Detection algorithm: median-inlier counting (robust to text pixels)
- *   - Sample 20 evenly-spaced pixels per row/column
- *   - Compute median R, G, B (text pixels are outliers → median ignores them)
- *   - Count what fraction of samples are within distance 40 of the median
- *   - If ≥ 60% agree on one color → row/col is a uniform band → crop it
- *   - Stop scanning when < 60% agree (= product content with mixed colors)
+ *   For each of the 4 edges:
+ *   1. Sample the outermost row/column (24 evenly-spaced pixels).
+ *   2. Compute the median RGB — this is the "edge color".
+ *   3. If the edge is not uniform (inlier ratio < 72%) → mixed product content
+ *      touching the edge → skip this edge entirely (no crop).
+ *   4. Otherwise scan inward, row by row, cropping while:
+ *        • the row's dominant color agrees with the edge color (distance ≤ 45)
+ *        • the row is still uniform (inlier ratio ≥ 72%)
+ *   5. Stop the moment either condition breaks — that's where product content
+ *      begins.
  *
- * Results are cached in-memory so each URL is only processed once per session.
+ * Why this works:
+ *   • Banana on white background: edge = white → trims white padding →
+ *     stops the instant yellow banana rows appear (color change). ✓
+ *   • Pepsi "24 Cans" blue bar: edge = blue → trims blue rows →
+ *     stops when colorful product area begins. ✓
+ *   • Coca-Cola bottles touching the edge: edge = mixed → no crop at all. ✓
+ *   • Sargento right-side composite: edge = white → trims white cheese section
+ *     → stops at dark green bag. ✓
+ *
+ * Results are cached in-memory so each URL is processed only once per session.
  */
 
 const cropCache = new Map<string, string | null>();
@@ -52,12 +59,14 @@ export async function cropProductImage(
         try {
           pixelData = ctx.getImageData(0, 0, w, h);
         } catch {
+          // Canvas tainted (CORS) — return null so caller uses raw URL
           cropCache.set(imageUrl, null);
           resolve(null);
           return;
         }
 
-        const { cropTop, cropBottom, cropLeft, cropRight } = detectCropBounds(pixelData.data, w, h);
+        const { cropTop, cropBottom, cropLeft, cropRight } =
+          detectCropBounds(pixelData.data, w, h);
 
         const cropW = w - cropLeft - cropRight;
         const cropH = h - cropTop - cropBottom;
@@ -106,67 +115,114 @@ export async function cropProductImage(
   });
 }
 
-// ─── Edge detection ──────────────────────────────────────────────────────────
+// ─── Edge-color-anchored crop detection ──────────────────────────────────────
 
 function detectCropBounds(
   px: Uint8ClampedArray,
   w: number,
   h: number,
 ): { cropTop: number; cropBottom: number; cropLeft: number; cropRight: number } {
-  const N = 20; // samples per scan line
-  const DIST = 40; // color distance threshold
-  const INLIER_RATIO = 0.60; // minimum fraction to be "uniform"
-  const MAX_FRAC = 0.45; // never crop more than 45% per edge
+  /** Inlier distance: pixels within this RGB distance of the median count as "matching" */
+  const PIXEL_DIST = 40;
+  /** A row/col is considered "uniform" if this fraction of samples agree on one color */
+  const INLIER_THRESH = 0.72;
+  /** Stop scanning inward if the row's dominant color drifts this far from the edge color */
+  const COLOR_DRIFT = 45;
+  /** Never crop more than this fraction of the image per edge */
+  const MAX_FRAC = 0.40;
+  /** How many pixels to sample per row/column */
+  const N_SAMPLES = 24;
 
-  /**
-   * Sample N pixels evenly along a row or column.
-   * Returns true if ≥ INLIER_RATIO of the samples agree on a dominant color
-   * (i.e. the row/col is a uniform band — whether white padding or colored callout).
-   */
-  function isUniform(axis: 'row' | 'col', idx: number): boolean {
-    const samples: [number, number, number][] = [];
-
+  function sampleLine(
+    axis: 'row' | 'col',
+    idx: number,
+  ): Array<[number, number, number]> {
+    const samples: Array<[number, number, number]> = [];
     if (axis === 'row') {
-      const step = Math.max(1, Math.floor(w / N));
+      const step = Math.max(1, Math.floor(w / N_SAMPLES));
       for (let x = 0; x < w; x += step) {
         const i = (idx * w + x) * 4;
         samples.push([px[i], px[i + 1], px[i + 2]]);
       }
     } else {
-      const step = Math.max(1, Math.floor(h / N));
+      const step = Math.max(1, Math.floor(h / N_SAMPLES));
       for (let y = 0; y < h; y += step) {
         const i = (y * w + idx) * 4;
         samples.push([px[i], px[i + 1], px[i + 2]]);
       }
     }
+    return samples;
+  }
 
-    if (samples.length === 0) return false;
-
-    // Median R, G, B — robust against outlier text pixels
+  function medianRGB(
+    samples: Array<[number, number, number]>,
+  ): [number, number, number] {
     const rs = samples.map(s => s[0]).sort((a, b) => a - b);
     const gs = samples.map(s => s[1]).sort((a, b) => a - b);
     const bs = samples.map(s => s[2]).sort((a, b) => a - b);
     const mid = Math.floor(samples.length / 2);
-    const medR = rs[mid], medG = gs[mid], medB = bs[mid];
-
-    const inliers = samples.filter(
-      s => Math.abs(s[0] - medR) < DIST && Math.abs(s[1] - medG) < DIST && Math.abs(s[2] - medB) < DIST,
-    ).length;
-
-    return inliers / samples.length >= INLIER_RATIO;
+    return [rs[mid], gs[mid], bs[mid]];
   }
 
-  let cropTop = 0;
-  while (cropTop < h * MAX_FRAC && isUniform('row', cropTop)) cropTop++;
+  function inlierRatio(
+    samples: Array<[number, number, number]>,
+    med: [number, number, number],
+  ): number {
+    const inliers = samples.filter(
+      s =>
+        Math.abs(s[0] - med[0]) < PIXEL_DIST &&
+        Math.abs(s[1] - med[1]) < PIXEL_DIST &&
+        Math.abs(s[2] - med[2]) < PIXEL_DIST,
+    ).length;
+    return inliers / samples.length;
+  }
 
-  let cropBottom = 0;
-  while (cropBottom < h * MAX_FRAC && isUniform('row', h - 1 - cropBottom)) cropBottom++;
+  function colorDist(
+    a: [number, number, number],
+    b: [number, number, number],
+  ): number {
+    return Math.sqrt(
+      (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2,
+    );
+  }
 
-  let cropLeft = 0;
-  while (cropLeft < w * MAX_FRAC && isUniform('col', cropLeft)) cropLeft++;
+  function scanEdge(axis: 'row' | 'col', fromEnd: boolean): number {
+    const dim = axis === 'row' ? h : w;
 
-  let cropRight = 0;
-  while (cropRight < w * MAX_FRAC && isUniform('col', w - 1 - cropRight)) cropRight++;
+    // Step 1: Sample the outermost line to establish the edge color
+    const edgeIdx = fromEnd ? dim - 1 : 0;
+    const edgeSamples = sampleLine(axis, edgeIdx);
+    const edgeMedian = medianRGB(edgeSamples);
 
-  return { cropTop, cropBottom, cropLeft, cropRight };
+    // If the edge itself is not uniform → product content is already at the edge → no crop
+    if (inlierRatio(edgeSamples, edgeMedian) < INLIER_THRESH) return 0;
+
+    // Step 2: Scan inward while rows/cols match the established edge color
+    let count = 0;
+    const limit = Math.floor(dim * MAX_FRAC);
+
+    while (count < limit) {
+      const idx = fromEnd ? dim - 1 - count : count;
+      const samples = sampleLine(axis, idx);
+      const med = medianRGB(samples);
+
+      // Stop if this line became mixed (product content)
+      if (inlierRatio(samples, med) < INLIER_THRESH) break;
+
+      // Stop if the dominant color drifted significantly from the edge color
+      // (e.g. white padding ended, actual product started)
+      if (colorDist(med, edgeMedian) > COLOR_DRIFT) break;
+
+      count++;
+    }
+
+    return count;
+  }
+
+  return {
+    cropTop:    scanEdge('row', false),
+    cropBottom: scanEdge('row', true),
+    cropLeft:   scanEdge('col', false),
+    cropRight:  scanEdge('col', true),
+  };
 }
