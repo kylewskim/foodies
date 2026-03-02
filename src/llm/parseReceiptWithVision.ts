@@ -25,6 +25,7 @@ export async function parseReceiptWithVision(file: File): Promise<NormalizeInput
     const response = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
       max_tokens: 512,  // ~20 items × ~20 tokens each = ~400 tokens max; 512 is safe ceiling
+      temperature: 0,   // deterministic output — same receipt → same items every time
       response_format: { type: 'json_object' },
       messages: [
         {
