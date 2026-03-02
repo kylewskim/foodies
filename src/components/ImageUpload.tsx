@@ -5,7 +5,7 @@ import { extractTextWithGoogleVision, isGoogleVisionConfigured } from '../utils/
 interface ImageUploadProps {
   onTextExtracted?: (text: string) => void;
   onFileSelected?: (file: File) => void; // If provided, skips OCR and hands the raw file to the caller
-  useCamera?: boolean; // true: 카메라 직접 실행, false: 앨범에서 선택
+  useCamera?: boolean; // true: open camera directly, false: pick from photo library
 }
 
 export function ImageUpload({ onTextExtracted, onFileSelected, useCamera = true }: ImageUploadProps) {
@@ -20,7 +20,7 @@ export function ImageUpload({ onTextExtracted, onFileSelected, useCamera = true 
     const file = event.target.files?.[0];
     if (!file) return;
 
-    // 이미지 미리보기 생성
+    // Generate image preview
     const objectUrl = URL.createObjectURL(file);
     setPreviewUrl(objectUrl);
     setError(null);
@@ -37,28 +37,28 @@ export function ImageUpload({ onTextExtracted, onFileSelected, useCamera = true 
     try {
       let extractedText: string;
 
-      // Google Vision API가 설정되어 있으면 우선 사용
+      // Prefer Google Vision API if configured
       if (isGoogleVisionConfigured()) {
         setUsingGoogleVision(true);
         setProgress(30);
-        
+
         try {
           extractedText = await extractTextWithGoogleVision(file);
           setProgress(100);
         } catch (googleError) {
-          console.warn('Google Vision API 실패, Tesseract로 폴백:', googleError);
+          console.warn('Google Vision API failed, falling back to Tesseract:', googleError);
           setUsingGoogleVision(false);
-          // Tesseract로 폴백
+          // Fall back to Tesseract
           extractedText = await extractTextWithTesseract(file);
         }
       } else {
-        // Tesseract.js 사용
+        // Use Tesseract.js
         setUsingGoogleVision(false);
         extractedText = await extractTextWithTesseract(file);
       }
 
       if (!extractedText.trim()) {
-        setError('이미지에서 텍스트를 찾을 수 없습니다. 다른 이미지를 시도해주세요.');
+        setError('No text found in the image. Please try a different image.');
         setUploading(false);
         return;
       }
@@ -66,7 +66,7 @@ export function ImageUpload({ onTextExtracted, onFileSelected, useCamera = true 
       onTextExtracted?.(extractedText);
     } catch (err) {
       console.error('OCR Error:', err);
-      setError('이미지 인식에 실패했습니다. 다시 시도해주세요.');
+      setError('Failed to process the image. Please try again.');
     } finally {
       setUploading(false);
       setProgress(0);
@@ -74,13 +74,13 @@ export function ImageUpload({ onTextExtracted, onFileSelected, useCamera = true 
   };
 
   /**
-   * Tesseract.js를 사용한 OCR (폴백)
+   * OCR using Tesseract.js (fallback)
    */
   const extractTextWithTesseract = async (file: File): Promise<string> => {
     const result = await Tesseract.recognize(file, 'eng+kor', {
       logger: (m) => {
         if (m.status === 'recognizing text') {
-          setProgress(30 + Math.round(m.progress * 70)); // 30-100% 범위
+          setProgress(30 + Math.round(m.progress * 70)); // 30-100% range
         }
       },
     });
@@ -95,10 +95,10 @@ export function ImageUpload({ onTextExtracted, onFileSelected, useCamera = true 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    
+
     const file = e.dataTransfer.files?.[0];
     if (file && file.type.startsWith('image/')) {
-      // 파일 입력에 파일 설정
+      // Attach the dropped file to the hidden input
       const dataTransfer = new DataTransfer();
       dataTransfer.items.add(file);
       if (fileInputRef.current) {
@@ -118,9 +118,9 @@ export function ImageUpload({ onTextExtracted, onFileSelected, useCamera = true 
 
   return (
     <div style={{ padding: '20px', border: '1px solid #ccc', borderRadius: '8px' }}>
-      <h3>{useCamera ? '📷 영수증 촬영' : '🖼️ 이미지 선택'}</h3>
+      <h3>{useCamera ? '📷 Scan Receipt' : '🖼️ Select Image'}</h3>
       
-      {/* 드래그 앤 드롭 영역 */}
+      {/* Drag and drop area */}
       <div
         onDragOver={handleDragOver}
         onDrop={handleDrop}
@@ -139,7 +139,7 @@ export function ImageUpload({ onTextExtracted, onFileSelected, useCamera = true 
           <div>
             <img
               src={previewUrl}
-              alt="업로드된 이미지"
+              alt="Uploaded image"
               style={{
                 maxWidth: '100%',
                 maxHeight: '200px',
@@ -165,17 +165,17 @@ export function ImageUpload({ onTextExtracted, onFileSelected, useCamera = true 
                   cursor: 'pointer',
                 }}
               >
-                다른 이미지 선택
+                Choose a different image
               </button>
             )}
           </div>
         ) : (
           <div>
             <p style={{ fontSize: '16px', color: '#666', margin: 0 }}>
-              {useCamera ? '📷 클릭하여 카메라 실행' : '🖼️ 클릭하여 앨범에서 선택'}
+              {useCamera ? '📷 Tap to open camera' : '🖼️ Tap to pick from library'}
             </p>
             <p style={{ fontSize: '14px', color: '#999', marginTop: '8px' }}>
-              {useCamera ? '영수증을 촬영해주세요' : '식료품 사진을 선택해주세요'}
+              {useCamera ? 'Take a photo of your receipt' : 'Select a grocery photo'}
             </p>
           </div>
         )}
@@ -191,7 +191,7 @@ export function ImageUpload({ onTextExtracted, onFileSelected, useCamera = true 
         style={{ display: 'none' }}
       />
 
-      {/* 진행 상태 표시 */}
+      {/* Progress indicator */}
       {uploading && (
         <div style={{ marginTop: '20px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -217,15 +217,15 @@ export function ImageUpload({ onTextExtracted, onFileSelected, useCamera = true 
           </div>
           <p style={{ fontSize: '14px', color: '#666', marginTop: '10px' }}>
             {usingGoogleVision ? (
-              <>🔍 <strong>Google Vision API</strong>로 이미지 인식 중... (더 정확함!)</>
+              <>🔍 Recognizing image with <strong>Google Vision API</strong>... (more accurate!)</>
             ) : (
-              <>🔍 Tesseract.js로 이미지 인식 중...</>
+              <>🔍 Recognizing image with Tesseract.js...</>
             )}
           </p>
         </div>
       )}
 
-      {/* 에러 메시지 */}
+      {/* Error message */}
       {error && (
         <div
           style={{
@@ -241,7 +241,7 @@ export function ImageUpload({ onTextExtracted, onFileSelected, useCamera = true 
         </div>
       )}
 
-      {/* 안내 메시지 */}
+      {/* Tip message */}
       <div
         style={{
           marginTop: '15px',
@@ -252,8 +252,8 @@ export function ImageUpload({ onTextExtracted, onFileSelected, useCamera = true 
           color: '#004085',
         }}
       >
-        <strong>💡 팁:</strong> 선명한 이미지일수록 인식률이 높습니다. 
-        영수증이 잘 보이도록 밝은 곳에서 촬영해주세요.
+        <strong>💡 Tip:</strong> Clearer images improve recognition accuracy.
+        Take the photo in a well-lit area so the receipt is easy to read.
       </div>
     </div>
   );

@@ -38,7 +38,7 @@ export function MagicKitchenResultPage() {
       const items = await getItemsByUser(user.uid);
 
       if (items.length === 0) {
-        alert('냉장고에 재료가 없습니다. 먼저 재료를 추가해주세요!');
+        alert('No ingredients in your fridge. Please add some items first!');
         navigate('/inventory');
         return;
       }
@@ -55,7 +55,7 @@ export function MagicKitchenResultPage() {
       }, 500);
     } catch (error) {
       console.error('Error generating creative recipe:', error);
-      alert('레시피 생성 중 오류가 발생했습니다. 다시 시도해주세요.');
+      alert('An error occurred while generating the recipe. Please try again.');
       setLoading(false);
     }
   };

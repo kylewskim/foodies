@@ -1,21 +1,21 @@
 /**
- * Google Cloud Vision API를 사용한 OCR
- * 
- * 무료 크레딧: 월 1,000회
- * 더 정확하고 빠른 OCR 제공
+ * OCR using Google Cloud Vision API
+ *
+ * Free tier: 1,000 requests/month
+ * Provides more accurate and faster OCR than Tesseract
  */
 
 const GOOGLE_VISION_API_KEY = import.meta.env.VITE_GOOGLE_VISION_API_KEY;
 
 export async function extractTextWithGoogleVision(imageFile: File): Promise<string> {
   if (!GOOGLE_VISION_API_KEY || GOOGLE_VISION_API_KEY === 'YOUR_API_KEY_HERE') {
-    throw new Error('Google Vision API 키가 설정되지 않았습니다.');
+    throw new Error('Google Vision API key is not configured.');
   }
 
-  // 이미지를 base64로 변환
+  // Convert image to base64
   const base64Image = await fileToBase64(imageFile);
 
-  // Google Cloud Vision API 호출
+  // Call Google Cloud Vision API
   const response = await fetch(
     `https://vision.googleapis.com/v1/images:annotate?key=${GOOGLE_VISION_API_KEY}`,
     {
@@ -27,7 +27,7 @@ export async function extractTextWithGoogleVision(imageFile: File): Promise<stri
         requests: [
           {
             image: {
-              content: base64Image.split(',')[1], // data:image/... 부분 제거
+              content: base64Image.split(',')[1], // strip the data:image/... prefix
             },
             features: [
               {
@@ -36,7 +36,7 @@ export async function extractTextWithGoogleVision(imageFile: File): Promise<stri
               },
             ],
             imageContext: {
-              languageHints: ['ko', 'en'], // 한국어, 영어 우선
+              languageHints: ['ko', 'en'],
             },
           },
         ],
@@ -47,13 +47,13 @@ export async function extractTextWithGoogleVision(imageFile: File): Promise<stri
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
     throw new Error(
-      `Google Vision API 오류: ${response.status} - ${errorData.error?.message || response.statusText}`
+      `Google Vision API error: ${response.status} - ${errorData.error?.message || response.statusText}`
     );
   }
 
   const data = await response.json();
 
-  // 텍스트 추출
+  // Extract text
   if (
     data.responses &&
     data.responses[0] &&
@@ -63,7 +63,7 @@ export async function extractTextWithGoogleVision(imageFile: File): Promise<stri
     return data.responses[0].fullTextAnnotation.text;
   }
 
-  // fullTextAnnotation이 없으면 textAnnotations에서 추출
+  // Fall back to textAnnotations if fullTextAnnotation is absent
   if (
     data.responses &&
     data.responses[0] &&
@@ -73,11 +73,11 @@ export async function extractTextWithGoogleVision(imageFile: File): Promise<stri
     return data.responses[0].textAnnotations[0].description || '';
   }
 
-  throw new Error('이미지에서 텍스트를 찾을 수 없습니다.');
+  throw new Error('No text found in image.');
 }
 
 /**
- * 파일을 base64로 변환
+ * Convert a File to a base64 data URL
  */
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -89,7 +89,7 @@ function fileToBase64(file: File): Promise<string> {
 }
 
 /**
- * Google Vision API 키가 설정되어 있는지 확인
+ * Returns true if the Google Vision API key is configured
  */
 export function isGoogleVisionConfigured(): boolean {
   return !!GOOGLE_VISION_API_KEY && GOOGLE_VISION_API_KEY !== 'YOUR_API_KEY_HERE';

@@ -409,7 +409,7 @@ export function AddItemPage() {
   }
 
   if (inputMethod === 'image') {
-    // methodParam이 'scan'이면 카메라, 'upload'면 앨범
+    // 'scan' opens the camera; 'upload' opens the photo library
     const useCamera = methodParam === 'scan';
     
     return (

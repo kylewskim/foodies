@@ -19,17 +19,17 @@ export async function estimateExpirationDays(
   normalizedName: string,
   category: FoodCategory
 ): Promise<EstimateExpirationDaysOutput> {
-  // OpenAI API가 설정되어 있으면 AI 사용
+  // Use AI if OpenAI API is configured
   if (isOpenAIConfigured()) {
     return estimateWithAI(normalizedName, category);
   }
-  
-  // 설정되지 않으면 기존 규칙 기반 사용
+
+  // Fall back to rule-based estimation if API is not configured
   return estimateWithRules(normalizedName, category);
 }
 
 /**
- * AI를 사용한 유통기한 추정
+ * Estimate expiration days using AI
  */
 async function estimateWithAI(
   normalizedName: string,
@@ -79,15 +79,15 @@ EXAMPLES:
       throw new Error('Empty response from API');
     }
 
-    // JSON 추출
+    // Extract JSON
     const jsonMatch = content.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
       throw new Error('No valid JSON in response');
     }
     const parsed = JSON.parse(jsonMatch[0]);
-    
-    // 결과 검증
-    const expirationDays = typeof parsed.expiration_days === 'number' 
+
+    // Validate result
+    const expirationDays = typeof parsed.expiration_days === 'number'
       ? Math.max(1, Math.round(parsed.expiration_days)) 
       : 7;
     
@@ -98,7 +98,7 @@ EXAMPLES:
     
     return { expiration_days: expirationDays, confidence };
   } catch (error: unknown) {
-    // 429 에러 (한도 초과) 시 API 비활성화
+    // Disable API on 429 (rate limit exceeded)
     if (error instanceof Error && error.message.includes('429')) {
       disableOpenAI();
     }
@@ -107,7 +107,7 @@ EXAMPLES:
 }
 
 /**
- * 규칙 기반 유통기한 추정 (폴백)
+ * Rule-based expiration estimation (fallback)
  */
 export function estimateWithRules(
   normalizedName: string,
@@ -115,7 +115,7 @@ export function estimateWithRules(
 ): EstimateExpirationDaysOutput {
   const nameLower = normalizedName.toLowerCase();
   
-  // 카테고리별 기본값
+  // Default values by category
   const categoryDefaults: Record<FoodCategory, { days: number; confidence: 'high' | 'medium' | 'low' }> = {
     Produce: { days: 7, confidence: 'medium' },
     Protein: { days: 3, confidence: 'high' },
@@ -132,68 +132,68 @@ export function estimateWithRules(
   
   let result = { ...categoryDefaults[category] };
   
-  // 농산물 세부 조정
+  // Produce overrides
   if (category === 'Produce') {
-    // 빨리 상하는 것들
-    if (/berry|strawberry|raspberry|lettuce|spinach|salad|딸기|상추|시금치|샐러드/.test(nameLower)) {
+    // Perishable
+    if (/berry|strawberry|raspberry|lettuce|spinach|salad/.test(nameLower)) {
       result = { days: 3, confidence: 'high' };
     }
-    // 중간
-    else if (/tomato|cucumber|pepper|avocado|토마토|오이|고추|아보카도/.test(nameLower)) {
+    // Medium shelf life
+    else if (/tomato|cucumber|pepper|avocado/.test(nameLower)) {
       result = { days: 5, confidence: 'high' };
     }
-    // 오래 가는 것들
-    else if (/potato|onion|carrot|apple|감자|양파|당근|사과/.test(nameLower)) {
+    // Long shelf life
+    else if (/potato|onion|carrot|apple/.test(nameLower)) {
       result = { days: 14, confidence: 'high' };
     }
-    // 바나나
-    else if (/banana|바나나/.test(nameLower)) {
+    // Banana
+    else if (/banana/.test(nameLower)) {
       result = { days: 5, confidence: 'high' };
     }
   }
-  
-  // 유제품 세부 조정
+
+  // Dairy overrides
   if (category === 'Dairy') {
-    if (/milk|우유/.test(nameLower)) {
+    if (/milk/.test(nameLower)) {
       result = { days: 7, confidence: 'high' };
-    } else if (/yogurt|요거트|요구르트/.test(nameLower)) {
+    } else if (/yogurt/.test(nameLower)) {
       result = { days: 14, confidence: 'high' };
-    } else if (/cheese|치즈/.test(nameLower)) {
+    } else if (/cheese/.test(nameLower)) {
       result = { days: 21, confidence: 'high' };
-    } else if (/butter|버터/.test(nameLower)) {
+    } else if (/butter/.test(nameLower)) {
       result = { days: 30, confidence: 'high' };
     }
   }
-  
-  // 단백질 세부 조정
+
+  // Protein overrides
   if (category === 'Protein') {
-    if (/ground|다진|간/.test(nameLower)) {
+    if (/ground/.test(nameLower)) {
       result = { days: 2, confidence: 'high' };
-    } else if (/chicken|닭/.test(nameLower)) {
+    } else if (/chicken/.test(nameLower)) {
       result = { days: 2, confidence: 'high' };
-    } else if (/bacon|베이컨/.test(nameLower)) {
+    } else if (/bacon/.test(nameLower)) {
       result = { days: 7, confidence: 'high' };
-    } else if (/sausage|소시지/.test(nameLower)) {
+    } else if (/sausage/.test(nameLower)) {
       result = { days: 7, confidence: 'high' };
     }
   }
-  
-  // 빵류/곡물 세부 조정
+
+  // Grains overrides
   if (category === 'Grains') {
-    if (/bread|식빵|빵/.test(nameLower)) {
+    if (/bread/.test(nameLower)) {
       result = { days: 7, confidence: 'high' };
-    } else if (/bagel|베이글/.test(nameLower)) {
+    } else if (/bagel/.test(nameLower)) {
       result = { days: 5, confidence: 'high' };
-    } else if (/cake|케이크/.test(nameLower)) {
+    } else if (/cake/.test(nameLower)) {
       result = { days: 3, confidence: 'medium' };
     }
   }
-  
-  // 음료 세부 조정
+
+  // Beverages overrides
   if (category === 'Beverages') {
-    if (/juice|주스/.test(nameLower)) {
+    if (/juice/.test(nameLower)) {
       result = { days: 7, confidence: 'high' };
-    } else if (/water|물/.test(nameLower)) {
+    } else if (/water/.test(nameLower)) {
       result = { days: 365, confidence: 'high' };
     }
   }

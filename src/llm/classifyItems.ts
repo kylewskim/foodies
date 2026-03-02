@@ -15,18 +15,18 @@ export async function classifyItems(rawNames: string[]): Promise<ClassifyItemOut
     return [];
   }
 
-  // OpenAI API가 설정되어 있으면 AI 사용
+  // Use AI if OpenAI API is configured
   if (isOpenAIConfigured()) {
     return classifyWithAI(rawNames);
   }
-  
-  // 설정되지 않으면 기존 키워드 매칭 사용
-  console.log('⚠️ OpenAI API 키가 없어서 기본 키워드 매칭을 사용합니다.');
+
+  // Fall back to keyword matching if API is not configured
+  console.log('⚠️ OpenAI API key not found. Using keyword matching fallback.');
   return classifyWithKeywords(rawNames);
 }
 
 /**
- * AI를 사용한 아이템 분류
+ * Classify items using AI
  */
 async function classifyWithAI(rawNames: string[]): Promise<ClassifyItemOutput[]> {
   const systemPrompt = `You are a grocery item classifier. Classify each item into a food category.
@@ -70,23 +70,23 @@ OUTPUT FORMAT (JSON array):
       throw new Error('Empty response from API');
     }
 
-    // JSON 추출 (배열 또는 객체)
+    // Extract JSON (array or object)
     const jsonMatch = content.match(/[\[\{][\s\S]*[\]\}]/);
     if (!jsonMatch) {
       throw new Error('No valid JSON in response');
     }
     const parsed = JSON.parse(jsonMatch[0]);
-    
-    // 결과가 배열인지 확인 (응답이 { items: [...] } 형태일 수 있음)
+
+    // Ensure result is an array (response may be wrapped as { items: [...] })
     let results: ClassifyItemOutput[] = Array.isArray(parsed) ? parsed : (parsed.items || parsed.classifications || []);
-    
-    // 결과 수가 입력과 일치하는지 확인
+
+    // Verify result count matches input count
     if (results.length !== rawNames.length) {
-      console.warn('AI 결과 수가 입력과 일치하지 않습니다. 키워드 매칭으로 폴백합니다.');
+      console.warn('AI result count does not match input count. Falling back to keyword matching.');
       return classifyWithKeywords(rawNames);
     }
     
-    // 카테고리 유효성 검증
+    // Validate categories
     const validCategories: FoodCategory[] = [
       'Produce', 'Protein', 'Grains', 'Dairy', 
       'Snacks', 'Condiments', 'Beverages', 'Prepared',
@@ -101,7 +101,7 @@ OUTPUT FORMAT (JSON array):
         : 'Produce', // Default to Produce
     }));
   } catch (error: unknown) {
-    // 429 에러 (한도 초과) 시 API 비활성화
+    // Disable API on 429 (rate limit exceeded)
     if (error instanceof Error && error.message.includes('429')) {
       disableOpenAI();
     }
@@ -110,56 +110,56 @@ OUTPUT FORMAT (JSON array):
 }
 
 /**
- * 키워드 매칭을 사용한 아이템 분류 (폴백)
+ * Keyword-based item classification (fallback)
  */
 export function classifyWithKeywords(rawNames: string[]): ClassifyItemOutput[] {
   return rawNames.map(rawName => {
     const nameLower = rawName.toLowerCase();
     
     // Produce
-    const produceKeywords = ['apple', 'banana', 'orange', 'lettuce', 'tomato', 'potato', 'onion', 'carrot', 'spinach', 'broccoli', 'cucumber', 'pepper', 'avocado', 'strawberry', 'grape', 'watermelon', 'pear', 'peach', 'plum', 'berry', 'fruit', 'vegetable', 'salad', 'lemon', 'lime', 'mango', 'pineapple', 'celery', 'garlic', 'ginger', '사과', '바나나', '오렌지', '상추', '토마토', '감자', '양파', '당근', '시금치', '브로콜리', '오이', '고추', '아보카도', '딸기', '포도', '수박', '배', '복숭아', '자두', '과일', '야채', '샐러드'];
+    const produceKeywords = ['apple', 'banana', 'orange', 'lettuce', 'tomato', 'potato', 'onion', 'carrot', 'spinach', 'broccoli', 'cucumber', 'pepper', 'avocado', 'strawberry', 'grape', 'watermelon', 'pear', 'peach', 'plum', 'berry', 'fruit', 'vegetable', 'salad', 'lemon', 'lime', 'mango', 'pineapple', 'celery', 'garlic', 'ginger'];
     if (produceKeywords.some(kw => nameLower.includes(kw))) {
       return { is_food: true, normalized_name: capitalizeWords(rawName), category: 'Produce' as FoodCategory };
     }
     
     // Protein (meat, seafood, eggs, beans, tofu)
-    const proteinKeywords = ['chicken', 'beef', 'pork', 'turkey', 'steak', 'ground', 'sausage', 'bacon', 'ham', 'lamb', 'meat', 'fish', 'salmon', 'tuna', 'shrimp', 'crab', 'lobster', 'cod', 'tilapia', 'seafood', 'egg', 'tofu', 'bean', 'lentil', '닭', '소고기', '돼지', '칠면조', '스테이크', '소시지', '베이컨', '햄', '양고기', '고기', '삼겹살', '갈비', '생선', '연어', '참치', '새우', '게', '랍스터', '해산물', '오징어', '조개', '계란', '두부', '콩'];
+    const proteinKeywords = ['chicken', 'beef', 'pork', 'turkey', 'steak', 'ground', 'sausage', 'bacon', 'ham', 'lamb', 'meat', 'fish', 'salmon', 'tuna', 'shrimp', 'crab', 'lobster', 'cod', 'tilapia', 'seafood', 'egg', 'tofu', 'bean', 'lentil'];
     if (proteinKeywords.some(kw => nameLower.includes(kw))) {
       return { is_food: true, normalized_name: capitalizeWords(rawName), category: 'Protein' as FoodCategory };
     }
     
     // Grains
-    const grainsKeywords = ['bread', 'bagel', 'muffin', 'croissant', 'donut', 'cake', 'pastry', 'bun', 'roll', 'pasta', 'rice', 'cereal', 'oatmeal', 'quinoa', 'flour', 'wheat', 'barley', '빵', '베이글', '머핀', '크루아상', '도넛', '케이크', '식빵', '파스타', '쌀', '시리얼', '오트밀', '라면', '국수', '밀가루'];
+    const grainsKeywords = ['bread', 'bagel', 'muffin', 'croissant', 'donut', 'cake', 'pastry', 'bun', 'roll', 'pasta', 'rice', 'cereal', 'oatmeal', 'quinoa', 'flour', 'wheat', 'barley'];
     if (grainsKeywords.some(kw => nameLower.includes(kw))) {
       return { is_food: true, normalized_name: capitalizeWords(rawName), category: 'Grains' as FoodCategory };
     }
     
     // Dairy
-    const dairyKeywords = ['milk', 'cheese', 'yogurt', 'butter', 'cream', 'cottage', 'cheddar', 'mozzarella', 'parmesan', 'ice cream', '우유', '치즈', '요거트', '버터', '크림', '아이스크림'];
+    const dairyKeywords = ['milk', 'cheese', 'yogurt', 'butter', 'cream', 'cottage', 'cheddar', 'mozzarella', 'parmesan', 'ice cream'];
     if (dairyKeywords.some(kw => nameLower.includes(kw))) {
       return { is_food: true, normalized_name: capitalizeWords(rawName), category: 'Dairy' as FoodCategory };
     }
     
     // Snacks
-    const snackKeywords = ['chips', 'crackers', 'cookies', 'candy', 'chocolate', 'popcorn', 'pretzels', 'nuts', 'granola', '과자', '쿠키', '사탕', '초콜릿', '팝콘', '견과류'];
+    const snackKeywords = ['chips', 'crackers', 'cookies', 'candy', 'chocolate', 'popcorn', 'pretzels', 'nuts', 'granola'];
     if (snackKeywords.some(kw => nameLower.includes(kw))) {
       return { is_food: true, normalized_name: capitalizeWords(rawName), category: 'Snacks' as FoodCategory };
     }
     
     // Condiments
-    const condimentKeywords = ['sauce', 'dressing', 'ketchup', 'mustard', 'mayonnaise', 'oil', 'vinegar', 'salt', 'pepper', 'spice', 'seasoning', 'soy', 'worcestershire', '소스', '드레싱', '케첩', '머스타드', '마요네즈', '기름', '식초', '소금', '후추', '양념'];
+    const condimentKeywords = ['sauce', 'dressing', 'ketchup', 'mustard', 'mayonnaise', 'oil', 'vinegar', 'salt', 'pepper', 'spice', 'seasoning', 'soy', 'worcestershire'];
     if (condimentKeywords.some(kw => nameLower.includes(kw))) {
       return { is_food: true, normalized_name: capitalizeWords(rawName), category: 'Condiments' as FoodCategory };
     }
     
     // Beverages
-    const beverageKeywords = ['water', 'juice', 'soda', 'coffee', 'tea', 'beer', 'wine', 'drink', 'beverage', 'energy', '물', '주스', '콜라', '커피', '차', '맥주', '와인', '음료'];
+    const beverageKeywords = ['water', 'juice', 'soda', 'coffee', 'tea', 'beer', 'wine', 'drink', 'beverage', 'energy'];
     if (beverageKeywords.some(kw => nameLower.includes(kw))) {
       return { is_food: true, normalized_name: capitalizeWords(rawName), category: 'Beverages' as FoodCategory };
     }
     
     // Prepared (ready-to-eat, deli, takeout)
-    const preparedKeywords = ['deli', 'sandwich', 'salad', 'soup', 'ready', 'prepared', 'takeout', 'meal', '델리', '샌드위치', '수프', '도시락'];
+    const preparedKeywords = ['deli', 'sandwich', 'salad', 'soup', 'ready', 'prepared', 'takeout', 'meal'];
     if (preparedKeywords.some(kw => nameLower.includes(kw))) {
       return { is_food: true, normalized_name: capitalizeWords(rawName), category: 'Prepared' as FoodCategory };
     }
@@ -170,7 +170,7 @@ export function classifyWithKeywords(rawNames: string[]): ClassifyItemOutput[] {
 }
 
 /**
- * 단어 첫 글자 대문자화
+ * Capitalize the first letter of each word
  */
 export function capitalizeWords(str: string): string {
   return str

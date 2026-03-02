@@ -14,12 +14,12 @@ export function AddFoodModal({ isOpen, onClose }: AddFoodModalProps) {
   if (!isOpen) return null;
 
   const handleScanReceipt = () => {
-    // 카메라 input 클릭
+    // Trigger camera input
     cameraInputRef.current?.click();
   };
 
   const handleUploadImage = () => {
-    // 앨범 input 클릭
+    // Trigger album input
     albumInputRef.current?.click();
   };
 
@@ -31,13 +31,13 @@ export function AddFoodModal({ isOpen, onClose }: AddFoodModalProps) {
   const handleFileSelected = (event: React.ChangeEvent<HTMLInputElement>, method: 'scan' | 'upload') => {
     const file = event.target.files?.[0];
     if (file) {
-      // 파일을 state로 전달하면서 페이지 이동
-      navigate(`/add-item?method=${method}`, { 
+      // Navigate to add-item page with the selected file in state
+      navigate(`/add-item?method=${method}`, {
         state: { selectedFile: file }
       });
       onClose();
     }
-    // input 초기화 (같은 파일 다시 선택 가능하도록)
+    // Reset input so the same file can be selected again
     event.target.value = '';
   };
 
