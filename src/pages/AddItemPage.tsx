@@ -186,6 +186,7 @@ export function AddItemPage() {
       }
 
       console.log(`✅ [Pipeline] Vision extracted ${visionResult.items.length} items`);
+      console.log(`[Pipeline] Vision: store="${visionResult.store_name ?? 'none'}", item_codes: [${visionResult.items.map(i => i.item_code ?? 'null').join(', ')}]`);
 
       // Run GPT verification + store lookup in parallel
       const tLookupStart = performance.now();
@@ -196,21 +197,26 @@ export function AddItemPage() {
       console.log(`⏱️ [Pipeline] verify+storeLookup (parallel): ${(performance.now() - tLookupStart).toFixed(0)}ms`);
 
       // Merge: store lookup > GPT correction > original name; store is_food > GPT is_food
-      const mergedResult = {
-        ...visionResult,
-        items: visionResult.items.map((item, i) => ({
+      const mergedItems = visionResult.items.map((item, i) => {
+        const storeSrc = storeResults[i]?.source;
+        const storeIsFood = storeResults[i]?.is_food;
+        const gptIsFood = verified[i]?.is_food;
+        const isFoodVal = storeIsFood !== undefined && storeIsFood !== null
+          ? storeIsFood
+          : (gptIsFood ?? null);
+        const isFoodSrc = storeIsFood !== undefined && storeIsFood !== null
+          ? `store(${storeSrc})`
+          : (gptIsFood !== null && gptIsFood !== undefined ? 'gpt' : 'keyword');
+        const finalName = storeResults[i]?.product_name ?? verified[i]?.verified_name ?? item.raw_name;
+        console.log(`  [merge] "${item.raw_name}" → "${finalName}" | is_food=${isFoodVal} (${isFoodSrc})`);
+        return {
           ...item,
-          raw_name:
-            storeResults[i]?.product_name ??
-            verified[i]?.verified_name ??
-            item.raw_name,
-          _is_food:
-            storeResults[i]?.is_food !== undefined
-              ? storeResults[i].is_food
-              : (verified[i]?.is_food ?? null),
+          raw_name: finalName,
+          _is_food: isFoodVal,
           _store_image_url: storeResults[i]?.image_url ?? null,
-        })),
-      };
+        };
+      });
+      const mergedResult = { ...visionResult, items: mergedItems };
 
       await processNormalized(mergedResult);
       console.log(`⏱️ [Pipeline] Full pipeline (Vision → save-ready): ${(performance.now() - t0).toFixed(0)}ms`);

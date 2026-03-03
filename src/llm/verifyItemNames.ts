@@ -34,11 +34,8 @@ export async function verifyItemNames(
     is_food: null as null,
   }));
 
-  if (!isOpenAIConfigured() || items.length === 0) return fallback;
-
-  // Skip verification if no item codes and no store context — not worth the extra call
-  const hasItemCodes = items.some((item) => item.item_code);
-  if (!hasItemCodes && !store_name) return fallback;
+  if (!isOpenAIConfigured()) return fallback;
+  if (items.length === 0) return fallback;
 
   try {
     const storeContext = store_name ? `Store: ${store_name}` : 'Store: unknown';

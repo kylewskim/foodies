@@ -21,9 +21,12 @@ export async function lookupStoreProduct(
 
   if (items.length === 0) return fallback;
 
-  // Only run if there's something useful to look up
+  // Only run if there's something useful to look up (store APIs need store context)
   const hasItemCodes = items.some(i => i.item_code);
-  if (!hasItemCodes && !store_name) return fallback;
+  if (!hasItemCodes && !store_name) {
+    console.log('[storeLookup] Skipping — no store name or item codes');
+    return fallback;
+  }
 
   try {
     const res = await fetch('/api/store-lookup', {
