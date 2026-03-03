@@ -54,7 +54,49 @@ const firebaseConfig = {
 };
 ```
 
-### 3. Run Development Server
+### 3.1 CI Smoke Test for /api/recommend (Optional)
+
+This repo includes a GitHub Actions smoke test that calls the deployed
+`/api/recommend` endpoint. To enable it, add a repository secret named
+`RECOMMENDER_API_BASE_URL` with your deployed base URL (no `/api/recommend`
+suffix), for example:
+
+```
+https://foodies-dusky-pi.vercel.app
+```
+
+If the secret is not set, the CI step skips the smoke test.
+
+### 3.2 Calling the Deployed /api/recommend
+
+Your teammate can call the deployed API through the frontend proxy as long as
+the Vercel deployment has `RECOMMENDER_URL` set to the Render endpoint.
+
+Example request:
+
+```bash
+curl -X POST "https://foodies-dusky-pi.vercel.app/api/recommend" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "inventory": [
+      {"name": "Eggs", "expiration_date": "2026-03-10", "category": "dairy"},
+      {"name": "Spinach", "expiration_date": "2026-03-06", "category": "produce"}
+    ],
+    "restrictions": ["allergy_nuts"],
+    "top_k": 6,
+    "debug": false
+  }'
+```
+
+If the request fails with a 5xx or “Recommender unreachable”, the Vercel
+environment likely does not have `RECOMMENDER_URL` set. In that case, add it in
+Vercel and redeploy:
+
+- Vercel → Project → Settings → Environment Variables
+- Name: `RECOMMENDER_URL`
+- Value: `https://<your-render-service>.onrender.com/recommend`
+
+### 4. Run Development Server
 
 ```bash
 npm run dev

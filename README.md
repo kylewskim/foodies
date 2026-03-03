@@ -16,6 +16,7 @@ A login-free MVP web app for tracking groceries and preventing food waste by mon
 - **Build Tool**: Vite
 - **Database**: Firebase Firestore
 - **Architecture**: Modular, client-side logic
+- **Recipe Recommender**: External service (separate repo), accessed via `/api/recommend` proxy
 
 ## Project Structure
 
@@ -40,6 +41,15 @@ src/
 ├── App.tsx                   # Main app component
 └── main.tsx                  # Entry point
 ```
+
+## Recommender Service (Separate Repo)
+
+The deterministic RecipeRec engine lives in its own repo and is deployed separately
+(Render suggested). This repo only contains the `/api/recommend` proxy and the
+client-side integration (`src/services/recommendationService.ts`).
+
+That separation keeps the frontend lightweight and allows the recommender to
+scale independently.
 
 ## Data Model
 
@@ -70,6 +80,83 @@ src/
 ```bash
 npm install
 ```
+
+### 2. Run Recipe Recommender Service (separate repo)
+
+This app proxies `/api/recommend` to a standalone service. Clone and run the
+recommender locally, then point `foodies` at it with `RECOMMENDER_URL`.
+
+```bash
+# In the recommender repo
+pip install -r requirements.txt
+uvicorn api.server:app --host 0.0.0.0 --port 8001
+```
+
+Set the URL for the proxy:
+
+```bash
+export RECOMMENDER_URL="http://localhost:8001/recommend"
+export RECOMMENDER_TIMEOUT_SECONDS="15"
+```
+
+For production, deploy the recommender (Render suggested) and set:
+
+```bash
+export RECOMMENDER_URL="https://<your-render-service>.onrender.com/recommend"
+```
+
+If you want provider results, set:
+
+```bash
+export FATSECRET_CLIENT_ID="..."
+export FATSECRET_CLIENT_SECRET="..."
+```
+
+When deploying `foodies` on Vercel, add `RECOMMENDER_URL` in the
+project’s Environment Variables (same value as above).
+
+### 2.1 CI Smoke Test for /api/recommend
+
+This repo includes a lightweight CI smoke test that calls the deployed API.
+It runs on push/PR when the GitHub Actions secret `RECOMMENDER_API_BASE_URL`
+is set.
+
+Example secret value:
+```
+https://foodies-dusky-pi.vercel.app
+```
+
+If the secret is missing, the CI step skips the smoke test.
+
+### 2.2 Calling the Deployed /api/recommend
+
+Your teammate can call the deployed API through the frontend proxy as long as
+the Vercel deployment has `RECOMMENDER_URL` set to the Render endpoint.
+
+Example request:
+
+```bash
+curl -X POST "https://foodies-dusky-pi.vercel.app/api/recommend" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "inventory": [
+      {"name": "Eggs", "expiration_date": "2026-03-10", "category": "dairy"},
+      {"name": "Spinach", "expiration_date": "2026-03-06", "category": "produce"}
+    ],
+    "restrictions": ["allergy_nuts"],
+    "top_k": 6,
+    "debug": false
+  }'
+```
+
+If the request fails with a 5xx or “Recommender unreachable”, the Vercel
+environment likely does not have `RECOMMENDER_URL` set. In that case, your
+teammate should add it in Vercel:
+
+- Vercel → Project → Settings → Environment Variables
+- Name: `RECOMMENDER_URL`
+- Value: `https://<your-render-service>.onrender.com/recommend`
+- Redeploy after saving the env var
 
 ### 2. Configure Firebase
 
