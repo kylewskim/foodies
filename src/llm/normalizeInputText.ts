@@ -83,6 +83,13 @@ Output: { "purchase_date": "2024-01-15T00:00:00.000Z", "items": [{ "raw_name": "
       parsed.items = [];
     }
 
+    // Ensure new fields have defaults (AI prompt doesn't include store_name/item_code)
+    parsed.store_name = parsed.store_name ?? null;
+    parsed.items = parsed.items.map((item) => ({
+      ...item,
+      item_code: item.item_code ?? null,
+    }));
+
     return parsed;
   } catch (error: unknown) {
     if (error instanceof Error && error.message.includes('429')) {
@@ -328,7 +335,7 @@ function normalizeWithPatternMatching(rawText: string): NormalizeInputTextOutput
     .filter(line => line.length > 0);
 
   let purchaseDate: string | null = null;
-  const items: Array<{ raw_name: string; quantity: string | null }> = [];
+  const items: Array<{ raw_name: string; quantity: string | null; item_code: string | null }> = [];
 
   for (const line of lines) {
     // 1. Try to extract purchase date (first match wins)
@@ -396,10 +403,10 @@ function normalizeWithPatternMatching(rawText: string): NormalizeInputTextOutput
     // 9. Skip if name is too short after all cleanup
     if (rawName.length <= 2) continue;
 
-    items.push({ raw_name: rawName, quantity });
+    items.push({ raw_name: rawName, quantity, item_code: null });
   }
 
-  return { purchase_date: purchaseDate, items };
+  return { purchase_date: purchaseDate, store_name: null, items };
 }
 
 /**

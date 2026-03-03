@@ -63,9 +63,11 @@ export interface Item {
 
 export interface NormalizeInputTextOutput {
   purchase_date: string | null;
+  store_name: string | null;
   items: Array<{
     raw_name: string;
     quantity: string | null;
+    item_code: string | null;
   }>;
 }
 

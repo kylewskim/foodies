@@ -24,17 +24,23 @@ export async function parseReceiptWithVision(file: File): Promise<NormalizeInput
 
     const response = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
-      max_tokens: 512,  // ~20 items × ~20 tokens each = ~400 tokens max; 512 is safe ceiling
+      max_tokens: 640,  // ~20 items × ~25 tokens each (name + quantity + item_code) + store_name overhead
       temperature: 0,   // deterministic output — same receipt → same items every time
       response_format: { type: 'json_object' },
       messages: [
         {
           role: 'system',
-          content: `Receipt parser. Extract food/grocery items only. Return JSON:
-{"purchase_date":"YYYY-MM-DD or null","items":[{"raw_name":"clean product name","quantity":"number as string or null"}]}
+          content: `Receipt parser. Extract food/grocery items only.
+
+Also capture:
+- store_name: the retailer name if visible on the receipt (e.g. "Costco", "Trader Joe's", "Whole Foods"), else null
+- item_code: per-item product code if printed next to the item (e.g. Costco item numbers like "47019"), else null
+
+Return JSON:
+{"store_name":"string or null","purchase_date":"YYYY-MM-DD or null","items":[{"raw_name":"clean product name","quantity":"number as string or null","item_code":"string or null"}]}
 
 Include: produce, meat, seafood, dairy, eggs, grains, bread, snacks, beverages, condiments, frozen food, canned food.
-Exclude: totals, taxes, store info, barcodes, non-food (medicine, cleaning supplies, pet supplies, batteries, gift cards).
+Exclude: totals, taxes, non-food (medicine, cleaning supplies, pet supplies, batteries, gift cards).
 - One entry per unique product — no duplicates even if the item appears multiple times on the receipt
 - Clean names: remove unit suffixes (Each, lb, oz, fl oz, per lb), write the full readable product name`,
         },

@@ -16,6 +16,7 @@ import { markRecipesNeedRefresh } from '../firebase/userRecipes';
 import { capitalizeWords } from '../llm/classifyItems';
 import type { NormalizeInputTextOutput } from '../types';
 import { fetchProductImage } from '../services/productImageService';
+import { verifyItemNames } from '../llm/verifyItemNames';
 
 type InputMethod = 'image' | 'manual' | 'form' | 'review';
 
@@ -174,7 +175,20 @@ export function AddItemPage() {
       }
 
       console.log(`✅ [Pipeline] Vision extracted ${visionResult.items.length} items`);
-      await processNormalized(visionResult);
+
+      // Verify item names using store context + item codes (e.g. Costco item numbers)
+      const tVerifyStart = performance.now();
+      const verified = await verifyItemNames(visionResult.items, visionResult.store_name);
+      console.log(`⏱️ [Pipeline] verifyItemNames: ${(performance.now() - tVerifyStart).toFixed(0)}ms`);
+      const verifiedResult = {
+        ...visionResult,
+        items: visionResult.items.map((item, i) => ({
+          ...item,
+          raw_name: verified[i]?.verified_name ?? item.raw_name,
+        })),
+      };
+
+      await processNormalized(verifiedResult);
       console.log(`⏱️ [Pipeline] Full pipeline (Vision → save-ready): ${(performance.now() - t0).toFixed(0)}ms`);
     } catch (error) {
       console.error('Error processing file:', error);
