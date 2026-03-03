@@ -17,6 +17,7 @@ import { capitalizeWords } from '../llm/classifyItems';
 import type { NormalizeInputTextOutput } from '../types';
 import { fetchProductImage } from '../services/productImageService';
 import { verifyItemNames } from '../llm/verifyItemNames';
+import { lookupStoreProduct } from '../llm/lookupStoreProduct';
 
 type InputMethod = 'image' | 'manual' | 'form' | 'review';
 
@@ -125,12 +126,19 @@ export function AddItemPage() {
 
     console.log(`⏱️ [Pipeline] predictLifecycle (${items.length} items): ${(performance.now() - tLifecycleStart).toFixed(0)}ms`);
 
-    const foodItems = items.filter(item =>
-      item.ingredientCategory !== 'unknown' && item.ingredientCategory !== 'non-food'
-    );
-    const filtered = items.filter(item =>
-      item.ingredientCategory === 'unknown' || item.ingredientCategory === 'non-food'
-    );
+    // Use _is_food override from store lookup / GPT when available; fall back to keyword matching
+    const foodItems = items.filter((item, i) => {
+      const override = normalized.items[i]?._is_food;
+      if (override === true) return true;
+      if (override === false) return false;
+      return item.ingredientCategory !== 'unknown' && item.ingredientCategory !== 'non-food';
+    });
+    const filtered = items.filter((item, i) => {
+      const override = normalized.items[i]?._is_food;
+      if (override === true) return false;
+      if (override === false) return true;
+      return item.ingredientCategory === 'unknown' || item.ingredientCategory === 'non-food';
+    });
     if (filtered.length > 0) {
       console.log(`🚫 Filtered ${filtered.length} non-food/unknown items:`);
       filtered.forEach(item => console.log(`  ❌ ${item.name} (${item.ingredientCategory})`));
@@ -176,19 +184,31 @@ export function AddItemPage() {
 
       console.log(`✅ [Pipeline] Vision extracted ${visionResult.items.length} items`);
 
-      // Verify item names using store context + item codes (e.g. Costco item numbers)
-      const tVerifyStart = performance.now();
-      const verified = await verifyItemNames(visionResult.items, visionResult.store_name);
-      console.log(`⏱️ [Pipeline] verifyItemNames: ${(performance.now() - tVerifyStart).toFixed(0)}ms`);
-      const verifiedResult = {
+      // Run GPT verification + store lookup in parallel
+      const tLookupStart = performance.now();
+      const [verified, storeResults] = await Promise.all([
+        verifyItemNames(visionResult.items, visionResult.store_name),
+        lookupStoreProduct(visionResult.items, visionResult.store_name),
+      ]);
+      console.log(`⏱️ [Pipeline] verify+storeLookup (parallel): ${(performance.now() - tLookupStart).toFixed(0)}ms`);
+
+      // Merge: store lookup > GPT correction > original name; store is_food > GPT is_food
+      const mergedResult = {
         ...visionResult,
         items: visionResult.items.map((item, i) => ({
           ...item,
-          raw_name: verified[i]?.verified_name ?? item.raw_name,
+          raw_name:
+            storeResults[i]?.product_name ??
+            verified[i]?.verified_name ??
+            item.raw_name,
+          _is_food:
+            storeResults[i]?.is_food !== undefined
+              ? storeResults[i].is_food
+              : (verified[i]?.is_food ?? null),
         })),
       };
 
-      await processNormalized(verifiedResult);
+      await processNormalized(mergedResult);
       console.log(`⏱️ [Pipeline] Full pipeline (Vision → save-ready): ${(performance.now() - t0).toFixed(0)}ms`);
     } catch (error) {
       console.error('Error processing file:', error);

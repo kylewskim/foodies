@@ -68,7 +68,16 @@ export interface NormalizeInputTextOutput {
     raw_name: string;
     quantity: string | null;
     item_code: string | null;
+    _is_food?: boolean | null;  // set during pipeline merge, not persisted
   }>;
+}
+
+export interface StoreLookupItem {
+  raw_name: string;
+  product_name: string | null;
+  is_food: boolean | null;
+  category: string | null;
+  source: 'kroger' | 'off' | 'costco' | 'traderjoes' | 'safeway' | 'fallback';
 }
 
 export interface ClassifyItemOutput {

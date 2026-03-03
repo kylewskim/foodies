@@ -9,6 +9,7 @@ export interface VerifyOutput {
   raw_name: string;
   verified_name: string;
   confidence: 'high' | 'low';
+  is_food: boolean | null;
 }
 
 /**
@@ -30,6 +31,7 @@ export async function verifyItemNames(
     raw_name: item.raw_name,
     verified_name: item.raw_name,
     confidence: 'low' as const,
+    is_food: null as null,
   }));
 
   if (!isOpenAIConfigured() || items.length === 0) return fallback;
@@ -48,7 +50,7 @@ export async function verifyItemNames(
       model: FREE_MODEL,
       temperature: 0,
       response_format: { type: 'json_object' },
-      max_tokens: 512,
+      max_tokens: 640,
       messages: [
         {
           role: 'system',
@@ -60,8 +62,11 @@ Rules:
 - If the name is already correct, return it unchanged
 - Keep names clean and readable (no size/unit suffixes)
 - Set confidence "high" when you are certain (item code match or unambiguous name), "low" when guessing
+- Set is_food to true for any food/grocery item (produce, meat, dairy, bakery, beverages, snacks, condiments, frozen food, canned goods)
+- Set is_food to false for non-food items (household cleaners, detergent, paper towels, personal care, shampoo, medicine, pet supplies, electronics, clothing, batteries)
+- Set is_food to null if you are genuinely unsure
 
-Return JSON: {"results":[{"raw_name":"original name","verified_name":"corrected name","confidence":"high"|"low"}]}`,
+Return JSON: {"results":[{"raw_name":"original name","verified_name":"corrected name","confidence":"high"|"low","is_food":true|false|null}]}`,
         },
         {
           role: 'user',
