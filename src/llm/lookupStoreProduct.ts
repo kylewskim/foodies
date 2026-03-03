@@ -15,6 +15,7 @@ export async function lookupStoreProduct(
     product_name: null,
     is_food: null,
     category: null,
+    image_url: null,
     source: 'fallback' as const,
   }));
 

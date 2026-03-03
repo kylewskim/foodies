@@ -121,6 +121,7 @@ export function AddItemPage() {
         predictionSource: lifecycle.predictionSource,
         autoExpireLabel: lifecycle.autoExpireLabel,
         autoExpireStatus: lifecycle.autoExpireStatus,
+        imageUrl: rawItem._store_image_url ?? null, // pre-populate from store lookup
       };
     });
 
@@ -151,7 +152,9 @@ export function AddItemPage() {
     setInputMethod('review');
 
     // Background image fetch — fire-and-forget, never blocks UI
+    // Use store-specific image if available (TJ's, Costco, OFF); fall back to Kroger
     foodItems.forEach(async (item) => {
+      if (item.imageUrl) return; // store image already set, skip Kroger fetch
       const url = await fetchProductImage(item.name);
       if (url) {
         setProcessedItems(prev =>
@@ -205,6 +208,7 @@ export function AddItemPage() {
             storeResults[i]?.is_food !== undefined
               ? storeResults[i].is_food
               : (verified[i]?.is_food ?? null),
+          _store_image_url: storeResults[i]?.image_url ?? null,
         })),
       };
 

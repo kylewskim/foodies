@@ -21,6 +21,7 @@ interface StoreLookupItem {
   product_name: string | null;
   is_food: boolean | null;
   category: string | null;
+  image_url: string | null;
   source: 'kroger' | 'off' | 'costco' | 'traderjoes' | 'safeway' | 'fallback';
 }
 
@@ -79,7 +80,7 @@ function classifyCategory(category: string | null): boolean | null {
 
 async function lookupKroger(item: InputItem): Promise<StoreLookupItem> {
   const nullResult: StoreLookupItem = {
-    raw_name: item.raw_name, product_name: null, is_food: null, category: null, source: 'fallback',
+    raw_name: item.raw_name, product_name: null, is_food: null, category: null, image_url: null, source: 'fallback',
   };
   try {
     const token = await getKrogerToken();
@@ -114,6 +115,7 @@ async function lookupKroger(item: InputItem): Promise<StoreLookupItem> {
       product_name: first.description,
       is_food: classifyCategory(dept),
       category: dept,
+      image_url: null, // Kroger images handled via /api/kroger-image
       source: 'kroger',
     };
   } catch {
@@ -123,7 +125,7 @@ async function lookupKroger(item: InputItem): Promise<StoreLookupItem> {
 
 async function lookupOFF(item: InputItem): Promise<StoreLookupItem> {
   const nullResult: StoreLookupItem = {
-    raw_name: item.raw_name, product_name: null, is_food: null, category: null, source: 'fallback',
+    raw_name: item.raw_name, product_name: null, is_food: null, category: null, image_url: null, source: 'fallback',
   };
   try {
     const params = new URLSearchParams({
@@ -131,7 +133,7 @@ async function lookupOFF(item: InputItem): Promise<StoreLookupItem> {
       action: 'process',
       json: '1',
       page_size: '3',
-      fields: 'product_name,categories_tags,pnns_groups_1',
+      fields: 'product_name,categories_tags,pnns_groups_1,image_front_url',
     });
     const res = await fetch(`https://search.openfoodfacts.org/search?${params}`, {
       signal: AbortSignal.timeout(4000),
@@ -143,6 +145,7 @@ async function lookupOFF(item: InputItem): Promise<StoreLookupItem> {
         product_name?: string;
         pnns_groups_1?: string;
         categories_tags?: string[];
+        image_front_url?: string;
       }>;
     };
 
@@ -159,6 +162,7 @@ async function lookupOFF(item: InputItem): Promise<StoreLookupItem> {
       product_name: first.product_name ?? null,
       is_food: isNonFood ? false : (isFoodTag ? true : null),
       category: pnns ?? null,
+      image_url: first.image_front_url ?? null,
       source: 'off',
     };
   } catch {
@@ -168,7 +172,7 @@ async function lookupOFF(item: InputItem): Promise<StoreLookupItem> {
 
 async function lookupCostco(item: InputItem): Promise<StoreLookupItem> {
   const nullResult: StoreLookupItem = {
-    raw_name: item.raw_name, product_name: null, is_food: null, category: null, source: 'fallback',
+    raw_name: item.raw_name, product_name: null, is_food: null, category: null, image_url: null, source: 'fallback',
   };
   try {
     const keyword = item.item_code ?? item.raw_name;
@@ -186,32 +190,41 @@ async function lookupCostco(item: InputItem): Promise<StoreLookupItem> {
     if (!res.ok) return nullResult;
     const html = await res.text();
 
-    // Try JSON-LD structured data first (most reliable)
+    // Try JSON-LD structured data first (most reliable) — also contains image
     const jsonLdMatch = html.match(/<script[^>]*type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/i);
     if (jsonLdMatch) {
       try {
-        const ld = JSON.parse(jsonLdMatch[1]) as { '@type'?: string; name?: string; category?: string };
+        const ld = JSON.parse(jsonLdMatch[1]) as {
+          '@type'?: string;
+          name?: string;
+          category?: string;
+          image?: string | string[];
+        };
         if (ld['@type'] === 'Product' && ld.name) {
+          const imageUrl = Array.isArray(ld.image) ? ld.image[0] : (ld.image ?? null);
           return {
             raw_name: item.raw_name,
             product_name: ld.name,
             is_food: classifyCategory(ld.category ?? null),
             category: ld.category ?? null,
+            image_url: imageUrl ?? null,
             source: 'costco',
           };
         }
       } catch { /* ignore JSON parse errors */ }
     }
 
-    // Fallback: extract first product title from HTML (best-effort)
+    // Fallback: extract first product title + thumbnail from HTML (best-effort)
     const titleMatch = html.match(/class="[^"]*description[^"]*"[^>]*>([^<]{5,80})<\/(?:a|span|h[1-6]|div)>/i);
-    if (titleMatch) {
-      const productName = titleMatch[1].trim();
+    // Try to extract Costco product image (mobilecontent.costco.com CDN)
+    const imgMatch = html.match(/https:\/\/(?:mobilecontent|richimage)\.costco\.com\/[^"'\s]+\.(?:jpg|jpeg|png|webp)/i);
+    if (titleMatch || imgMatch) {
       return {
         raw_name: item.raw_name,
-        product_name: productName,
+        product_name: titleMatch ? titleMatch[1].trim() : null,
         is_food: null,
         category: null,
+        image_url: imgMatch ? imgMatch[0] : null,
         source: 'costco',
       };
     }
@@ -224,7 +237,7 @@ async function lookupCostco(item: InputItem): Promise<StoreLookupItem> {
 
 async function lookupTraderJoes(item: InputItem): Promise<StoreLookupItem> {
   const nullResult: StoreLookupItem = {
-    raw_name: item.raw_name, product_name: null, is_food: null, category: null, source: 'fallback',
+    raw_name: item.raw_name, product_name: null, is_food: null, category: null, image_url: null, source: 'fallback',
   };
   try {
     const res = await fetch('https://www.traderjoes.com/api/graphql', {
@@ -240,6 +253,7 @@ async function lookupTraderJoes(item: InputItem): Promise<StoreLookupItem> {
             nodes {
               sku
               product_title
+              primary_image
               category_hierarchy
             }
           }
@@ -255,6 +269,7 @@ async function lookupTraderJoes(item: InputItem): Promise<StoreLookupItem> {
         products?: {
           nodes?: Array<{
             product_title?: string;
+            primary_image?: string;
             category_hierarchy?: Array<{ title?: string }>;
           }>;
         };
@@ -265,11 +280,17 @@ async function lookupTraderJoes(item: InputItem): Promise<StoreLookupItem> {
     if (!first?.product_title) return nullResult;
 
     const category = first.category_hierarchy?.[0]?.title ?? null;
+    // TJ's primary_image is a relative path — prefix with their CDN base
+    const rawImg = first.primary_image ?? null;
+    const imageUrl = rawImg
+      ? (rawImg.startsWith('http') ? rawImg : `https://www.traderjoes.com${rawImg}`)
+      : null;
     return {
       raw_name: item.raw_name,
       product_name: first.product_title,
       is_food: classifyCategory(category),
       category,
+      image_url: imageUrl,
       source: 'traderjoes',
     };
   } catch {
@@ -279,7 +300,7 @@ async function lookupTraderJoes(item: InputItem): Promise<StoreLookupItem> {
 
 async function lookupSafeway(item: InputItem): Promise<StoreLookupItem> {
   const nullResult: StoreLookupItem = {
-    raw_name: item.raw_name, product_name: null, is_food: null, category: null, source: 'fallback',
+    raw_name: item.raw_name, product_name: null, is_food: null, category: null, image_url: null, source: 'fallback',
   };
   try {
     const params = new URLSearchParams({
@@ -306,6 +327,7 @@ async function lookupSafeway(item: InputItem): Promise<StoreLookupItem> {
         docs?: Array<{
           name?: string;
           departmentName?: string;
+          imageUrl?: string;
         }>;
       };
     };
@@ -318,6 +340,7 @@ async function lookupSafeway(item: InputItem): Promise<StoreLookupItem> {
       product_name: first.name,
       is_food: classifyCategory(first.departmentName ?? null),
       category: first.departmentName ?? null,
+      image_url: first.imageUrl ?? null,
       source: 'safeway',
     };
   } catch {
@@ -379,6 +402,7 @@ export default async function handler(req: any, res: any) {
       product_name: null,
       is_food: null,
       category: null,
+      image_url: null,
       source: 'fallback',
     }));
     res.json(fallback);

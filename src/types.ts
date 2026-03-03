@@ -68,7 +68,8 @@ export interface NormalizeInputTextOutput {
     raw_name: string;
     quantity: string | null;
     item_code: string | null;
-    _is_food?: boolean | null;  // set during pipeline merge, not persisted
+    _is_food?: boolean | null;       // set during pipeline merge, not persisted
+    _store_image_url?: string | null; // store-specific image URL, not persisted
   }>;
 }
 
@@ -77,6 +78,7 @@ export interface StoreLookupItem {
   product_name: string | null;
   is_food: boolean | null;
   category: string | null;
+  image_url: string | null;
   source: 'kroger' | 'off' | 'costco' | 'traderjoes' | 'safeway' | 'fallback';
 }
 
