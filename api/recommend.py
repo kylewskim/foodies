@@ -19,13 +19,24 @@ from http.server import BaseHTTPRequestHandler
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-RECOMMENDER_URL = os.getenv("RECOMMENDER_URL", "https://reciperec.onrender.com/recommend")
+RECOMMENDER_URL = os.getenv("RECOMMENDER_URL")
 RECOMMENDER_TIMEOUT_SECONDS = float(os.getenv("RECOMMENDER_TIMEOUT_SECONDS", "15"))
+
+
+class UpstreamHTTPError(Exception):
+    def __init__(self, status: int, body: str):
+        self.status = status
+        self.body = body
+        super().__init__(f"Recommender error {status}: {body}")
 
 
 class handler(BaseHTTPRequestHandler):
     def do_POST(self):
         try:
+            if not RECOMMENDER_URL:
+                self._send_error(500, "Server misconfigured: RECOMMENDER_URL is not set")
+                return
+
             content_length = int(self.headers.get("Content-Length", 0))
             body = json.loads(self.rfile.read(content_length)) if content_length > 0 else {}
 
@@ -53,6 +64,11 @@ class handler(BaseHTTPRequestHandler):
 
         except json.JSONDecodeError:
             self._send_error(400, "Invalid JSON in request body")
+        except UpstreamHTTPError as e:
+            # Preserve upstream error semantics (4xx/5xx) instead of collapsing to 500.
+            self._send_error(e.status, f"Upstream recommender returned {e.status}: {e.body}")
+        except URLError as e:
+            self._send_error(502, f"Recommender unreachable: {str(e)}")
         except Exception as e:
             self._send_error(500, f"Internal error: {str(e)}")
 
@@ -60,6 +76,8 @@ class handler(BaseHTTPRequestHandler):
         self._send_json(200, {
             "status": "ok",
             "engine": "RecipeRec v2",
+            "recommender_configured": bool(RECOMMENDER_URL),
+            "timeout_seconds": RECOMMENDER_TIMEOUT_SECONDS,
         })
 
     def _send_json(self, status: int, data: dict):
@@ -95,6 +113,4 @@ class handler(BaseHTTPRequestHandler):
                 return json.loads(resp_body) if resp_body else {}
         except HTTPError as e:
             body = e.read().decode("utf-8") if hasattr(e, "read") else ""
-            raise RuntimeError(f"Recommender error {e.code}: {body}") from e
-        except URLError as e:
-            raise RuntimeError(f"Recommender unreachable: {e}") from e
+            raise UpstreamHTTPError(e.code, body) from e
