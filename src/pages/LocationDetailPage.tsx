@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { getItemsByUser, updateItem, deleteItem } from '../firebase/saveReceipt';
+import { getItemsByUser, updateItem, deleteItem, markItemAsTrashed, markItemAsUsed } from '../firebase/saveReceipt';
 import type { Item, StorageLocation } from '../types';
 import { getDaysUntilExpiration } from '../utils/dateHelpers';
 
@@ -33,6 +33,16 @@ export function LocationDetailPage() {
   const [showMoveToModal, setShowMoveToModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
+  const [swipedItemId, setSwipedItemId] = useState<string | null>(null);
+  const [touchStart, setTouchStart] = useState(0);
+  const [touchCurrent, setTouchCurrent] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const [touchedItemId, setTouchedItemId] = useState<string | null>(null);
+  const [isSwipeActive, setIsSwipeActive] = useState(false);
+
+  const SWIPE_THRESHOLD = 15;
+  const SWIPE_OPEN_THRESHOLD = 60;
+  const ACTION_WIDTH = 176;
 
   useEffect(() => {
     if (user) loadItems();
@@ -99,6 +109,67 @@ export function LocationDetailPage() {
     setSelectedIds(new Set());
     setIsBulkMode(false);
     await loadItems();
+  };
+
+  const handleTouchStart = (e: React.TouchEvent, itemId: string) => {
+    if (isBulkMode) return;
+    setTouchStart(e.touches[0].clientX);
+    setTouchCurrent(e.touches[0].clientX);
+    setTouchedItemId(itemId);
+    setIsDragging(true);
+    setIsSwipeActive(false);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isDragging || isBulkMode) return;
+
+    const currentX = e.touches[0].clientX;
+    setTouchCurrent(currentX);
+
+    const moveDistance = Math.abs(touchStart - currentX);
+    if (moveDistance > SWIPE_THRESHOLD && !isSwipeActive) {
+      setIsSwipeActive(true);
+      setSwipedItemId(touchedItemId);
+    }
+  };
+
+  const handleTouchEnd = (itemId: string) => {
+    if (isBulkMode) return;
+
+    const swipeDistance = touchStart - touchCurrent;
+    if (isSwipeActive) {
+      if (swipeDistance > SWIPE_OPEN_THRESHOLD) {
+        setSwipedItemId(itemId);
+      } else {
+        setSwipedItemId(null);
+      }
+    }
+
+    setIsDragging(false);
+    setTouchStart(0);
+    setTouchCurrent(0);
+    setTouchedItemId(null);
+    setIsSwipeActive(false);
+  };
+
+  const handleTrash = async (itemId: string) => {
+    try {
+      await markItemAsTrashed(itemId);
+      setSwipedItemId(null);
+      await loadItems();
+    } catch (error) {
+      console.error('Error trashing item:', error);
+    }
+  };
+
+  const handleUsed = async (itemId: string) => {
+    try {
+      await markItemAsUsed(itemId);
+      setSwipedItemId(null);
+      await loadItems();
+    } catch (error) {
+      console.error('Error marking item as used:', error);
+    }
   };
 
   if (loading) {
@@ -288,26 +359,31 @@ export function LocationDetailPage() {
           displayedItems.map((item) => {
             const badge = getExpiryBadge(item);
             const isSelected = selectedIds.has(item.itemId);
+            const isSwipedOpen = swipedItemId === item.itemId;
+            const isCurrentlyDragging = isDragging && touchedItemId === item.itemId && isSwipeActive;
+            const swipeOffset = isCurrentlyDragging
+              ? Math.max(-ACTION_WIDTH, Math.min(0, touchCurrent - touchStart))
+              : isSwipedOpen ? -ACTION_WIDTH : 0;
+            const purchaseLabel = (() => {
+              const diffDays = Math.floor((Date.now() - new Date(item.purchaseDate).getTime()) / 86400000);
+              if (diffDays === 0) return 'Bought today';
+              if (diffDays === 1) return 'Bought 1 day ago';
+              return `Bought ${diffDays} days ago`;
+            })();
 
-            return (
-              <div
-                key={item.itemId}
-                onClick={() => {
-                  if (isBulkMode) {
-                    toggleSelect(item.itemId);
-                  } else {
-                    navigate(`/item/${item.itemId}`);
-                  }
-                }}
-                style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  paddingTop: '16px', paddingBottom: '16px',
-                  borderBottom: '1px solid rgba(51,51,51,0.1)',
-                  cursor: 'pointer',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  {isBulkMode && (
+            if (isBulkMode) {
+              return (
+                <div
+                  key={item.itemId}
+                  onClick={() => toggleSelect(item.itemId)}
+                  style={{
+                    display: 'flex', alignItems: 'center',
+                    paddingTop: '16px', paddingBottom: '16px',
+                    borderBottom: '1px solid rgba(51,51,51,0.1)',
+                    cursor: 'pointer', minWidth: 0,
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, minWidth: 0 }}>
                     <div style={{
                       width: '24px', height: '24px', borderRadius: '50%', flexShrink: 0,
                       border: `1.5px solid ${isSelected ? '#073d33' : '#b8b8b3'}`,
@@ -320,43 +396,191 @@ export function LocationDetailPage() {
                         </svg>
                       )}
                     </div>
+                    <ProductImage imageUrl={item.imageUrl} name={item.name} category={item.category} size={60} />
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1, minWidth: 0 }}>
+                      <span style={{
+                        fontFamily: '"Poppins", sans-serif', fontSize: '18px',
+                        color: '#11130b', textTransform: 'capitalize',
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      }}>
+                        {item.name}
+                      </span>
+                      <span style={{
+                        fontFamily: '"Poppins", sans-serif', fontSize: '12px',
+                        color: 'rgba(17,19,11,0.5)',
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      }}>
+                        {purchaseLabel}
+                      </span>
+                    </div>
+                  </div>
+                  {badge && (
+                    <div style={{
+                      backgroundColor: badge.bgColor, borderRadius: '8px',
+                      padding: '0 8px', height: '20px',
+                      display: 'flex', alignItems: 'center', flexShrink: 0, marginLeft: '8px',
+                    }}>
+                      <span style={{ fontFamily: '"Poppins", sans-serif', fontSize: '10px', color: badge.textColor }}>
+                        {badge.text}
+                      </span>
+                    </div>
                   )}
-                  {/* Image */}
-                  <ProductImage imageUrl={item.imageUrl} name={item.name} category={item.category} size={60} />
-                  {/* Info */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0 }}>
-                    <span style={{
-                      fontFamily: '"Poppins", sans-serif', fontSize: '18px',
-                      color: '#11130b', textTransform: 'capitalize',
-                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                </div>
+              );
+            }
+
+            return (
+              <div
+                key={item.itemId}
+                style={{
+                  position: 'relative',
+                  width: '100%',
+                  height: '92px',
+                  overflow: 'hidden',
+                }}
+              >
+                <div style={{
+                  position: 'absolute',
+                  right: 0,
+                  top: 0,
+                  height: '92px',
+                  display: 'flex',
+                }}>
+                  <div
+                    onClick={() => handleTrash(item.itemId)}
+                    style={{
+                      backgroundColor: '#a9a8a4',
+                      width: '88px',
+                      height: '92px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <p style={{
+                      fontSize: '12px',
+                      fontWeight: '500',
+                      fontFamily: '"Poppins", sans-serif',
+                      color: 'white',
+                      margin: 0,
+                      textTransform: 'capitalize',
                     }}>
-                      {item.name}
-                    </span>
-                    <span style={{
-                      fontFamily: '"Poppins", sans-serif', fontSize: '12px',
-                      color: 'rgba(17,19,11,0.5)',
+                      Trash
+                    </p>
+                  </div>
+                  <div
+                    onClick={() => handleUsed(item.itemId)}
+                    style={{
+                      backgroundColor: '#d8654a',
+                      width: '88px',
+                      height: '92px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <p style={{
+                      fontSize: '12px',
+                      fontWeight: '500',
+                      fontFamily: '"Poppins", sans-serif',
+                      color: 'white',
+                      margin: 0,
+                      textTransform: 'capitalize',
                     }}>
-                      {(() => {
-                        const diffDays = Math.floor((Date.now() - new Date(item.purchaseDate).getTime()) / 86400000);
-                        if (diffDays === 0) return 'Bought today';
-                        if (diffDays === 1) return 'Bought 1 day ago';
-                        return `Bought ${diffDays} days ago`;
-                      })()}
-                    </span>
+                      Used
+                    </p>
                   </div>
                 </div>
-                {/* Expiry badge — only for expired / today / ≤3 days */}
-                {badge && (
-                  <div style={{
-                    backgroundColor: badge.bgColor, borderRadius: '8px',
-                    padding: '0 8px', height: '20px',
-                    display: 'flex', alignItems: 'center', flexShrink: 0, marginLeft: '8px',
+
+                <div
+                  onTouchStart={(e) => handleTouchStart(e, item.itemId)}
+                  onTouchMove={handleTouchMove}
+                  onTouchEnd={() => handleTouchEnd(item.itemId)}
+                  onClick={(e) => {
+                    if (isSwipeActive) {
+                      e.preventDefault();
+                      return;
+                    }
+                    if (isSwipedOpen) {
+                      e.preventDefault();
+                      setSwipedItemId(null);
+                    } else {
+                      navigate(`/item/${item.itemId}`);
+                    }
+                  }}
+                  style={{
+                    position: 'absolute',
+                    left: 0,
+                    top: 0,
+                    width: '100%',
+                    height: '92px',
+                    backgroundColor: '#f7f6ef',
+                    borderBottom: '1px solid rgba(51,51,51,0.1)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    paddingTop: '16px',
+                    paddingBottom: '16px',
+                    paddingLeft: '0',
+                    paddingRight: '0',
+                    cursor: 'pointer',
+                    transform: `translateX(${swipeOffset}px)`,
+                    transition: isCurrentlyDragging ? 'none' : 'transform 0.3s ease',
+                    boxSizing: 'border-box',
                   }}>
-                    <span style={{ fontFamily: '"Poppins", sans-serif', fontSize: '10px', color: badge.textColor }}>
-                      {badge.text}
-                    </span>
+                  <ProductImage imageUrl={item.imageUrl} name={item.name} category={item.category} size={60} />
+                  <div style={{ display: 'flex', alignItems: 'center', flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1, minWidth: 0 }}>
+                      <span style={{
+                        fontFamily: '"Poppins", sans-serif',
+                        fontSize: '18px',
+                        color: '#11130b',
+                        textTransform: 'capitalize',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}>
+                        {item.name}
+                      </span>
+                      <span style={{
+                        fontFamily: '"Poppins", sans-serif',
+                        fontSize: '12px',
+                        color: 'rgba(17,19,11,0.5)',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}>
+                        {purchaseLabel}
+                      </span>
+                    </div>
+                    {badge && (
+                      <div style={{
+                        backgroundColor: badge.bgColor,
+                        borderRadius: '8px',
+                        padding: '0 8px',
+                        height: '20px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        flexShrink: 0,
+                        marginLeft: '8px',
+                        maxWidth: '44%',
+                      }}>
+                        <span style={{
+                          fontFamily: '"Poppins", sans-serif',
+                          fontSize: '10px',
+                          color: badge.textColor,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}>
+                          {badge.text}
+                        </span>
+                      </div>
+                    )}
                   </div>
-                )}
+                </div>
               </div>
             );
           })
