@@ -2,6 +2,7 @@
 /// <reference types="vite-plugin-pwa/client" />
 
 interface ImportMetaEnv {
+  readonly VITE_RECOMMEND_API_URL?: string;
   readonly VITE_GROQ_API_KEY: string;
   readonly VITE_GOOGLE_VISION_API_KEY: string;
   readonly VITE_FIREBASE_API_KEY: string;

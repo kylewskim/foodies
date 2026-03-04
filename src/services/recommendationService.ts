@@ -14,6 +14,8 @@
 import type { Item, StoredRecipe, UserPreferences } from '../types';
 import { getUserPreferences } from '../firebase/saveReceipt';
 
+const REMOTE_RECOMMEND_FALLBACK_URL = 'https://foodies-dusky-pi.vercel.app/api/recommend';
+
 // ─── Types matching RecipeRec engine output ──────────────────────────────────
 
 export interface RecommendationResponse {
@@ -444,11 +446,29 @@ async function callRecommendAPI(
 
   console.log(`📤 RecipeRec API request (${strategy}, provider=on):`, JSON.stringify(payload, null, 2));
 
-  const response = await fetch('/api/recommend', {
+  const configuredEndpoint = (import.meta.env.VITE_RECOMMEND_API_URL || '').trim();
+  const primaryEndpoint = configuredEndpoint || '/api/recommend';
+
+  let response = await fetch(primaryEndpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
+
+  // In local Vite dev, /api/recommend is usually not hosted.
+  // Retry once against deployed API to keep development unblocked.
+  if (
+    response.status === 404 &&
+    import.meta.env.DEV &&
+    primaryEndpoint.startsWith('/')
+  ) {
+    console.warn(`⚠️ ${primaryEndpoint} returned 404 in dev. Retrying against deployed API endpoint.`);
+    response = await fetch(REMOTE_RECOMMEND_FALLBACK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+  }
 
   if (!response.ok) {
     const text = await response.text();
@@ -549,11 +569,27 @@ export async function getRecipesForItem(item: Item): Promise<StoredRecipe[]> {
       provider_enabled: true,
     };
 
-    const response = await fetch('/api/recommend', {
+    const configuredEndpoint = (import.meta.env.VITE_RECOMMEND_API_URL || '').trim();
+    const primaryEndpoint = configuredEndpoint || '/api/recommend';
+
+    let response = await fetch(primaryEndpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
+
+    if (
+      response.status === 404 &&
+      import.meta.env.DEV &&
+      primaryEndpoint.startsWith('/')
+    ) {
+      console.warn(`⚠️ ${primaryEndpoint} returned 404 in dev. Retrying item recipes against deployed API endpoint.`);
+      response = await fetch(REMOTE_RECOMMEND_FALLBACK_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+    }
 
     if (!response.ok) return [];
 
