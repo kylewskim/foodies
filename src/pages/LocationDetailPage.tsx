@@ -345,11 +345,11 @@ export function LocationDetailPage() {
       )}
 
       {/* Items list */}
-      <div style={{ flex: 1, overflowY: 'auto', paddingBottom: isBulkMode ? '80px' : '20px', padding: '0 20px' }}>
+      <div style={{ flex: 1, overflowY: 'auto', paddingBottom: isBulkMode ? '80px' : '20px', padding: 0 }}>
         {displayedItems.length === 0 ? (
           <div style={{
             display: 'flex', flexDirection: 'column', alignItems: 'center',
-            justifyContent: 'center', padding: '60px 0', gap: '8px',
+            justifyContent: 'center', padding: '60px 20px', gap: '8px',
           }}>
             <p style={{ fontFamily: '"Poppins", sans-serif', fontSize: '18px', color: '#11130b', margin: 0 }}>
               {isSearchMode && searchQuery ? 'No results found' : `${label} is empty`}
@@ -379,6 +379,7 @@ export function LocationDetailPage() {
                   style={{
                     display: 'flex', alignItems: 'center',
                     paddingTop: '16px', paddingBottom: '16px',
+                    paddingLeft: '20px', paddingRight: '20px',
                     borderBottom: '1px solid rgba(51,51,51,0.1)',
                     cursor: 'pointer', minWidth: 0,
                   }}
@@ -523,8 +524,8 @@ export function LocationDetailPage() {
                     gap: '12px',
                     paddingTop: '16px',
                     paddingBottom: '16px',
-                    paddingLeft: '0',
-                    paddingRight: '0',
+                    paddingLeft: '20px',
+                    paddingRight: '20px',
                     cursor: 'pointer',
                     transform: `translateX(${swipeOffset}px)`,
                     transition: isCurrentlyDragging ? 'none' : 'transform 0.3s ease',

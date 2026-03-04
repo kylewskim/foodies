@@ -454,10 +454,10 @@ export function ScanResultPage({
                         cursor: 'pointer',
                       }}
                     >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, minWidth: 0 }}>
                         <ProductImage imageUrl={item.imageUrl} name={item.name} category={item.category} size={60} />
 
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1, minWidth: 0 }}>
                           <p
                             style={{
                               fontFamily: '"Poppins", sans-serif',
@@ -465,6 +465,9 @@ export function ScanResultPage({
                               color: '#000',
                               margin: 0,
                               textTransform: 'capitalize',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
                             }}
                           >
                             {item.name}
@@ -475,6 +478,9 @@ export function ScanResultPage({
                               fontSize: '12px',
                               color: 'rgba(0,0,0,0.4)',
                               margin: 0,
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
                             }}
                           >
                             In {location} | {getExpirationText(item)}

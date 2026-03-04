@@ -278,7 +278,7 @@ export function HomePage() {
             </div>
 
             {/* Item list */}
-            <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', marginLeft: '-20px', marginRight: '-20px' }}>
               {useTheseFirst.map((item) => {
                 const badge = getExpiryBadge(item);
                 const isSwipedOpen = swipedItemId === item.itemId;
@@ -378,8 +378,8 @@ export function HomePage() {
                         gap: '12px',
                         paddingTop: '16px',
                         paddingBottom: '16px',
-                        paddingLeft: '0',
-                        paddingRight: '0',
+                        paddingLeft: '20px',
+                        paddingRight: '20px',
                         cursor: 'pointer',
                         transform: `translateX(${swipeOffset}px)`,
                         transition: isCurrentlyDragging ? 'none' : 'transform 0.3s ease',

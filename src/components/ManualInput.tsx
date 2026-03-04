@@ -21,7 +21,7 @@ export function ManualInput({ onTextSubmitted }: ManualInputProps) {
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder="Enter grocery items (one per line)&#10;Example:&#10;2 Apples&#10;Milk&#10;3x Yogurt&#10;Chicken Breast"
+          placeholder="Enter grocery items (line break or comma separated)&#10;Example:&#10;2 Apples, Milk, 3x Yogurt&#10;Chicken Breast"
           rows={10}
           style={{
             width: '100%',

@@ -1,6 +1,10 @@
 import type { NormalizeInputTextOutput } from '../types';
 import { openai, isOpenAIConfigured, disableOpenAI, FREE_MODEL } from './openaiClient';
 
+interface NormalizeInputTextOptions {
+  preferAI?: boolean;
+}
+
 /**
  * Normalize raw OCR text or manual user input.
  *
@@ -30,9 +34,23 @@ function splitCommaSeparatedNumberedItems(text: string): string {
     .join('\n');
 }
 
-export async function normalizeInputText(rawText: string): Promise<NormalizeInputTextOutput> {
+export async function normalizeInputText(
+  rawText: string,
+  options: NormalizeInputTextOptions = {},
+): Promise<NormalizeInputTextOutput> {
   // Pre-process: split "1 banana, 2 orange, 3 porkbelly" into separate lines
   const preprocessed = splitCommaSeparatedNumberedItems(rawText);
+
+  // Manual input mode: prefer OpenAI parsing first for better split/cleanup accuracy.
+  if (options.preferAI && isOpenAIConfigured()) {
+    console.log('🤖 Manual mode: using OpenAI-first normalization.');
+    const aiFirst = await normalizeWithAI(preprocessed);
+    if (aiFirst.items.length > 0) {
+      return aiFirst;
+    }
+    console.log('⚠️ OpenAI-first returned 0 items — falling back to pattern matching.');
+    return normalizeWithPatternMatching(preprocessed);
+  }
 
   // Step 1: Try enhanced pattern matching (instant)
   const patternResult = normalizeWithPatternMatching(preprocessed);
