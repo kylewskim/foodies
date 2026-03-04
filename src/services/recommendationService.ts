@@ -90,6 +90,19 @@ const ALIASES: Record<string, string> = {
   'extra virgin olive oil': 'olive oil',
   'vegetable oil': 'oil',
   'canola oil': 'oil',
+  'greek yogurt': 'yogurt',
+  yogurt: 'yogurt',
+  mozzarella: 'mozzarella',
+  wate: 'water',
+  purified: 'water',
+  'purified wate': 'water',
+  'purified water': 'water',
+  salmons: 'salmon',
+  porkbelly: 'pork belly',
+  'coca-cola': 'coca cola',
+  'coca cola': 'coca cola',
+  'pop-tarts': 'pop tarts',
+  'pop-tarts toaster pastries': 'pop tarts',
   eggs: 'egg',
   tomatoes: 'tomato',
   onions: 'onion',
@@ -118,6 +131,13 @@ const DROP_TOKENS = new Set([
   'piece',
   'pieces',
   'each',
+  'count',
+  'ct',
+  'bunch',
+  'now',
+  'ft',
+  'app',
+  'series',
 ]);
 
 const QUALIFIER_TOKENS = new Set([
@@ -152,6 +172,20 @@ const QUALIFIER_TOKENS = new Set([
   'unsweetened',
   'salted',
   'unsalted',
+]);
+
+const WEAK_TAIL_TOKENS = new Set([
+  'item',
+  'items',
+  'grocery',
+  'grocer',
+  'natural',
+  'balanced',
+  'protein',
+  'whole',
+  'less',
+  'sugar',
+  'zero',
 ]);
 
 /**
@@ -218,8 +252,13 @@ function pickPrimaryIngredientName(tokens: string[], fallbackName: string): stri
   const phrase = meaningful.find((token) => token.includes(' '));
   if (phrase) return phrase;
 
-  // For noisy names (e.g. "korean banana"), the tail token is usually the ingredient.
-  return meaningful[meaningful.length - 1];
+  // For noisy names, select the strongest token, not just the last token.
+  const reversed = [...meaningful].reverse();
+  const strong = reversed.find((token) => token.length >= 3 && !WEAK_TAIL_TOKENS.has(token));
+  const selected = strong ?? meaningful[meaningful.length - 1];
+  if (ALIASES[selected]) return ALIASES[selected];
+  if (selected.endsWith('s') && selected.length > 4) return selected.slice(0, -1);
+  return selected;
 }
 
 function normalizeDate(dateLike?: string | null): string {
