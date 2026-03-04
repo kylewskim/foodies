@@ -18,6 +18,8 @@ import { getUserPreferences } from '../firebase/saveReceipt';
 
 export interface RecommendationResponse {
   mode: 'empty_fridge' | 'low_stock' | 'abundant';
+  source?: string;
+  source_note?: string;
   inventory_summary: {
     unique_items_count: number;
     expiring_soon_count: number;
@@ -596,40 +598,34 @@ export async function getRecommendations(
   const canonicalResponse = await callRecommendAPI(items, restrictions, 8, 'canonical', true);
   let response = canonicalResponse;
 
-  // Safety fallback: if normalized pass is too low, run additional strategies
-  // and choose the result with the highest recommendation count.
+  // Safety fallback: if normalized pass is too low, retry with raw names only.
+  // Do NOT use provider_disabled/local fallback results.
   if ((canonicalResponse.recommendations?.length ?? 0) <= 2 && items.length >= 6) {
-    console.log('🔁 Low recommendation count from normalized names. Running fallback strategies...');
+    console.log('🔁 Low recommendation count from normalized names. Retrying once with raw inventory names (provider only)...');
+    try {
+      const rawProviderResponse = await callRecommendAPI(items, restrictions, 16, 'raw', true);
+      const canonicalIsProvider = canonicalResponse.source !== 'local_fallback';
+      const rawIsProvider = rawProviderResponse.source !== 'local_fallback';
 
-    const attempts = [
-      { label: 'raw/provider-on', promise: callRecommendAPI(items, restrictions, 16, 'raw', true) },
-      { label: 'canonical/provider-off', promise: callRecommendAPI(items, restrictions, 16, 'canonical', false) },
-      { label: 'raw/provider-off', promise: callRecommendAPI(items, restrictions, 16, 'raw', false) },
-    ];
+      const canonicalCount = canonicalIsProvider ? (canonicalResponse.recommendations?.length ?? 0) : 0;
+      const rawCount = rawIsProvider ? (rawProviderResponse.recommendations?.length ?? 0) : 0;
 
-    const settled = await Promise.allSettled(attempts.map((a) => a.promise));
-    const candidates: Array<{ label: string; result: RecommendationResponse }> = [
-      { label: 'canonical/provider-on', result: canonicalResponse },
-    ];
-
-    settled.forEach((entry, idx) => {
-      const label = attempts[idx].label;
-      if (entry.status === 'fulfilled') {
-        candidates.push({ label, result: entry.value });
-        console.log(`✅ Fallback ${label}: ${entry.value.recommendations?.length ?? 0} recommendations`);
-      } else {
-        console.warn(`⚠️ Fallback ${label} failed:`, entry.reason);
+      if (rawCount > canonicalCount) {
+        response = rawProviderResponse;
       }
-    });
+      console.log(`🏁 Selected provider response: canonical=${canonicalCount}, raw=${rawCount}`);
+    } catch (err) {
+      console.warn('Raw-name provider retry failed; keeping canonical provider response:', err);
+    }
+  }
 
-    const best = candidates.reduce((acc, cur) => {
-      const accCount = acc.result.recommendations?.length ?? 0;
-      const curCount = cur.result.recommendations?.length ?? 0;
-      return curCount > accCount ? cur : acc;
-    });
-
-    response = best.result;
-    console.log(`🏆 Selected recommendation strategy: ${best.label} (${best.result.recommendations?.length ?? 0} recipes)`);
+  // Hard guard: never show local fallback recipes in UI.
+  if (response.source === 'local_fallback') {
+    console.warn('🚫 Ignoring local_fallback recommendation response by policy.');
+    response = {
+      ...response,
+      recommendations: [],
+    };
   }
 
   const recipes = response.recommendations.map(apiRecipeToStoredRecipe);
