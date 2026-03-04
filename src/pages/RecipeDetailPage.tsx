@@ -144,7 +144,23 @@ export function RecipeDetailPage() {
 
   if (!recipe) return null;
 
-  const validInstructions = recipe.instructions?.filter(i => !i.startsWith('Full recipe:')) ?? [];
+  const validInstructions = (recipe.instructions ?? [])
+    .map((item) => (item || '').trim())
+    .filter((item) => item.length > 0 && !item.startsWith('Full recipe:'));
+
+  useEffect(() => {
+    if (!recipe) return;
+    console.log('🍽️ Recipe detail state:', {
+      name: recipe.name,
+      source: recipe.source,
+      prepTime: recipe.prepTime,
+      calories: recipe.calories,
+      difficulty: recipe.difficulty,
+      instructionsCount: recipe.instructions?.length ?? 0,
+      validInstructionsCount: validInstructions.length,
+      image: recipe.image,
+    });
+  }, [recipe, validInstructions.length]);
 
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#f7f6ef', position: 'relative' }}>

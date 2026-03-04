@@ -485,7 +485,7 @@ function apiRecipeToStoredRecipe(rec: APIRecipe): StoredRecipe {
   const calories = normalizeCalories(rec);
   const difficultyRaw = firstString(record, ['difficulty', 'level', 'skill_level']);
 
-  return {
+  const mappedRecipe: StoredRecipe = {
     id: rec.recipe_id,
     name: rec.title || 'Untitled Recipe',
     image: image || undefined,
@@ -504,6 +504,17 @@ function apiRecipeToStoredRecipe(rec: APIRecipe): StoredRecipe {
     coverage: rec.coverage || undefined,
     score: rec.score || undefined,
   };
+  console.log('🧩 Mapped recipe:', {
+    id: mappedRecipe.id,
+    name: mappedRecipe.name,
+    image: mappedRecipe.image,
+    prepTime: mappedRecipe.prepTime,
+    calories: mappedRecipe.calories,
+    difficulty: mappedRecipe.difficulty,
+    instructionsCount: mappedRecipe.instructions.length,
+    source: mappedRecipe.source,
+  });
+  return mappedRecipe;
 }
 
 // ─── Item-specific recipe fetch ──────────────────────────────────────────────

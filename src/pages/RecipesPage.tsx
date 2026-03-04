@@ -5,7 +5,6 @@ import { getItemsByUser } from '../firebase/saveReceipt';
 import type { Item, StoredRecipe } from '../types';
 import { BottomNavigation } from '../components/BottomNavigation';
 import { RecipeCardSkeleton } from '../components/RecipeCardSkeleton';
-import { fetchRecipeImages } from '../utils/fetchRecipeImage';
 import { getRecommendations } from '../services/recommendationService';
 import {
   addFavoriteRecipe,
@@ -54,8 +53,6 @@ export function RecipesPage() {
 
       setIsRefreshing(true);
       const result = await getRecommendations(user.uid, items, false);
-      const recipeNames = result.recipes.map(r => r.name);
-      const images = await fetchRecipeImages(recipeNames);
 
       const recipesWithUI: Recipe[] = result.recipes.map(stored => {
         const matchedUserItems = items.filter(item =>
@@ -69,7 +66,7 @@ export function RecipesPage() {
           const expB = new Date(b.manualExpirationDate || b.autoExpirationDate);
           return expA.getTime() - expB.getTime();
         });
-        return { ...stored, image: stored.image || images.get(stored.name), userItems: matchedUserItems };
+        return { ...stored, image: stored.image, userItems: matchedUserItems };
       });
 
       setRecipes(recipesWithUI);
