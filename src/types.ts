@@ -146,7 +146,7 @@ export interface StoredRecipe {
   ingredients: string[];
   matchedIngredients: string[];
   missingIngredients: string[];
-  prepTime: string;
+  prepTime?: string;
   calories?: number;
   difficulty?: 'Easy' | 'Medium' | 'Hard';
   instructions: string[];

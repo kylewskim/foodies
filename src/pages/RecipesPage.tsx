@@ -111,9 +111,10 @@ export function RecipesPage() {
     }
   };
 
-  const parseMinutes = (prepTime: string): number => {
+  const parseMinutes = (prepTime?: string): number => {
+    if (!prepTime) return Number.POSITIVE_INFINITY;
     const match = prepTime.match(/(\d+)/);
-    return match ? parseInt(match[1]) : 60;
+    return match ? parseInt(match[1]) : Number.POSITIVE_INFINITY;
   };
 
   const filteredRecipes = recipes.filter(recipe => {
@@ -353,14 +354,18 @@ export function RecipesPage() {
 
                   {/* Clock + uses */}
                   <div style={{ display: 'flex', gap: '4px', alignItems: 'center', opacity: 0.6 }}>
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                      <circle cx="8" cy="8" r="6.5" stroke="#333" strokeWidth="1.2" />
-                      <path d="M8 4.5V8L10.5 10" stroke="#333" strokeWidth="1.2" strokeLinecap="round" />
-                    </svg>
-                    <span style={{ fontFamily: '"Poppins", sans-serif', fontSize: '12px', color: '#333' }}>
-                      {recipe.prepTime}
-                    </span>
-                    <span style={{ fontFamily: '"Poppins", sans-serif', fontSize: '12px', color: '#333' }}>·</span>
+                    {recipe.prepTime && (
+                      <>
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                          <circle cx="8" cy="8" r="6.5" stroke="#333" strokeWidth="1.2" />
+                          <path d="M8 4.5V8L10.5 10" stroke="#333" strokeWidth="1.2" strokeLinecap="round" />
+                        </svg>
+                        <span style={{ fontFamily: '"Poppins", sans-serif', fontSize: '12px', color: '#333' }}>
+                          {recipe.prepTime}
+                        </span>
+                        <span style={{ fontFamily: '"Poppins", sans-serif', fontSize: '12px', color: '#333' }}>·</span>
+                      </>
+                    )}
                     <span style={{ fontFamily: '"Poppins", sans-serif', fontSize: '12px', color: '#333' }}>
                       Uses <strong>{recipe.matchedIngredients.length}</strong> of your items
                     </span>

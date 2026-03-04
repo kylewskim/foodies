@@ -453,30 +453,38 @@ export function ItemDetailPage() {
                     </div>
 
                     {/* Time and Tags */}
-                    <div style={{
-                      display: 'flex',
-                      gap: '4px',
-                      alignItems: 'center',
-                      opacity: 0.6,
-                    }}>
-                      <p style={{
-                        fontSize: '12px',
-                        fontFamily: '"Poppins", sans-serif',
-                        color: '#333',
-                        margin: 0,
+                    {(recipe.prepTime || recipe.difficulty) && (
+                      <div style={{
+                        display: 'flex',
+                        gap: '4px',
+                        alignItems: 'center',
+                        opacity: 0.6,
                       }}>
-                        {recipe.prepTime}
-                      </p>
-                      <span style={{ fontSize: '12px', color: '#333' }}>·</span>
-                      <p style={{
-                        fontSize: '12px',
-                        fontFamily: '"Poppins", sans-serif',
-                        color: '#333',
-                        margin: 0,
-                      }}>
-                        {recipe.difficulty}
-                      </p>
-                    </div>
+                        {recipe.prepTime && (
+                          <p style={{
+                            fontSize: '12px',
+                            fontFamily: '"Poppins", sans-serif',
+                            color: '#333',
+                            margin: 0,
+                          }}>
+                            {recipe.prepTime}
+                          </p>
+                        )}
+                        {recipe.prepTime && recipe.difficulty && (
+                          <span style={{ fontSize: '12px', color: '#333' }}>·</span>
+                        )}
+                        {recipe.difficulty && (
+                          <p style={{
+                            fontSize: '12px',
+                            fontFamily: '"Poppins", sans-serif',
+                            color: '#333',
+                            margin: 0,
+                          }}>
+                            {recipe.difficulty}
+                          </p>
+                        )}
+                      </div>
+                    )}
 
                     {/* Matched Ingredients */}
                     <p style={{

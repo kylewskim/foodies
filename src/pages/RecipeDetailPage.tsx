@@ -59,7 +59,11 @@ function parseIngredient(ingredient: string): { name: string; quantity: string }
 }
 
 function sourceLabel(source?: string, url?: string | null): string {
-  if (source && source.trim()) return source.trim();
+  if (source && source.trim()) {
+    const normalized = source.trim();
+    if (normalized.toLowerCase() === 'fatsecret') return 'FatSecret';
+    return normalized;
+  }
   if (url) {
     try {
       return new URL(url).hostname.replace(/^www\./, '');
@@ -233,46 +237,49 @@ export function RecipeDetailPage() {
             color: '#11130b',
             opacity: 0.4,
             lineHeight: '1.35',
+            letterSpacing: '-0.4316px',
           }}>
-            Source: {sourceLabel(recipe.source, recipe.url)}
+            By {sourceLabel(recipe.source, recipe.url)}
           </p>
 
           {/* Stats row */}
-          <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
-            {recipe.prepTime && (
-              <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-                <span style={{ fontFamily: '"Poppins", sans-serif', fontSize: '12px', color: '#333' }}>
-                  {recipe.prepTime}
-                </span>
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                  <circle cx="8" cy="8" r="6.5" stroke="#333" strokeWidth="1.2" />
-                  <path d="M8 4.5V8L10.5 10" stroke="#333" strokeWidth="1.2" strokeLinecap="round" />
-                </svg>
-              </div>
-            )}
-            {recipe.calories != null && (
-              <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-                <span style={{ fontFamily: '"Poppins", sans-serif', fontSize: '12px', color: '#333' }}>
-                  {recipe.calories} Cal
-                </span>
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                  <path d="M8 2C8 2 5 6 5 9a3 3 0 0 0 6 0c0-3-3-7-3-7z"
-                    stroke="#333" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
-            )}
-            {recipe.difficulty && (
-              <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-                <span style={{ fontFamily: '"Poppins", sans-serif', fontSize: '12px', color: '#333' }}>
-                  {recipe.difficulty}
-                </span>
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                  <path d="M8 2l1.5 3.5 3.5.5-2.5 2.5.5 3.5L8 10.5 5 12l.5-3.5L3 6l3.5-.5L8 2z"
-                    stroke="#333" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </div>
-            )}
-          </div>
+          {(recipe.prepTime || recipe.calories != null || recipe.difficulty) && (
+            <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
+              {recipe.prepTime && (
+                <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                  <span style={{ fontFamily: '"Sora", sans-serif', fontSize: '12px', color: '#333' }}>
+                    {recipe.prepTime}
+                  </span>
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                    <circle cx="8" cy="8" r="6.5" stroke="#333" strokeWidth="1.2" />
+                    <path d="M8 4.5V8L10.5 10" stroke="#333" strokeWidth="1.2" strokeLinecap="round" />
+                  </svg>
+                </div>
+              )}
+              {recipe.calories != null && (
+                <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                  <span style={{ fontFamily: '"Sora", sans-serif', fontSize: '12px', color: '#333' }}>
+                    {recipe.calories} Cal
+                  </span>
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                    <path d="M8 2C8 2 5 6 5 9a3 3 0 0 0 6 0c0-3-3-7-3-7z"
+                      stroke="#333" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </div>
+              )}
+              {recipe.difficulty && (
+                <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                  <span style={{ fontFamily: '"Sora", sans-serif', fontSize: '12px', color: '#333' }}>
+                    {recipe.difficulty}
+                  </span>
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                    <path d="M8 2l1.5 3.5 3.5.5-2.5 2.5.5 3.5L8 10.5 5 12l.5-3.5L3 6l3.5-.5L8 2z"
+                      stroke="#333" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Description */}

@@ -44,6 +44,8 @@ export interface APIRecipe {
   prep_time?: string | number | null;
   prepTime?: string | number | null;
   total_time?: string | number | null;
+  time_minutes?: string | number | null;
+  timeMinutes?: string | number | null;
   calories?: string | number | null;
   kcal?: string | number | null;
   description?: string | null;
@@ -325,10 +327,10 @@ function deriveSourceFromUrl(url?: string): string | undefined {
   }
 }
 
-function normalizePrepTime(recipe: APIRecipe): string {
+function normalizePrepTime(recipe: APIRecipe): string | undefined {
   const rec = asRecord(recipe);
-  const raw = firstString(rec, ['cook_time', 'cookTime', 'prep_time', 'prepTime', 'total_time', 'totalTime', 'ready_in'])
-    ?? firstNumber(rec, ['cook_time', 'cookTime', 'prep_time', 'prepTime', 'total_time', 'totalTime', 'ready_in']);
+  const raw = firstString(rec, ['cook_time', 'cookTime', 'prep_time', 'prepTime', 'total_time', 'totalTime', 'time_minutes', 'timeMinutes', 'ready_in'])
+    ?? firstNumber(rec, ['cook_time', 'cookTime', 'prep_time', 'prepTime', 'total_time', 'totalTime', 'time_minutes', 'timeMinutes', 'ready_in']);
 
   if (typeof raw === 'number' && raw > 0) return `${Math.round(raw)} min`;
   if (typeof raw === 'string') {
@@ -344,7 +346,7 @@ function normalizePrepTime(recipe: APIRecipe): string {
     if (n) return `${n[1]} min`;
   }
 
-  return recipe.bucket === 'quick_bites' ? '15 min' : '30 min';
+  return undefined;
 }
 
 function normalizeCalories(recipe: APIRecipe): number | undefined {
