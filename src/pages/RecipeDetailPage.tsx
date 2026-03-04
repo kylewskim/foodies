@@ -10,6 +10,7 @@ import {
 
 interface RecipeDetailState {
   name: string;
+  source?: string;
   description?: string;
   image?: string;
   ingredients: string[];
@@ -57,6 +58,18 @@ function parseIngredient(ingredient: string): { name: string; quantity: string }
   return { name: ingredient, quantity: '' };
 }
 
+function sourceLabel(source?: string, url?: string | null): string {
+  if (source && source.trim()) return source.trim();
+  if (url) {
+    try {
+      return new URL(url).hostname.replace(/^www\./, '');
+    } catch {
+      return 'Freshli';
+    }
+  }
+  return 'Freshli';
+}
+
 export function RecipeDetailPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -92,6 +105,7 @@ export function RecipeDetailPage() {
       } else {
         await addFavoriteRecipe(user.uid, {
           recipeName: recipe.name,
+          recipeSource: recipe.source,
           recipeDescription: recipe.description,
           recipeImage: recipe.image,
           ingredients: recipe.ingredients,
@@ -220,7 +234,7 @@ export function RecipeDetailPage() {
             opacity: 0.4,
             lineHeight: '1.35',
           }}>
-            By Freshli
+            Source: {sourceLabel(recipe.source, recipe.url)}
           </p>
 
           {/* Stats row */}

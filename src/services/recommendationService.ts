@@ -39,6 +39,28 @@ export interface APIRecipe {
   missing: string[];
   reasons: string[];
   violations: string[];
+  cook_time?: string | number | null;
+  cookTime?: string | number | null;
+  prep_time?: string | number | null;
+  prepTime?: string | number | null;
+  total_time?: string | number | null;
+  calories?: string | number | null;
+  kcal?: string | number | null;
+  description?: string | null;
+  summary?: string | null;
+  instructions?: unknown;
+  steps?: unknown;
+  ingredients?: unknown;
+  source?: string | null;
+  source_name?: string | null;
+  provider?: string | null;
+  recipe_url?: string | null;
+  source_url?: string | null;
+  image?: string | null;
+  image_url?: string | null;
+  photo_url?: string | null;
+  thumbnail?: string | null;
+  difficulty?: string | null;
 }
 
 export interface ShoppingListItem {
@@ -269,6 +291,120 @@ function normalizeDate(dateLike?: string | null): string {
   return ymd ? ymd[1] : new Date().toISOString().split('T')[0];
 }
 
+function asRecord(value: unknown): Record<string, unknown> {
+  return typeof value === 'object' && value !== null ? value as Record<string, unknown> : {};
+}
+
+function firstString(record: Record<string, unknown>, keys: string[]): string | undefined {
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === 'string' && value.trim().length > 0) return value.trim();
+  }
+  return undefined;
+}
+
+function firstNumber(record: Record<string, unknown>, keys: string[]): number | undefined {
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+    if (typeof value === 'string') {
+      const m = value.match(/(\d+(?:\.\d+)?)/);
+      if (m) return Number(m[1]);
+    }
+  }
+  return undefined;
+}
+
+function deriveSourceFromUrl(url?: string): string | undefined {
+  if (!url) return undefined;
+  try {
+    const host = new URL(url).hostname.replace(/^www\./, '');
+    return host || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function normalizePrepTime(recipe: APIRecipe): string {
+  const rec = asRecord(recipe);
+  const raw = firstString(rec, ['cook_time', 'cookTime', 'prep_time', 'prepTime', 'total_time', 'totalTime', 'ready_in'])
+    ?? firstNumber(rec, ['cook_time', 'cookTime', 'prep_time', 'prepTime', 'total_time', 'totalTime', 'ready_in']);
+
+  if (typeof raw === 'number' && raw > 0) return `${Math.round(raw)} min`;
+  if (typeof raw === 'string') {
+    const text = raw.trim();
+    if (/^PT\d+H(\d+M)?$/i.test(text) || /^PT\d+M$/i.test(text)) {
+      const h = text.match(/(\d+)H/i);
+      const m = text.match(/(\d+)M/i);
+      const total = (h ? Number(h[1]) * 60 : 0) + (m ? Number(m[1]) : 0);
+      if (total > 0) return `${total} min`;
+    }
+    if (/\bmin\b|\bhour\b|\bhr\b/i.test(text)) return text;
+    const n = text.match(/(\d+)/);
+    if (n) return `${n[1]} min`;
+  }
+
+  return recipe.bucket === 'quick_bites' ? '15 min' : '30 min';
+}
+
+function normalizeCalories(recipe: APIRecipe): number | undefined {
+  const rec = asRecord(recipe);
+  const nutrition = asRecord(rec.nutrition);
+  const value = firstNumber(rec, ['calories', 'kcal', 'calorie', 'energy_kcal'])
+    ?? firstNumber(nutrition, ['calories', 'kcal', 'calorie', 'energy_kcal']);
+  if (value == null || !Number.isFinite(value) || value <= 0) return undefined;
+  return Math.round(value);
+}
+
+function normalizeInstructions(recipe: APIRecipe): string[] {
+  const rec = asRecord(recipe);
+  const raw = rec.instructions ?? rec.steps ?? rec.directions ?? rec.method;
+  if (!raw) return [];
+
+  if (Array.isArray(raw)) {
+    const parsed = raw
+      .map((step) => {
+        if (typeof step === 'string') return step.trim();
+        const obj = asRecord(step);
+        return firstString(obj, ['step', 'instruction', 'text', 'description', 'content']) ?? '';
+      })
+      .filter(Boolean);
+    return parsed;
+  }
+
+  if (typeof raw === 'string') {
+    const text = raw.trim();
+    if (!text) return [];
+    const splitByLine = text.split(/\n+/).map((s) => s.trim()).filter(Boolean);
+    if (splitByLine.length > 1) return splitByLine;
+    return text
+      .split(/\s*\d+\.\s+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+
+  return [];
+}
+
+function normalizeIngredients(recipe: APIRecipe): string[] {
+  const rec = asRecord(recipe);
+  const raw = rec.ingredients;
+  if (!Array.isArray(raw)) return [...recipe.matched, ...recipe.missing];
+
+  const parsed = raw
+    .map((item) => {
+      if (typeof item === 'string') return item.trim();
+      const obj = asRecord(item);
+      const name = firstString(obj, ['name', 'ingredient', 'ingredient_name', 'item']) ?? '';
+      const amount = firstString(obj, ['amount', 'quantity', 'measurement']) ?? '';
+      if (!name) return '';
+      return amount ? `${name} (${amount})` : name;
+    })
+    .filter(Boolean);
+
+  return parsed.length > 0 ? parsed : [...recipe.matched, ...recipe.missing];
+}
+
 function itemsToPayload(items: Item[], strategy: 'raw' | 'canonical'): Array<{
   name: string;
   expiration_date: string;
@@ -316,6 +452,13 @@ async function callRecommendAPI(
   }
 
   const data = await response.json();
+  console.log('📥 RecipeRec API raw response:', data);
+  if (Array.isArray(data?.recommendations)) {
+    console.log('📥 RecipeRec API raw recommendations:', data.recommendations);
+    console.log('📥 RecipeRec first recommendation keys:', Object.keys(data.recommendations[0] || {}));
+  } else {
+    console.error('❌ RecipeRec response schema mismatch: recommendations is not an array', data);
+  }
   console.log('📥 RecipeRec API response:', {
     mode: data.mode,
     recommendationCount: data.recommendations?.length ?? 0,
@@ -328,18 +471,34 @@ async function callRecommendAPI(
 // ─── API Response → StoredRecipe ─────────────────────────────────────────────
 
 function apiRecipeToStoredRecipe(rec: APIRecipe): StoredRecipe {
+  const record = asRecord(rec);
+  const reasonSummary = rec.reasons.filter(Boolean).join(' · ');
+  const coveragePct = Number.isFinite(rec.coverage) ? Math.round(rec.coverage * 100) : 0;
+  const description = firstString(record, ['description', 'summary', 'short_description', 'intro'])
+    ?? (reasonSummary || `${coveragePct}% match`);
+  const source = firstString(record, ['source', 'source_name', 'provider', 'provider_name', 'publisher']);
+  const url = firstString(record, ['url', 'recipe_url', 'source_url', 'original_url', 'link']);
+  const image = firstString(record, ['image', 'image_url', 'photo_url', 'thumbnail', 'thumb']);
+  const instructions = normalizeInstructions(rec);
+  const calories = normalizeCalories(rec);
+  const difficultyRaw = firstString(record, ['difficulty', 'level', 'skill_level']);
+
   return {
     id: rec.recipe_id,
     name: rec.title || 'Untitled Recipe',
-    description: rec.reasons.join(' · ') || `${Math.round(rec.coverage * 100)}% match`,
-    ingredients: [...rec.matched, ...rec.missing],
+    image: image || undefined,
+    description,
+    ingredients: normalizeIngredients(rec),
     matchedIngredients: rec.matched,
     missingIngredients: rec.missing,
-    prepTime: rec.bucket === 'quick_bites' ? '15 min' : '30 min',
-    calories: 0,   // not available from engine
-    difficulty: rec.bucket === 'quick_bites' ? 'Easy' : 'Medium',
-    instructions: [],  // Actual steps not available; original recipe URL shown via "View Original Recipe" button
-    url: rec.url || undefined,
+    prepTime: normalizePrepTime(rec),
+    calories,
+    difficulty: (difficultyRaw === 'Easy' || difficultyRaw === 'Medium' || difficultyRaw === 'Hard')
+      ? difficultyRaw
+      : undefined,
+    instructions,
+    url: url || undefined,
+    source: source ?? deriveSourceFromUrl(url || undefined),
     coverage: rec.coverage || undefined,
     score: rec.score || undefined,
   };

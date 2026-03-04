@@ -28,6 +28,7 @@ export async function addFavoriteRecipe(
   userId: string,
   recipe: {
     recipeName: string;
+    recipeSource?: string;
     recipeDescription?: string;
     recipeImage?: string;
     ingredients: string[];
@@ -48,6 +49,7 @@ export async function addFavoriteRecipe(
       userId,
       recipeId,
       recipeName: recipe.recipeName,
+      recipeSource: recipe.recipeSource,
       recipeDescription: recipe.recipeDescription,
       recipeImage: recipe.recipeImage,
       ingredients: recipe.ingredients,

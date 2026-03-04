@@ -136,6 +136,10 @@ class handler(BaseHTTPRequestHandler):
             debug = body.get("debug", False)
             provider_enabled = body.get("provider_enabled", True)
 
+            if debug:
+                print("[/api/recommend] incoming request body:")
+                print(json.dumps(body, ensure_ascii=False))
+
             if not isinstance(inventory, list):
                 self._send_error(400, "inventory must be a list")
                 return
@@ -155,7 +159,8 @@ class handler(BaseHTTPRequestHandler):
                     "top_k": top_k,
                     "debug": debug,
                     "provider_enabled": provider_enabled,
-                }
+                },
+                debug=bool(debug),
             )
 
             if debug and isinstance(result, dict):
@@ -164,6 +169,19 @@ class handler(BaseHTTPRequestHandler):
                     existing_debug = {}
                 existing_debug["preprocess"] = preprocess_debug
                 result["debug"] = existing_debug
+
+                print("[/api/recommend] upstream parsed response:")
+                print(json.dumps(result, ensure_ascii=False))
+
+            if isinstance(result, dict):
+                recs = result.get("recommendations")
+                if not isinstance(recs, list):
+                    print("[/api/recommend] warning: upstream response has no recommendations array")
+                elif debug and recs:
+                    first = recs[0]
+                    if isinstance(first, dict):
+                        print("[/api/recommend] first recommendation keys:")
+                        print(json.dumps(list(first.keys()), ensure_ascii=False))
 
             self._send_json(200, result)
 
@@ -205,7 +223,7 @@ class handler(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.end_headers()
 
-    def _call_recommender(self, payload: dict):
+    def _call_recommender(self, payload: dict, debug: bool = False):
         data = json.dumps(payload).encode("utf-8")
         req = Request(
             RECOMMENDER_URL,
@@ -216,6 +234,9 @@ class handler(BaseHTTPRequestHandler):
         try:
             with urlopen(req, timeout=RECOMMENDER_TIMEOUT_SECONDS) as resp:
                 resp_body = resp.read().decode("utf-8")
+                if debug:
+                    print("[/api/recommend] upstream raw response body:")
+                    print(resp_body)
                 return json.loads(resp_body) if resp_body else {}
         except HTTPError as e:
             body = e.read().decode("utf-8") if hasattr(e, "read") else ""

@@ -128,6 +128,7 @@ export interface FavoriteRecipe {
   userId: string;  // User who favorited this recipe
   recipeId: string;  // Unique identifier for the recipe (hash of name)
   recipeName: string;
+  recipeSource?: string;
   recipeDescription?: string;
   recipeImage?: string;
   ingredients: string[];
@@ -139,14 +140,15 @@ export interface FavoriteRecipe {
 export interface StoredRecipe {
   id: string;
   name: string;
+  source?: string;
   description: string;
   image?: string;
   ingredients: string[];
   matchedIngredients: string[];
   missingIngredients: string[];
   prepTime: string;
-  calories: number;
-  difficulty: 'Easy' | 'Medium' | 'Hard';
+  calories?: number;
+  difficulty?: 'Easy' | 'Medium' | 'Hard';
   instructions: string[];
   url?: string;           // Original recipe URL (e.g. Jamie Oliver page)
   coverage?: number;      // Ingredient match ratio from recommendation engine

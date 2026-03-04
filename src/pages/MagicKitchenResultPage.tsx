@@ -66,6 +66,7 @@ export function MagicKitchenResultPage() {
     navigate(`/recipes/magic-${Date.now()}`, {
       state: {
         name: recipe.name,
+        source: 'Magic Kitchen',
         description: recipe.description,
         image: recipe.imageUrl,
         ingredients: recipe.ingredients,

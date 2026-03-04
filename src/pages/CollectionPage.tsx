@@ -4,6 +4,11 @@ import { useAuth } from '../contexts/AuthContext';
 import { getFavoriteRecipesByUser } from '../firebase/favoriteRecipes';
 import type { FavoriteRecipe } from '../types';
 
+function sourceLabel(recipe: FavoriteRecipe): string {
+  if (recipe.recipeSource && recipe.recipeSource.trim()) return recipe.recipeSource;
+  return 'Freshli';
+}
+
 export function CollectionPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -126,6 +131,7 @@ export function CollectionPage() {
                   navigate(`/recipes/${recipe.recipeId}`, {
                     state: {
                       name: recipe.recipeName,
+                      source: recipe.recipeSource,
                       description: recipe.recipeDescription,
                       image: recipe.recipeImage,
                       ingredients: recipe.ingredients,
@@ -195,7 +201,7 @@ export function CollectionPage() {
                     color: 'rgba(0, 0, 0, 0.4)',
                     margin: 0,
                   }}>
-                    By Jamie Oliver
+                    Source: {sourceLabel(recipe)}
                   </p>
                   {recipe.recipeDescription && (
                     <p style={{

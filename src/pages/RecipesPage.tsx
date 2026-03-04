@@ -101,6 +101,7 @@ export function RecipesPage() {
       setFavoritedIds(newFavs);
       await addFavoriteRecipe(user.uid, {
         recipeName: recipe.name,
+        recipeSource: recipe.source,
         recipeDescription: recipe.description,
         recipeImage: recipe.image,
         ingredients: recipe.ingredients,
@@ -280,6 +281,7 @@ export function RecipesPage() {
                 onClick={() => navigate(`/recipes/${recipe.id}`, {
                   state: {
                     name: recipe.name,
+                    source: recipe.source,
                     description: recipe.description,
                     image: recipe.image,
                     ingredients: recipe.ingredients,

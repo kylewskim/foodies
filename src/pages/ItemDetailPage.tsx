@@ -390,6 +390,7 @@ export function ItemDetailPage() {
                 to={`/recipes/${recipe.id}`}
                 state={{
                   name: recipe.name,
+                  source: recipe.source,
                   description: recipe.description,
                   image: recipe.image,
                   ingredients: recipe.ingredients,
