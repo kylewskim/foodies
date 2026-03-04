@@ -62,6 +62,64 @@ const ALLERGY_TO_RESTRICTION: Record<string, string> = {
   'Shellfish': 'allergy_shellfish',
 };
 
+const PHRASE_INGREDIENTS = [
+  'olive oil',
+  'sesame oil',
+  'soy sauce',
+  'fish sauce',
+  'oyster sauce',
+  'spring onion',
+  'green onion',
+  'sweet potato',
+  'bell pepper',
+  'coconut milk',
+  'whole milk',
+  'skim milk',
+  'almond milk',
+  'chicken breast',
+  'chicken thigh',
+  'pork belly',
+  'beef brisket',
+  'curry powder',
+  'chili powder',
+  'black pepper',
+  'sea salt',
+];
+
+const ALIASES: Record<string, string> = {
+  'extra virgin olive oil': 'olive oil',
+  'vegetable oil': 'oil',
+  'canola oil': 'oil',
+  eggs: 'egg',
+  tomatoes: 'tomato',
+  onions: 'onion',
+  potatoes: 'potato',
+  yolk: 'egg',
+  'egg yolk': 'egg',
+};
+
+const DROP_TOKENS = new Set([
+  'fresh',
+  'large',
+  'small',
+  'organic',
+  'pack',
+  'bottle',
+  'jar',
+  'bag',
+  'lb',
+  'lbs',
+  'oz',
+  'g',
+  'kg',
+  'ml',
+  'l',
+  'pcs',
+  'piece',
+  'pieces',
+  'each',
+]);
+
 /**
  * Convert user preferences into restriction keys for the engine.
  */
@@ -83,16 +141,64 @@ export function preferencesToRestrictions(prefs: UserPreferences): string[] {
 
 // ─── Inventory → API Payload ─────────────────────────────────────────────────
 
-function itemsToPayload(items: Item[]): Array<{
+function canonicalizeText(text: string): string {
+  return (text || '')
+    .toLowerCase()
+    .replace(/[^a-z\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function parseIngredientTokens(name: string): string[] {
+  let text = canonicalizeText(name);
+  const found: string[] = [];
+
+  for (const phrase of [...PHRASE_INGREDIENTS].sort((a, b) => b.length - a.length)) {
+    if (text.includes(phrase)) {
+      found.push(phrase);
+      text = text.split(phrase).join(' ');
+    }
+  }
+
+  const tokens = text
+    .split(' ')
+    .filter((t) => t && !DROP_TOKENS.has(t));
+
+  const normalized = [...found, ...tokens].map((item) => ALIASES[item] ?? item);
+  const deduped: string[] = [];
+  const seen = new Set<string>();
+  for (const token of normalized) {
+    if (!seen.has(token)) {
+      seen.add(token);
+      deduped.push(token);
+    }
+  }
+  return deduped;
+}
+
+function normalizeDate(dateLike?: string | null): string {
+  if (!dateLike) return new Date().toISOString().split('T')[0];
+  const dt = new Date(dateLike);
+  if (!Number.isNaN(dt.getTime())) return dt.toISOString().split('T')[0];
+  const ymd = dateLike.match(/^(\d{4}-\d{2}-\d{2})/);
+  return ymd ? ymd[1] : new Date().toISOString().split('T')[0];
+}
+
+function itemsToPayload(items: Item[], strategy: 'raw' | 'canonical'): Array<{
   name: string;
   expiration_date: string;
   category: string;
 }> {
-  return items.map(item => ({
-    name: item.name,
-    expiration_date: item.manualExpirationDate || item.autoExpirationDate,
-    category: item.category,
-  }));
+  return items.map((item) => {
+    const canonicalTokens = parseIngredientTokens(item.name);
+    const fallbackName = canonicalizeText(item.name) || item.name.toLowerCase();
+    const normalizedName = canonicalTokens[0] ?? fallbackName;
+    return {
+      name: strategy === 'canonical' ? normalizedName : item.name,
+      expiration_date: normalizeDate(item.manualExpirationDate || item.autoExpirationDate),
+      category: item.category.toLowerCase(),
+    };
+  });
 }
 
 // ─── API Call ────────────────────────────────────────────────────────────────
@@ -101,15 +207,16 @@ async function callRecommendAPI(
   items: Item[],
   restrictions: string[],
   topK: number = 8,
+  strategy: 'raw' | 'canonical' = 'raw',
 ): Promise<RecommendationResponse> {
   const payload = {
-    inventory: itemsToPayload(items),
+    inventory: itemsToPayload(items, strategy),
     restrictions,
     top_k: topK,
     debug: true,
   };
 
-  console.log('📤 RecipeRec API request:', JSON.stringify(payload, null, 2));
+  console.log(`📤 RecipeRec API request (${strategy}):`, JSON.stringify(payload, null, 2));
 
   const response = await fetch('/api/recommend', {
     method: 'POST',
@@ -161,11 +268,13 @@ function apiRecipeToStoredRecipe(rec: APIRecipe): StoredRecipe {
  */
 export async function getRecipesForItem(item: Item): Promise<StoredRecipe[]> {
   try {
+    const canonicalTokens = parseIngredientTokens(item.name);
+    const normalizedName = canonicalTokens[0] ?? canonicalizeText(item.name) ?? item.name.toLowerCase();
     const payload = {
       inventory: [{
-        name: item.name,
-        expiration_date: item.manualExpirationDate || item.autoExpirationDate,
-        category: item.category,
+        name: normalizedName,
+        expiration_date: normalizeDate(item.manualExpirationDate || item.autoExpirationDate),
+        category: item.category.toLowerCase(),
       }],
       restrictions: [],
       top_k: 10,
@@ -224,7 +333,21 @@ export async function getRecommendations(
 
   // Always call the recommendation API directly
   console.log('🔄 Fetching recommendations from RecipeRec engine...');
-  const response = await callRecommendAPI(items, restrictions);
+  const rawResponse = await callRecommendAPI(items, restrictions, 8, 'raw');
+  let response = rawResponse;
+
+  // If matching is too low, retry with canonicalized inventory names.
+  if ((rawResponse.recommendations?.length ?? 0) <= 2 && items.length >= 6) {
+    try {
+      console.log('🔁 Low recommendation count from raw names. Retrying with canonicalized inventory names...');
+      const canonicalResponse = await callRecommendAPI(items, restrictions, 16, 'canonical');
+      if ((canonicalResponse.recommendations?.length ?? 0) > (rawResponse.recommendations?.length ?? 0)) {
+        response = canonicalResponse;
+      }
+    } catch (err) {
+      console.warn('Canonicalized retry failed; using raw recommendation response:', err);
+    }
+  }
 
   const recipes = response.recommendations.map(apiRecipeToStoredRecipe);
 
