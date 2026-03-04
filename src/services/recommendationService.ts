@@ -120,6 +120,40 @@ const DROP_TOKENS = new Set([
   'each',
 ]);
 
+const QUALIFIER_TOKENS = new Set([
+  'korean',
+  'japanese',
+  'chinese',
+  'thai',
+  'vietnamese',
+  'italian',
+  'mexican',
+  'indian',
+  'american',
+  'style',
+  'premium',
+  'choice',
+  'select',
+  'local',
+  'imported',
+  'frozen',
+  'dried',
+  'sliced',
+  'chopped',
+  'minced',
+  'peeled',
+  'washed',
+  'seedless',
+  'ripe',
+  'sweet',
+  'baby',
+  'plain',
+  'original',
+  'unsweetened',
+  'salted',
+  'unsalted',
+]);
+
 /**
  * Convert user preferences into restriction keys for the engine.
  */
@@ -176,6 +210,18 @@ function parseIngredientTokens(name: string): string[] {
   return deduped;
 }
 
+function pickPrimaryIngredientName(tokens: string[], fallbackName: string): string {
+  const meaningful = tokens.filter((token) => !QUALIFIER_TOKENS.has(token));
+  if (meaningful.length === 0) return fallbackName;
+
+  // Prefer multi-word ingredient phrases when available.
+  const phrase = meaningful.find((token) => token.includes(' '));
+  if (phrase) return phrase;
+
+  // For noisy names (e.g. "korean banana"), the tail token is usually the ingredient.
+  return meaningful[meaningful.length - 1];
+}
+
 function normalizeDate(dateLike?: string | null): string {
   if (!dateLike) return new Date().toISOString().split('T')[0];
   const dt = new Date(dateLike);
@@ -192,7 +238,7 @@ function itemsToPayload(items: Item[], strategy: 'raw' | 'canonical'): Array<{
   return items.map((item) => {
     const canonicalTokens = parseIngredientTokens(item.name);
     const fallbackName = canonicalizeText(item.name) || item.name.toLowerCase();
-    const normalizedName = canonicalTokens[0] ?? fallbackName;
+    const normalizedName = pickPrimaryIngredientName(canonicalTokens, fallbackName);
     return {
       name: strategy === 'canonical' ? normalizedName : item.name,
       expiration_date: normalizeDate(item.manualExpirationDate || item.autoExpirationDate),
@@ -269,7 +315,8 @@ function apiRecipeToStoredRecipe(rec: APIRecipe): StoredRecipe {
 export async function getRecipesForItem(item: Item): Promise<StoredRecipe[]> {
   try {
     const canonicalTokens = parseIngredientTokens(item.name);
-    const normalizedName = canonicalTokens[0] ?? canonicalizeText(item.name) ?? item.name.toLowerCase();
+    const fallbackName = canonicalizeText(item.name) || item.name.toLowerCase();
+    const normalizedName = pickPrimaryIngredientName(canonicalTokens, fallbackName);
     const payload = {
       inventory: [{
         name: normalizedName,
@@ -331,21 +378,21 @@ export async function getRecommendations(
     console.warn('Could not load user preferences for restrictions:', err);
   }
 
-  // Always call the recommendation API directly
+  // Always call the recommendation API with normalized ingredient names first.
   console.log('🔄 Fetching recommendations from RecipeRec engine...');
-  const rawResponse = await callRecommendAPI(items, restrictions, 8, 'raw');
-  let response = rawResponse;
+  const canonicalResponse = await callRecommendAPI(items, restrictions, 8, 'canonical');
+  let response = canonicalResponse;
 
-  // If matching is too low, retry with canonicalized inventory names.
-  if ((rawResponse.recommendations?.length ?? 0) <= 2 && items.length >= 6) {
+  // Safety fallback: if normalized pass is still too low, try original raw names once.
+  if ((canonicalResponse.recommendations?.length ?? 0) <= 2 && items.length >= 6) {
     try {
-      console.log('🔁 Low recommendation count from raw names. Retrying with canonicalized inventory names...');
-      const canonicalResponse = await callRecommendAPI(items, restrictions, 16, 'canonical');
-      if ((canonicalResponse.recommendations?.length ?? 0) > (rawResponse.recommendations?.length ?? 0)) {
-        response = canonicalResponse;
+      console.log('🔁 Low recommendation count from normalized names. Retrying once with raw inventory names...');
+      const rawResponse = await callRecommendAPI(items, restrictions, 16, 'raw');
+      if ((rawResponse.recommendations?.length ?? 0) > (canonicalResponse.recommendations?.length ?? 0)) {
+        response = rawResponse;
       }
     } catch (err) {
-      console.warn('Canonicalized retry failed; using raw recommendation response:', err);
+      console.warn('Raw-name retry failed; using normalized recommendation response:', err);
     }
   }
 
