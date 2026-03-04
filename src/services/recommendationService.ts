@@ -106,6 +106,7 @@ const PHRASE_INGREDIENTS = [
   'skim milk',
   'almond milk',
   'chicken breast',
+  'chicken feet',
   'chicken thigh',
   'pork belly',
   'beef brisket',
@@ -126,6 +127,10 @@ const ALIASES: Record<string, string> = {
   purified: 'water',
   'purified wate': 'water',
   'purified water': 'water',
+  'chicken feet': 'chicken',
+  feet: 'chicken',
+  'beef tartar': 'beef',
+  tartar: 'beef',
   salmons: 'salmon',
   porkbelly: 'pork belly',
   'coca-cola': 'coca cola',
@@ -215,6 +220,10 @@ const WEAK_TAIL_TOKENS = new Set([
   'less',
   'sugar',
   'zero',
+  'series',
+  'stick',
+  'high',
+  'food',
 ]);
 
 /**
@@ -273,9 +282,9 @@ function parseIngredientTokens(name: string): string[] {
   return deduped;
 }
 
-function pickPrimaryIngredientName(tokens: string[], fallbackName: string): string {
+function pickPrimaryIngredientName(tokens: string[]): string {
   const meaningful = tokens.filter((token) => !QUALIFIER_TOKENS.has(token));
-  if (meaningful.length === 0) return fallbackName;
+  if (meaningful.length === 0) return '';
 
   // Prefer multi-word ingredient phrases when available.
   const phrase = meaningful.find((token) => token.includes(' '));
@@ -284,7 +293,8 @@ function pickPrimaryIngredientName(tokens: string[], fallbackName: string): stri
   // For noisy names, select the strongest token, not just the last token.
   const reversed = [...meaningful].reverse();
   const strong = reversed.find((token) => token.length >= 3 && !WEAK_TAIL_TOKENS.has(token));
-  const selected = strong ?? meaningful[meaningful.length - 1];
+  const selected = strong ?? meaningful.find((token) => token.length >= 3) ?? '';
+  if (!selected) return '';
   if (ALIASES[selected]) return ALIASES[selected];
   if (selected.endsWith('s') && selected.length > 4) return selected.slice(0, -1);
   return selected;
@@ -417,15 +427,19 @@ function itemsToPayload(items: Item[], strategy: 'raw' | 'canonical'): Array<{
   expiration_date: string;
   category: string;
 }> {
-  return items.map((item) => {
+  return items.flatMap((item) => {
     const canonicalTokens = parseIngredientTokens(item.name);
-    const fallbackName = canonicalizeText(item.name) || item.name.toLowerCase();
-    const normalizedName = pickPrimaryIngredientName(canonicalTokens, fallbackName);
-    return {
+    const normalizedName = pickPrimaryIngredientName(canonicalTokens);
+    const name = strategy === 'canonical' ? normalizedName : item.name;
+    const cleanedName = canonicalizeText(name);
+
+    if (!cleanedName || cleanedName.length < 3) return [];
+
+    return [{
       name: strategy === 'canonical' ? normalizedName : item.name,
       expiration_date: normalizeDate(item.manualExpirationDate || item.autoExpirationDate),
       category: item.category.toLowerCase(),
-    };
+    }];
   });
 }
 
@@ -463,11 +477,12 @@ function buildExpansionItemSets(items: Item[]): Item[][] {
   const uniqueByCanonical = new Map<string, Item>();
   for (const item of byExpiry) {
     const canonicalTokens = parseIngredientTokens(item.name);
-    const fallbackName = canonicalizeText(item.name) || item.name.toLowerCase();
-    const key = pickPrimaryIngredientName(canonicalTokens, fallbackName);
+    const key = pickPrimaryIngredientName(canonicalTokens);
+    if (!key || key.length < 3) continue;
     if (!uniqueByCanonical.has(key)) uniqueByCanonical.set(key, item);
   }
   const uniqueItems = [...uniqueByCanonical.values()];
+  if (uniqueItems.length <= 6) return [byExpiry.slice(0, 16)];
 
   const byCategoryPriority = [...uniqueItems].sort((a, b) => {
     const score = (cat: string) => (cat === 'Protein' ? 0 : cat === 'Produce' ? 1 : cat === 'Dairy' ? 2 : 3);
@@ -486,8 +501,31 @@ function buildExpansionItemSets(items: Item[]): Item[][] {
     ...byCategoryPriority.filter((item) => item.category !== 'Produce'),
   ].slice(0, 24);
 
-  return [recentWindow, diverseWindow, tailWindow, proteinFirstWindow, produceFirstWindow]
+  const chunkWindows: Item[][] = [];
+  const chunkSize = 10;
+  const stride = 6;
+  for (let i = 0; i < uniqueItems.length; i += stride) {
+    const chunk = uniqueItems.slice(i, i + chunkSize);
+    if (chunk.length >= 5) chunkWindows.push(chunk);
+  }
+
+  const allWindows = [recentWindow, diverseWindow, tailWindow, proteinFirstWindow, produceFirstWindow, ...chunkWindows]
     .filter((set) => set.length > 0);
+
+  const seen = new Set<string>();
+  const dedupedWindows: Item[][] = [];
+  for (const win of allWindows) {
+    const sig = win
+      .map((item) => canonicalizeText(item.name))
+      .filter(Boolean)
+      .sort()
+      .join('|');
+    if (!sig || seen.has(sig)) continue;
+    seen.add(sig);
+    dedupedWindows.push(win);
+  }
+
+  return dedupedWindows.slice(0, 10);
 }
 
 // ─── API Call ────────────────────────────────────────────────────────────────
@@ -617,8 +655,7 @@ function apiRecipeToStoredRecipe(rec: APIRecipe): StoredRecipe {
 export async function getRecipesForItem(item: Item): Promise<StoredRecipe[]> {
   try {
     const canonicalTokens = parseIngredientTokens(item.name);
-    const fallbackName = canonicalizeText(item.name) || item.name.toLowerCase();
-    const normalizedName = pickPrimaryIngredientName(canonicalTokens, fallbackName);
+    const normalizedName = pickPrimaryIngredientName(canonicalTokens);
     const payload = {
       inventory: [{
         name: normalizedName,
