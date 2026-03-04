@@ -8,7 +8,6 @@
  *   - Calling the /api/recommend endpoint
  *   - Mapping inventory items to the API payload format
  *   - Mapping user preferences to restriction keys
- *   - Caching recommendations in Firestore
  *   - Converting API response to StoredRecipe format
  */
 

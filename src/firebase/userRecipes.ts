@@ -1,5 +1,3 @@
-import { doc, setDoc, getDoc, deleteDoc } from 'firebase/firestore';
-import { db } from './firebaseConfig';
 import type { UserRecipes, StoredRecipe, Item } from '../types';
 
 /**
@@ -29,30 +27,12 @@ function generateItemFingerprint(items: Item[]): string {
  * @param items - Current items used to generate recipes
  */
 export async function saveUserRecipes(
-  userId: string,
-  recipes: StoredRecipe[],
-  items: Item[]
+  _userId: string,
+  _recipes: StoredRecipe[],
+  _items: Item[]
 ): Promise<void> {
-  try {
-    const userRecipes: UserRecipes = {
-      userId,
-      recipes,
-      generatedAt: new Date().toISOString(),
-      itemFingerprint: generateItemFingerprint(items),
-      itemIds: items.map(item => item.itemId),
-    };
-
-    const docRef = doc(db, 'userRecipes', userId);
-    await setDoc(docRef, userRecipes);
-
-    console.log('✅ Recipes saved to Firebase:', {
-      recipeCount: recipes.length,
-      itemCount: items.length,
-    });
-  } catch (error) {
-    console.error('Error saving user recipes:', error);
-    throw new Error('Failed to save recipes');
-  }
+  // Firebase recipe cache is disabled. Keep API for backward compatibility.
+  return;
 }
 
 /**
@@ -61,26 +41,9 @@ export async function saveUserRecipes(
  * @param userId - User ID
  * @returns User recipes or null if not found
  */
-export async function getUserRecipes(userId: string): Promise<UserRecipes | null> {
-  try {
-    const docRef = doc(db, 'userRecipes', userId);
-    const docSnap = await getDoc(docRef);
-
-    if (docSnap.exists()) {
-      const data = docSnap.data() as UserRecipes;
-      console.log('✅ Recipes loaded from Firebase:', {
-        recipeCount: data.recipes.length,
-        age: Math.round((Date.now() - new Date(data.generatedAt).getTime()) / 1000) + 's',
-      });
-      return data;
-    }
-
-    console.log('No recipes found in Firebase');
-    return null;
-  } catch (error) {
-    console.error('Error loading user recipes:', error);
-    return null;
-  }
+export async function getUserRecipes(_userId: string): Promise<UserRecipes | null> {
+  // Firebase recipe cache is disabled.
+  return null;
 }
 
 /**
@@ -171,14 +134,9 @@ export function shouldRegenerateRecipes(
  * @param userId - User ID
  */
 export async function clearUserRecipes(userId: string): Promise<void> {
-  try {
-    const docRef = doc(db, 'userRecipes', userId);
-    await deleteDoc(docRef);
-    console.log('🗑️ User recipes cleared from Firebase');
-  } catch (error) {
-    console.error('Error clearing user recipes:', error);
-    throw new Error('Failed to clear recipes');
-  }
+  void userId;
+  // Firebase recipe cache is disabled.
+  return;
 }
 
 /**
@@ -188,7 +146,6 @@ export async function clearUserRecipes(userId: string): Promise<void> {
 export function markRecipesNeedRefresh(): void {
   localStorage.setItem('recipesNeedRefresh', 'true');
   localStorage.setItem('recipesRefreshTimestamp', Date.now().toString());
-  console.log('🔄 Recipes marked for refresh');
 }
 
 /**
