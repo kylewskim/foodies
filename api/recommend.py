@@ -1,28 +1,26 @@
 """
 Vercel Python Serverless Function — /api/recommend
 
-Wraps the RecipeRec engine (https://github.com/TanLaura/RecipeRec).
+Proxies to the standalone RecipeRec service.
 
 POST /api/recommend
 Body: {
   "inventory": [{"name": "Eggs", "expiration_date": "2026-02-12"}, ...],
   "restrictions": ["allergy_nuts", "diet_vegan"],
   "top_k": 8,
-  "debug": false
+  "debug": false,
+  "provider_enabled": true
 }
 """
 
-from http.server import BaseHTTPRequestHandler
 import json
 import os
-import sys
-from pathlib import Path
+from http.server import BaseHTTPRequestHandler
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 
-# Add api directory to path for local imports
-API_DIR = Path(__file__).parent
-sys.path.insert(0, str(API_DIR))
-
-from core.engine import recommend
+RECOMMENDER_URL = os.getenv("RECOMMENDER_URL", "http://localhost:8001/recommend")
+RECOMMENDER_TIMEOUT_SECONDS = float(os.getenv("RECOMMENDER_TIMEOUT_SECONDS", "15"))
 
 
 class handler(BaseHTTPRequestHandler):
@@ -35,20 +33,20 @@ class handler(BaseHTTPRequestHandler):
             restrictions = body.get("restrictions", [])
             top_k = body.get("top_k", 8)
             debug = body.get("debug", False)
+            provider_enabled = body.get("provider_enabled", True)
 
             if not isinstance(inventory, list):
                 self._send_error(400, "inventory must be a list")
                 return
 
-            # Call engine with correct paths relative to api/ directory
-            result = recommend(
-                inventory_payload=inventory,
-                restrictions=restrictions,
-                top_k=top_k,
-                debug=debug,
-                data_path=API_DIR / "data" / "df_parsed.csv",
-                restrictions_path=API_DIR / "config" / "restrictions.json",
-                policy_path=API_DIR / "config" / "policy.json",
+            result = self._call_recommender(
+                {
+                    "inventory": inventory,
+                    "restrictions": restrictions,
+                    "top_k": top_k,
+                    "debug": debug,
+                    "provider_enabled": provider_enabled,
+                }
             )
 
             self._send_json(200, result)
@@ -82,3 +80,21 @@ class handler(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.end_headers()
+
+    def _call_recommender(self, payload: dict):
+        data = json.dumps(payload).encode("utf-8")
+        req = Request(
+            RECOMMENDER_URL,
+            data=data,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urlopen(req, timeout=RECOMMENDER_TIMEOUT_SECONDS) as resp:
+                resp_body = resp.read().decode("utf-8")
+                return json.loads(resp_body) if resp_body else {}
+        except HTTPError as e:
+            body = e.read().decode("utf-8") if hasattr(e, "read") else ""
+            raise RuntimeError(f"Recommender error {e.code}: {body}") from e
+        except URLError as e:
+            raise RuntimeError(f"Recommender unreachable: {e}") from e
