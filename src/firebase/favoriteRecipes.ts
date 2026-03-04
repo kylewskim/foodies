@@ -17,6 +17,12 @@ export function generateRecipeId(recipeName: string): string {
   return Math.abs(hash).toString(36);
 }
 
+function stripUndefined<T extends Record<string, unknown>>(input: T): T {
+  return Object.fromEntries(
+    Object.entries(input).filter(([, value]) => value !== undefined)
+  ) as T;
+}
+
 /**
  * Add a recipe to user's favorites
  *
@@ -42,7 +48,7 @@ export async function addFavoriteRecipe(
     // Check if already favorited
     const existing = await getFavoriteRecipeByRecipeId(userId, recipeId);
     if (existing) {
-      const updatedData = {
+      const updatedData = stripUndefined({
         userId,
         recipeId,
         recipeName: recipe.recipeName,
@@ -53,7 +59,7 @@ export async function addFavoriteRecipe(
         instructions: recipe.instructions,
         prepTime: recipe.prepTime,
         createdAt: existing.createdAt || new Date().toISOString(),
-      };
+      });
       await setDoc(doc(db, 'favoriteRecipes', existing.favoriteId), updatedData, { merge: true });
       return {
         ...existing,
@@ -61,7 +67,7 @@ export async function addFavoriteRecipe(
       };
     }
 
-    const favoriteData = {
+    const favoriteData = stripUndefined({
       userId,
       recipeId,
       recipeName: recipe.recipeName,
@@ -72,7 +78,7 @@ export async function addFavoriteRecipe(
       instructions: recipe.instructions,
       prepTime: recipe.prepTime,
       createdAt: new Date().toISOString(),
-    };
+    });
 
     const docRef = await addDoc(collection(db, 'favoriteRecipes'), favoriteData);
 
