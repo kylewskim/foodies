@@ -39,6 +39,20 @@ VALID_CATEGORIES = {
     "other",
 }
 
+CATEGORY_PRIORITY = {
+    "protein": 0,
+    "produce": 1,
+    "dairy": 2,
+    "grains": 3,
+    "prepared": 4,
+    "frozen": 5,
+    "canned": 6,
+    "snacks": 7,
+    "condiments": 8,
+    "beverages": 9,
+    "other": 10,
+}
+
 DROP_TOKENS = {
     "fresh",
     "organic",
@@ -364,7 +378,20 @@ def _preprocess_inventory(inventory):
         if normalized["expiration_date"] < existing["expiration_date"]:
             cleaned[normalized_name] = normalized
 
-    normalized_inventory = sorted(cleaned.values(), key=lambda item: item["name"])
+    normalized_inventory = sorted(
+        cleaned.values(),
+        key=lambda item: (
+            item["expiration_date"],
+            CATEGORY_PRIORITY.get(item["category"], 10),
+            len(item["name"]),
+            item["name"],
+        ),
+    )
+
+    # Keep a practical window of ingredients so upstream provider expression
+    # does not over-focus on arbitrary trailing items.
+    if len(normalized_inventory) > 36:
+        normalized_inventory = normalized_inventory[:36]
 
     # If filtering is too aggressive, fall back to a permissive pass.
     if len(normalized_inventory) < 3 and len(inventory) >= 3:

@@ -15,6 +15,7 @@ import type { Item, StoredRecipe, UserPreferences } from '../types';
 import { getUserPreferences } from '../firebase/saveReceipt';
 
 const REMOTE_RECOMMEND_FALLBACK_URL = 'https://foodies-dusky-pi.vercel.app/api/recommend';
+const TARGET_MIN_RECOMMENDATIONS = 6;
 
 // ─── Types matching RecipeRec engine output ──────────────────────────────────
 
@@ -428,6 +429,52 @@ function itemsToPayload(items: Item[], strategy: 'raw' | 'canonical'): Array<{
   });
 }
 
+function dedupeRecipesByIdentity(recipes: APIRecipe[]): APIRecipe[] {
+  const seen = new Set<string>();
+  const out: APIRecipe[] = [];
+
+  for (const recipe of recipes) {
+    const id = (recipe.recipe_id || '').trim().toLowerCase();
+    const title = (recipe.title || '').trim().toLowerCase();
+    const key = id || title;
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(recipe);
+  }
+
+  return out.sort((a, b) => (b.score || 0) - (a.score || 0));
+}
+
+function buildExpansionItemSets(items: Item[]): Item[][] {
+  if (items.length <= 6) return [items];
+
+  const byExpiry = [...items].sort((a, b) => {
+    const aDate = new Date(normalizeDate(a.manualExpirationDate || a.autoExpirationDate)).getTime();
+    const bDate = new Date(normalizeDate(b.manualExpirationDate || b.autoExpirationDate)).getTime();
+    return aDate - bDate;
+  });
+
+  const uniqueByCanonical = new Map<string, Item>();
+  for (const item of byExpiry) {
+    const canonicalTokens = parseIngredientTokens(item.name);
+    const fallbackName = canonicalizeText(item.name) || item.name.toLowerCase();
+    const key = pickPrimaryIngredientName(canonicalTokens, fallbackName);
+    if (!uniqueByCanonical.has(key)) uniqueByCanonical.set(key, item);
+  }
+  const uniqueItems = [...uniqueByCanonical.values()];
+
+  const byCategoryPriority = [...uniqueItems].sort((a, b) => {
+    const score = (cat: string) => (cat === 'Protein' ? 0 : cat === 'Produce' ? 1 : cat === 'Dairy' ? 2 : 3);
+    return score(a.category) - score(b.category);
+  });
+
+  const recentWindow = byExpiry.slice(0, 20);
+  const diverseWindow = byCategoryPriority.slice(0, 20);
+  const tailWindow = uniqueItems.slice(Math.max(0, uniqueItems.length - 20));
+
+  return [recentWindow, diverseWindow, tailWindow].filter((set) => set.length > 0);
+}
+
 // ─── API Call ────────────────────────────────────────────────────────────────
 
 async function callRecommendAPI(
@@ -659,6 +706,34 @@ export async function getRecommendations(
       console.log(`🏁 Selected provider response: canonical=${canonicalCount}, raw=${rawCount}`);
     } catch (err) {
       console.warn('Raw-name provider retry failed; keeping canonical provider response:', err);
+    }
+  }
+
+  if ((response.recommendations?.length ?? 0) < TARGET_MIN_RECOMMENDATIONS && items.length >= 8) {
+    const itemSets = buildExpansionItemSets(items);
+    const expansionResponses = await Promise.all(
+      itemSets.map(async (set, index) => {
+        try {
+          const strategy: 'raw' | 'canonical' = index === 1 ? 'raw' : 'canonical';
+          return await callRecommendAPI(set, restrictions, 24, strategy);
+        } catch (err) {
+          console.warn(`Expansion pass ${index + 1} failed:`, err);
+          return null;
+        }
+      }),
+    );
+
+    const merged = dedupeRecipesByIdentity([
+      ...(response.recommendations || []),
+      ...expansionResponses.flatMap((r) => r?.recommendations || []),
+    ]);
+
+    if (merged.length > (response.recommendations?.length ?? 0)) {
+      console.log(`🧠 Expanded provider recipes: ${(response.recommendations?.length ?? 0)} -> ${merged.length}`);
+      response = {
+        ...response,
+        recommendations: merged,
+      };
     }
   }
 
