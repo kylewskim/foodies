@@ -3,16 +3,16 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase/firebaseConfig';
 import { markItemAsTrashed, markItemAsUsed } from '../firebase/saveReceipt';
-import { getUserRecipes } from '../firebase/userRecipes';
 import type { Item, StoredRecipe } from '../types';
+import { getRecipesForItem } from '../services/recommendationService';
 import { getDaysUntilExpiration } from '../utils/dateHelpers';
-import { useAuth } from '../contexts/AuthContext';
+
 import { ProductImage } from '../components/ProductImage';
 
 export function ItemDetailPage() {
   const { itemId } = useParams<{ itemId: string }>();
   const navigate = useNavigate();
-  const { user } = useAuth();
+
   const [item, setItem] = useState<Item | null>(null);
   const [loading, setLoading] = useState(true);
   const [relatedRecipes, setRelatedRecipes] = useState<StoredRecipe[]>([]);
@@ -25,10 +25,10 @@ export function ItemDetailPage() {
   }, [itemId]);
 
   useEffect(() => {
-    if (user && item) {
+    if (item) {
       loadRelatedRecipes();
     }
-  }, [user, item]);
+  }, [item]);
 
   const loadItem = async () => {
     try {
@@ -56,26 +56,12 @@ export function ItemDetailPage() {
   };
 
   const loadRelatedRecipes = async () => {
-    if (!user || !item) return;
+    if (!item) return;
 
     try {
       setLoadingRecipes(true);
-      const userRecipesData = await getUserRecipes(user.uid);
-
-      if (userRecipesData && userRecipesData.recipes.length > 0) {
-        // Filter recipes that use this ingredient
-        const itemNameLower = item.name.toLowerCase();
-        const related = userRecipesData.recipes.filter(recipe => {
-          const ingredientsLower = recipe.ingredients.map(i => i.toLowerCase());
-          return ingredientsLower.some(ing =>
-            ing.includes(itemNameLower) || itemNameLower.includes(ing.split(' ').pop() || '')
-          ) || recipe.matchedIngredients.some(mi =>
-            mi.toLowerCase().includes(itemNameLower) || itemNameLower.includes(mi.toLowerCase())
-          );
-        });
-
-        setRelatedRecipes(related.slice(0, 5));
-      }
+      const recipes = await getRecipesForItem(item);
+      setRelatedRecipes(recipes);
     } catch (error) {
       console.error('Error loading related recipes:', error);
     } finally {

@@ -19,7 +19,7 @@ from http.server import BaseHTTPRequestHandler
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-RECOMMENDER_URL = os.getenv("RECOMMENDER_URL", "http://localhost:8001/recommend")
+RECOMMENDER_URL = os.getenv("RECOMMENDER_URL", "https://reciperec.onrender.com/recommend")
 RECOMMENDER_TIMEOUT_SECONDS = float(os.getenv("RECOMMENDER_TIMEOUT_SECONDS", "15"))
 
 

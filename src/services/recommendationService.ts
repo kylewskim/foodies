@@ -161,6 +161,40 @@ function apiRecipeToStoredRecipe(rec: APIRecipe): StoredRecipe {
   };
 }
 
+// ─── Item-specific recipe fetch ──────────────────────────────────────────────
+
+/**
+ * Fetch recipes that use a specific ingredient, without Firebase caching.
+ * Used by ItemDetailPage "Cook Now" section.
+ */
+export async function getRecipesForItem(item: Item): Promise<StoredRecipe[]> {
+  try {
+    const payload = {
+      inventory: [{
+        name: item.name,
+        expiration_date: item.manualExpirationDate || item.autoExpirationDate,
+        category: item.category,
+      }],
+      restrictions: [],
+      top_k: 10,
+      debug: false,
+    };
+
+    const response = await fetch('/api/recommend', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) return [];
+
+    const data = await response.json() as RecommendationResponse;
+    return (data.recommendations || []).map(apiRecipeToStoredRecipe);
+  } catch {
+    return [];
+  }
+}
+
 // ─── Main Service Function ───────────────────────────────────────────────────
 
 export interface RecommendationResult {
