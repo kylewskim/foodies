@@ -22,12 +22,34 @@ if (hash && hash.includes('access_token=')) {
 
 const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
-console.log('🧭 Freshli bundle marker: recipe-detail-fix-2026-03-04-v2');
+const BUILD_ID = __APP_BUILD_ID__;
+console.log(`🧭 Freshli bundle marker: ${BUILD_ID}`);
+
+async function cleanupLegacyServiceWorkers() {
+  if (!('serviceWorker' in navigator)) return;
+  try {
+    const regs = await navigator.serviceWorker.getRegistrations();
+    for (const reg of regs) {
+      const scriptUrl = reg.active?.scriptURL || reg.waiting?.scriptURL || reg.installing?.scriptURL || '';
+      // Keep current Vite PWA SW and remove legacy/foreign registrations.
+      if (scriptUrl.includes('/sw.js')) continue;
+      await reg.unregister();
+      console.log('🧹 Unregistered legacy service worker:', scriptUrl || '(unknown)');
+    }
+  } catch (err) {
+    console.warn('Failed to clean up legacy service workers:', err);
+  }
+}
+
+void cleanupLegacyServiceWorkers();
 
 const updateSW = registerSW({
   immediate: true,
   onRegisteredSW(_swUrl, registration) {
     registration?.update();
+    window.setInterval(() => {
+      registration?.update();
+    }, 60_000);
   },
   onNeedRefresh() {
     console.log('♻️ New app version detected. Reloading to apply update.');

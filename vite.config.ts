@@ -4,6 +4,11 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vitejs.dev/config/
 export default defineConfig({
+  define: {
+    __APP_BUILD_ID__: JSON.stringify(
+      process.env.VERCEL_GIT_COMMIT_SHA || process.env.VERCEL_URL || `local-${Date.now()}`
+    ),
+  },
   server: {
     proxy: {
       // Proxies /api/off-search → search.openfoodfacts.org in dev (bypasses CORS)

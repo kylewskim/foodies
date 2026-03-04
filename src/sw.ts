@@ -1,6 +1,7 @@
 /// <reference lib="webworker" />
 
-import { precacheAndRoute } from 'workbox-precaching';
+import { clientsClaim } from 'workbox-core';
+import { cleanupOutdatedCaches, precacheAndRoute } from 'workbox-precaching';
 
 declare const self: ServiceWorkerGlobalScope & {
   __WB_MANIFEST: Array<{ url: string; revision: string | null }>;
@@ -8,6 +9,9 @@ declare const self: ServiceWorkerGlobalScope & {
 
 // ─── Workbox Precache ────────────────────────────────────────────────────────
 // vite-plugin-pwa injects the precache manifest into self.__WB_MANIFEST
+self.skipWaiting();
+clientsClaim();
+cleanupOutdatedCaches();
 precacheAndRoute(self.__WB_MANIFEST);
 
 // ─── Firebase Cloud Messaging ────────────────────────────────────────────────
