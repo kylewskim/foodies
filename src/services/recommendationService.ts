@@ -76,6 +76,19 @@ export interface ShoppingListItem {
   unlock_value: number;
 }
 
+interface RecommendCallTrace {
+  label: string;
+  strategy: 'raw' | 'canonical';
+  top_k: number;
+  request_ingredients: string[];
+  request_ingredient_count: number;
+  response_count: number;
+  response_titles: string[];
+  source?: string;
+  source_note?: string;
+  upstream_debug?: Record<string, unknown>;
+}
+
 // ─── Preference → Restriction Mapping ────────────────────────────────────────
 // Maps onboarding choices to RecipeRec restriction IDs in restrictions.json
 
@@ -461,6 +474,49 @@ function summarizePayload(
   };
 }
 
+function summarizeUpstreamDebug(debug: unknown): Record<string, unknown> | undefined {
+  if (!debug || typeof debug !== 'object') return undefined;
+  const d = debug as Record<string, unknown>;
+  return {
+    provider_candidate_count: d.provider_candidate_count,
+    scored_count: d.scored_count,
+    exclusion_counts: d.exclusion_counts,
+    candidate_thresholds: d.candidate_thresholds,
+    inventory_set_size: Array.isArray(d.inventory_set) ? d.inventory_set.length : undefined,
+  };
+}
+
+function recipeKey(recipe: APIRecipe): string {
+  return (recipe.recipe_id || '').trim().toLowerCase() || (recipe.title || '').trim().toLowerCase();
+}
+
+function summarizeMerge(candidates: APIRecipe[], merged: APIRecipe[]) {
+  const seen = new Set<string>();
+  const duplicateTitles: string[] = [];
+
+  for (const recipe of candidates) {
+    const key = recipeKey(recipe);
+    if (!key) continue;
+    if (seen.has(key)) duplicateTitles.push(recipe.title);
+    seen.add(key);
+  }
+
+  return {
+    candidate_count: candidates.length,
+    unique_candidate_count: seen.size,
+    duplicate_count: duplicateTitles.length,
+    duplicate_titles: [...new Set(duplicateTitles)].slice(0, 20),
+    selected_count: merged.length,
+    selected: merged.slice(0, 20).map((recipe) => ({
+      id: recipe.recipe_id,
+      title: recipe.title,
+      matched_count: recipe.matched?.length ?? 0,
+      coverage: recipe.coverage,
+      score: recipe.score,
+    })),
+  };
+}
+
 function dedupeRecipesByIdentity(recipes: APIRecipe[]): APIRecipe[] {
   const seen = new Set<string>();
   const out: APIRecipe[] = [];
@@ -553,6 +609,8 @@ async function callRecommendAPI(
   restrictions: string[],
   topK: number = 8,
   strategy: 'raw' | 'canonical' = 'raw',
+  traceLabel?: string,
+  onTrace?: (trace: RecommendCallTrace) => void,
 ): Promise<RecommendationResponse> {
   const payload = {
     inventory: itemsToPayload(items, strategy),
@@ -596,6 +654,21 @@ async function callRecommendAPI(
   if (!Array.isArray(data?.recommendations)) {
     console.error('❌ RecipeRec response schema mismatch: recommendations is not an array', data);
   }
+
+  onTrace?.({
+    label: traceLabel || `${strategy}-top${topK}`,
+    strategy,
+    top_k: topK,
+    request_ingredients: [...new Set(payload.inventory.map((it) => it.name))],
+    request_ingredient_count: payload.inventory.length,
+    response_count: Array.isArray(data?.recommendations) ? data.recommendations.length : 0,
+    response_titles: Array.isArray(data?.recommendations)
+      ? data.recommendations.map((r: APIRecipe) => r.title)
+      : [],
+    source: data?.source,
+    source_note: data?.source_note,
+    upstream_debug: summarizeUpstreamDebug(data?.debug),
+  });
 
   if (data?.source === 'local_fallback') {
     throw new Error('Blocked local_fallback response: provider data is required.');
@@ -736,7 +809,15 @@ export async function getRecommendations(
   // Always call the recommendation API with normalized ingredient names first.
   const canonicalSummary = summarizePayload(items, restrictions, 'canonical', 8);
   console.log('📤 Recipe request summary:', canonicalSummary);
-  const canonicalResponse = await callRecommendAPI(items, restrictions, 8, 'canonical');
+  const passTraces: RecommendCallTrace[] = [];
+  const canonicalResponse = await callRecommendAPI(
+    items,
+    restrictions,
+    8,
+    'canonical',
+    'primary-canonical',
+    (trace) => passTraces.push(trace),
+  );
   let response = canonicalResponse;
   let usedFallbackRaw = false;
   let usedExpansion = false;
@@ -745,7 +826,14 @@ export async function getRecommendations(
   // Do NOT use provider_disabled/local fallback results.
   if ((canonicalResponse.recommendations?.length ?? 0) <= 2 && items.length >= 6) {
     try {
-      const rawProviderResponse = await callRecommendAPI(items, restrictions, 16, 'raw');
+      const rawProviderResponse = await callRecommendAPI(
+        items,
+        restrictions,
+        16,
+        'raw',
+        'fallback-raw',
+        (trace) => passTraces.push(trace),
+      );
       const canonicalCount = canonicalResponse.recommendations?.length ?? 0;
       const rawCount = rawProviderResponse.recommendations?.length ?? 0;
 
@@ -764,7 +852,14 @@ export async function getRecommendations(
       itemSets.map(async (set, index) => {
         try {
           const strategy: 'raw' | 'canonical' = index === 1 ? 'raw' : 'canonical';
-          return await callRecommendAPI(set, restrictions, 64, strategy);
+          return await callRecommendAPI(
+            set,
+            restrictions,
+            64,
+            strategy,
+            `expansion-${index + 1}-${strategy}`,
+            (trace) => passTraces.push(trace),
+          );
         } catch (err) {
           console.warn(`Expansion pass ${index + 1} failed:`, err);
           return null;
@@ -772,10 +867,11 @@ export async function getRecommendations(
       }),
     );
 
-    const merged = dedupeRecipesByIdentity([
+    const allCandidates = [
       ...(response.recommendations || []),
       ...expansionResponses.flatMap((r) => r?.recommendations || []),
-    ]);
+    ];
+    const merged = dedupeRecipesByIdentity(allCandidates);
 
     if (merged.length > (response.recommendations?.length ?? 0)) {
       response = {
@@ -784,6 +880,21 @@ export async function getRecommendations(
       };
       usedExpansion = true;
     }
+
+    console.log('🧪 Recipe decision trace:', {
+      request: canonicalSummary,
+      passes: passTraces,
+      merge: summarizeMerge(
+        allCandidates,
+        response.recommendations || [],
+      ),
+    });
+  } else {
+    console.log('🧪 Recipe decision trace:', {
+      request: canonicalSummary,
+      passes: passTraces,
+      merge: summarizeMerge(response.recommendations || [], response.recommendations || []),
+    });
   }
 
   const recipes = response.recommendations.map(apiRecipeToStoredRecipe);
