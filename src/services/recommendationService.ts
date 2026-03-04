@@ -431,15 +431,17 @@ async function callRecommendAPI(
   restrictions: string[],
   topK: number = 8,
   strategy: 'raw' | 'canonical' = 'raw',
+  providerEnabled: boolean = true,
 ): Promise<RecommendationResponse> {
   const payload = {
     inventory: itemsToPayload(items, strategy),
     restrictions,
     top_k: topK,
     debug: true,
+    provider_enabled: providerEnabled,
   };
 
-  console.log(`📤 RecipeRec API request (${strategy}):`, JSON.stringify(payload, null, 2));
+  console.log(`📤 RecipeRec API request (${strategy}, provider=${providerEnabled ? 'on' : 'off'}):`, JSON.stringify(payload, null, 2));
 
   const response = await fetch('/api/recommend', {
     method: 'POST',
@@ -591,20 +593,43 @@ export async function getRecommendations(
 
   // Always call the recommendation API with normalized ingredient names first.
   console.log('🔄 Fetching recommendations from RecipeRec engine...');
-  const canonicalResponse = await callRecommendAPI(items, restrictions, 8, 'canonical');
+  const canonicalResponse = await callRecommendAPI(items, restrictions, 8, 'canonical', true);
   let response = canonicalResponse;
 
-  // Safety fallback: if normalized pass is still too low, try original raw names once.
+  // Safety fallback: if normalized pass is too low, run additional strategies
+  // and choose the result with the highest recommendation count.
   if ((canonicalResponse.recommendations?.length ?? 0) <= 2 && items.length >= 6) {
-    try {
-      console.log('🔁 Low recommendation count from normalized names. Retrying once with raw inventory names...');
-      const rawResponse = await callRecommendAPI(items, restrictions, 16, 'raw');
-      if ((rawResponse.recommendations?.length ?? 0) > (canonicalResponse.recommendations?.length ?? 0)) {
-        response = rawResponse;
+    console.log('🔁 Low recommendation count from normalized names. Running fallback strategies...');
+
+    const attempts = [
+      { label: 'raw/provider-on', promise: callRecommendAPI(items, restrictions, 16, 'raw', true) },
+      { label: 'canonical/provider-off', promise: callRecommendAPI(items, restrictions, 16, 'canonical', false) },
+      { label: 'raw/provider-off', promise: callRecommendAPI(items, restrictions, 16, 'raw', false) },
+    ];
+
+    const settled = await Promise.allSettled(attempts.map((a) => a.promise));
+    const candidates: Array<{ label: string; result: RecommendationResponse }> = [
+      { label: 'canonical/provider-on', result: canonicalResponse },
+    ];
+
+    settled.forEach((entry, idx) => {
+      const label = attempts[idx].label;
+      if (entry.status === 'fulfilled') {
+        candidates.push({ label, result: entry.value });
+        console.log(`✅ Fallback ${label}: ${entry.value.recommendations?.length ?? 0} recommendations`);
+      } else {
+        console.warn(`⚠️ Fallback ${label} failed:`, entry.reason);
       }
-    } catch (err) {
-      console.warn('Raw-name retry failed; using normalized recommendation response:', err);
-    }
+    });
+
+    const best = candidates.reduce((acc, cur) => {
+      const accCount = acc.result.recommendations?.length ?? 0;
+      const curCount = cur.result.recommendations?.length ?? 0;
+      return curCount > accCount ? cur : acc;
+    });
+
+    response = best.result;
+    console.log(`🏆 Selected recommendation strategy: ${best.label} (${best.result.recommendations?.length ?? 0} recipes)`);
   }
 
   const recipes = response.recommendations.map(apiRecipeToStoredRecipe);
