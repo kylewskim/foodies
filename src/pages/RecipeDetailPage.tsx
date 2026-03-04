@@ -117,16 +117,14 @@ export function RecipeDetailPage() {
     });
   };
 
-  if (!recipe) {
-    return (
-      <div style={{
-        minHeight: '100vh', backgroundColor: '#f7f6ef',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-      }}>
-        <p style={{ fontFamily: '"Poppins", sans-serif', color: '#666' }}>Recipe not found</p>
-      </div>
-    );
-  }
+  useEffect(() => {
+    if (!recipe) {
+      console.warn('RecipeDetailPage: no location.state — redirecting to /recipes');
+      navigate('/recipes', { replace: true });
+    }
+  }, [recipe, navigate]);
+
+  if (!recipe) return null;
 
   const validInstructions = recipe.instructions?.filter(i => !i.startsWith('Full recipe:')) ?? [];
 

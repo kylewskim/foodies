@@ -11,9 +11,31 @@ import { openai, isOpenAIConfigured, disableOpenAI, FREE_MODEL } from './openaiC
  *
  * This eliminates the ~5.6s API call for 80%+ of receipts.
  */
+/**
+ * Pre-process manual input to split comma-separated numbered items into lines.
+ * "1 banana, 2 orange, 3 pork belly" → "1 banana\n2 orange\n3 pork belly"
+ * Only splits when every comma-separated segment starts with a digit.
+ */
+function splitCommaSeparatedNumberedItems(text: string): string {
+  return text
+    .split('\n')
+    .map(line => {
+      if (!line.includes(',')) return line;
+      const parts = line.split(/,\s*/);
+      if (parts.length >= 2 && parts.every(p => /^\d+\s+\w/.test(p.trim()))) {
+        return parts.map(p => p.trim()).join('\n');
+      }
+      return line;
+    })
+    .join('\n');
+}
+
 export async function normalizeInputText(rawText: string): Promise<NormalizeInputTextOutput> {
+  // Pre-process: split "1 banana, 2 orange, 3 porkbelly" into separate lines
+  const preprocessed = splitCommaSeparatedNumberedItems(rawText);
+
   // Step 1: Try enhanced pattern matching (instant)
-  const patternResult = normalizeWithPatternMatching(rawText);
+  const patternResult = normalizeWithPatternMatching(preprocessed);
 
   // Step 2: Validate — if we got reasonable results, skip AI entirely
   if (patternResult.items.length >= 1) {
@@ -24,7 +46,7 @@ export async function normalizeInputText(rawText: string): Promise<NormalizeInpu
   // Step 3: Pattern matching found nothing — try AI if configured
   if (isOpenAIConfigured()) {
     console.log('⚠️ Pattern matching found 0 items — falling back to AI.');
-    return normalizeWithAI(rawText);
+    return normalizeWithAI(preprocessed);
   }
 
   console.log('⚠️ No items found and OpenAI not configured.');

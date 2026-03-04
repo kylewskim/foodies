@@ -14,13 +14,6 @@
 
 import type { Item, StoredRecipe, UserPreferences } from '../types';
 import { getUserPreferences } from '../firebase/saveReceipt';
-import {
-  getUserRecipes,
-  saveUserRecipes,
-  shouldRegenerateRecipes,
-  checkRecipesNeedRefresh,
-  clearRecipesRefreshFlag,
-} from '../firebase/userRecipes';
 
 // ─── Types matching RecipeRec engine output ──────────────────────────────────
 
@@ -212,49 +205,13 @@ export interface RecommendationResult {
 /**
  * Get recipe recommendations for a user.
  *
- * Uses Firestore cache when possible; calls /api/recommend when stale.
+ * Always fetches fresh from RecipeRec engine — no Firebase cache.
  */
 export async function getRecommendations(
   userId: string,
   items: Item[],
-  forceRegenerate: boolean = false,
+  _forceRegenerate: boolean = false,
 ): Promise<RecommendationResult> {
-  const needsBackgroundRefresh = checkRecipesNeedRefresh();
-
-  // Check Firestore cache first (unless force regenerate)
-  if (!forceRegenerate) {
-    const cachedRecipes = await getUserRecipes(userId);
-
-    if (cachedRecipes && !needsBackgroundRefresh) {
-      // Invalidate old AI-generated recipes that lack a url field
-      // (RecipeRec engine always provides url from Jamie Oliver dataset)
-      const isLegacyAICache = cachedRecipes.recipes.length > 0 &&
-        cachedRecipes.recipes.every(r => !r.url);
-
-      if (isLegacyAICache) {
-        console.log('🔄 Cached recipes are from old AI system (no url). Regenerating...');
-      } else {
-        const check = shouldRegenerateRecipes(items, cachedRecipes);
-        if (!check.shouldRegenerate) {
-          console.log(`✅ Using cached recommendations: ${check.reason}`);
-          // Recover extra metadata if stored
-          const extra = cachedRecipes as any;
-          return {
-            mode: extra.mode || 'abundant',
-            inventorySummary: extra.inventorySummary || {
-              uniqueItemsCount: items.length,
-              expiringSoonCount: 0,
-              expiringSoonItems: [],
-            },
-            recipes: cachedRecipes.recipes,
-            shoppingList: extra.shoppingList || [],
-            fromCache: true,
-          };
-        }
-      }
-    }
-  }
-
   // Fetch user preferences for restrictions
   let restrictions: string[] = [];
   try {
@@ -266,21 +223,11 @@ export async function getRecommendations(
     console.warn('Could not load user preferences for restrictions:', err);
   }
 
-  // Call the recommendation API
-  console.log('🔄 Fetching fresh recommendations from RecipeRec engine...');
+  // Always call the recommendation API directly
+  console.log('🔄 Fetching recommendations from RecipeRec engine...');
   const response = await callRecommendAPI(items, restrictions);
 
-  // Convert to StoredRecipe format
   const recipes = response.recommendations.map(apiRecipeToStoredRecipe);
-
-  // Save to Firestore cache
-  try {
-    await saveUserRecipes(userId, recipes, items);
-  } catch (err) {
-    console.warn('Failed to cache recommendations:', err);
-  }
-
-  clearRecipesRefreshFlag();
 
   return {
     mode: response.mode,
