@@ -134,11 +134,14 @@ class handler(BaseHTTPRequestHandler):
             restrictions = body.get("restrictions", [])
             requested_top_k = body.get("top_k", 8)
             debug = body.get("debug", False)
-            provider_enabled = body.get("provider_enabled", True)
+            requested_provider_enabled = body.get("provider_enabled", True)
+            provider_enabled = True
 
             if debug:
                 print("[/api/recommend] incoming request body:")
                 print(json.dumps(body, ensure_ascii=False))
+            if requested_provider_enabled is False:
+                print("[/api/recommend] provider_enabled=false requested by client; forcing provider_enabled=true by policy.")
 
             if not isinstance(inventory, list):
                 self._send_error(400, "inventory must be a list")
@@ -162,6 +165,10 @@ class handler(BaseHTTPRequestHandler):
                 },
                 debug=bool(debug),
             )
+
+            if isinstance(result, dict) and result.get("source") == "local_fallback":
+                self._send_error(502, "Upstream provider fallback blocked by policy (source=local_fallback)")
+                return
 
             if debug and isinstance(result, dict):
                 existing_debug = result.get("debug")
@@ -207,6 +214,7 @@ class handler(BaseHTTPRequestHandler):
     def _send_json(self, status: int, data: dict):
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
+        self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")

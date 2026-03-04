@@ -433,17 +433,16 @@ async function callRecommendAPI(
   restrictions: string[],
   topK: number = 8,
   strategy: 'raw' | 'canonical' = 'raw',
-  providerEnabled: boolean = true,
 ): Promise<RecommendationResponse> {
   const payload = {
     inventory: itemsToPayload(items, strategy),
     restrictions,
     top_k: topK,
     debug: true,
-    provider_enabled: providerEnabled,
+    provider_enabled: true,
   };
 
-  console.log(`📤 RecipeRec API request (${strategy}, provider=${providerEnabled ? 'on' : 'off'}):`, JSON.stringify(payload, null, 2));
+  console.log(`📤 RecipeRec API request (${strategy}, provider=on):`, JSON.stringify(payload, null, 2));
 
   const response = await fetch('/api/recommend', {
     method: 'POST',
@@ -469,8 +468,14 @@ async function callRecommendAPI(
     mode: data.mode,
     recommendationCount: data.recommendations?.length ?? 0,
     inventorySummary: data.inventory_summary,
+    source: data.source,
     debug: data.debug,
   });
+
+  if (data?.source === 'local_fallback') {
+    throw new Error('Blocked local_fallback response: provider data is required.');
+  }
+
   return data;
 }
 
@@ -541,6 +546,7 @@ export async function getRecipesForItem(item: Item): Promise<StoredRecipe[]> {
       restrictions: [],
       top_k: 10,
       debug: false,
+      provider_enabled: true,
     };
 
     const response = await fetch('/api/recommend', {
@@ -552,6 +558,10 @@ export async function getRecipesForItem(item: Item): Promise<StoredRecipe[]> {
     if (!response.ok) return [];
 
     const data = await response.json() as RecommendationResponse;
+    if (data?.source === 'local_fallback') {
+      console.warn('🚫 Ignoring local_fallback item recipe response by policy.');
+      return [];
+    }
     return (data.recommendations || []).map(apiRecipeToStoredRecipe);
   } catch {
     return [];
@@ -595,7 +605,7 @@ export async function getRecommendations(
 
   // Always call the recommendation API with normalized ingredient names first.
   console.log('🔄 Fetching recommendations from RecipeRec engine...');
-  const canonicalResponse = await callRecommendAPI(items, restrictions, 8, 'canonical', true);
+  const canonicalResponse = await callRecommendAPI(items, restrictions, 8, 'canonical');
   let response = canonicalResponse;
 
   // Safety fallback: if normalized pass is too low, retry with raw names only.
@@ -603,12 +613,9 @@ export async function getRecommendations(
   if ((canonicalResponse.recommendations?.length ?? 0) <= 2 && items.length >= 6) {
     console.log('🔁 Low recommendation count from normalized names. Retrying once with raw inventory names (provider only)...');
     try {
-      const rawProviderResponse = await callRecommendAPI(items, restrictions, 16, 'raw', true);
-      const canonicalIsProvider = canonicalResponse.source !== 'local_fallback';
-      const rawIsProvider = rawProviderResponse.source !== 'local_fallback';
-
-      const canonicalCount = canonicalIsProvider ? (canonicalResponse.recommendations?.length ?? 0) : 0;
-      const rawCount = rawIsProvider ? (rawProviderResponse.recommendations?.length ?? 0) : 0;
+      const rawProviderResponse = await callRecommendAPI(items, restrictions, 16, 'raw');
+      const canonicalCount = canonicalResponse.recommendations?.length ?? 0;
+      const rawCount = rawProviderResponse.recommendations?.length ?? 0;
 
       if (rawCount > canonicalCount) {
         response = rawProviderResponse;
@@ -617,15 +624,6 @@ export async function getRecommendations(
     } catch (err) {
       console.warn('Raw-name provider retry failed; keeping canonical provider response:', err);
     }
-  }
-
-  // Hard guard: never show local fallback recipes in UI.
-  if (response.source === 'local_fallback') {
-    console.warn('🚫 Ignoring local_fallback recommendation response by policy.');
-    response = {
-      ...response,
-      recommendations: [],
-    };
   }
 
   const recipes = response.recommendations.map(apiRecipeToStoredRecipe);
