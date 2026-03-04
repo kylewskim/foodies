@@ -69,19 +69,6 @@ export function RecipesPage() {
         return { ...stored, image: stored.image, userItems: matchedUserItems };
       });
 
-      if (recipesWithUI.length > 0) {
-        const first = recipesWithUI[0];
-        console.log('🪄 RecipesPage mapped first card:', {
-          id: first.id,
-          name: first.name,
-          image: first.image,
-          prepTime: first.prepTime,
-          calories: first.calories,
-          description: first.description,
-          instructionsCount: first.instructions?.length ?? 0,
-        });
-      }
-
       setRecipes(recipesWithUI);
 
       // Load favorite status

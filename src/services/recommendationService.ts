@@ -443,6 +443,24 @@ function itemsToPayload(items: Item[], strategy: 'raw' | 'canonical'): Array<{
   });
 }
 
+function summarizePayload(
+  items: Item[],
+  restrictions: string[],
+  strategy: 'raw' | 'canonical',
+  topK: number,
+) {
+  const inventory = itemsToPayload(items, strategy);
+  const uniqueNames = [...new Set(inventory.map((it) => it.name))];
+  return {
+    strategy,
+    top_k: topK,
+    restrictions,
+    inventory_count: inventory.length,
+    unique_ingredient_count: uniqueNames.length,
+    ingredients: uniqueNames,
+  };
+}
+
 function dedupeRecipesByIdentity(recipes: APIRecipe[]): APIRecipe[] {
   const seen = new Set<string>();
   const out: APIRecipe[] = [];
@@ -544,8 +562,6 @@ async function callRecommendAPI(
     provider_enabled: true,
   };
 
-  console.log(`📤 RecipeRec API request (${strategy}, provider=on):`, JSON.stringify(payload, null, 2));
-
   const configuredEndpoint = (import.meta.env.VITE_RECOMMEND_API_URL || '').trim();
   const primaryEndpoint = configuredEndpoint || '/api/recommend';
 
@@ -577,20 +593,9 @@ async function callRecommendAPI(
   }
 
   const data = await response.json();
-  console.log('📥 RecipeRec API raw response:', data);
-  if (Array.isArray(data?.recommendations)) {
-    console.log('📥 RecipeRec API raw recommendations:', data.recommendations);
-    console.log('📥 RecipeRec first recommendation keys:', Object.keys(data.recommendations[0] || {}));
-  } else {
+  if (!Array.isArray(data?.recommendations)) {
     console.error('❌ RecipeRec response schema mismatch: recommendations is not an array', data);
   }
-  console.log('📥 RecipeRec API response:', {
-    mode: data.mode,
-    recommendationCount: data.recommendations?.length ?? 0,
-    inventorySummary: data.inventory_summary,
-    source: data.source,
-    debug: data.debug,
-  });
 
   if (data?.source === 'local_fallback') {
     throw new Error('Blocked local_fallback response: provider data is required.');
@@ -633,16 +638,6 @@ function apiRecipeToStoredRecipe(rec: APIRecipe): StoredRecipe {
     coverage: rec.coverage || undefined,
     score: rec.score || undefined,
   };
-  console.log('🧩 Mapped recipe:', {
-    id: mappedRecipe.id,
-    name: mappedRecipe.name,
-    image: mappedRecipe.image,
-    prepTime: mappedRecipe.prepTime,
-    calories: mappedRecipe.calories,
-    difficulty: mappedRecipe.difficulty,
-    instructionsCount: mappedRecipe.instructions.length,
-    source: mappedRecipe.source,
-  });
   return mappedRecipe;
 }
 
@@ -739,14 +734,16 @@ export async function getRecommendations(
   }
 
   // Always call the recommendation API with normalized ingredient names first.
-  console.log('🔄 Fetching recommendations from RecipeRec engine...');
+  const canonicalSummary = summarizePayload(items, restrictions, 'canonical', 8);
+  console.log('📤 Recipe request summary:', canonicalSummary);
   const canonicalResponse = await callRecommendAPI(items, restrictions, 8, 'canonical');
   let response = canonicalResponse;
+  let usedFallbackRaw = false;
+  let usedExpansion = false;
 
   // Safety fallback: if normalized pass is too low, retry with raw names only.
   // Do NOT use provider_disabled/local fallback results.
   if ((canonicalResponse.recommendations?.length ?? 0) <= 2 && items.length >= 6) {
-    console.log('🔁 Low recommendation count from normalized names. Retrying once with raw inventory names (provider only)...');
     try {
       const rawProviderResponse = await callRecommendAPI(items, restrictions, 16, 'raw');
       const canonicalCount = canonicalResponse.recommendations?.length ?? 0;
@@ -754,8 +751,8 @@ export async function getRecommendations(
 
       if (rawCount > canonicalCount) {
         response = rawProviderResponse;
+        usedFallbackRaw = true;
       }
-      console.log(`🏁 Selected provider response: canonical=${canonicalCount}, raw=${rawCount}`);
     } catch (err) {
       console.warn('Raw-name provider retry failed; keeping canonical provider response:', err);
     }
@@ -781,15 +778,23 @@ export async function getRecommendations(
     ]);
 
     if (merged.length > (response.recommendations?.length ?? 0)) {
-      console.log(`🧠 Expanded provider recipes: ${(response.recommendations?.length ?? 0)} -> ${merged.length}`);
       response = {
         ...response,
         recommendations: merged,
       };
+      usedExpansion = true;
     }
   }
 
   const recipes = response.recommendations.map(apiRecipeToStoredRecipe);
+  console.log('📥 Recipe response summary:', {
+    source: response.source ?? 'unknown',
+    mode: response.mode,
+    recommendation_count: recipes.length,
+    used_fallback_raw: usedFallbackRaw,
+    used_expansion: usedExpansion,
+    recipe_titles: recipes.map((r) => r.name),
+  });
 
   return {
     mode: response.mode,
