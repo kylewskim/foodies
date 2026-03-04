@@ -19,7 +19,8 @@ from http.server import BaseHTTPRequestHandler
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-RECOMMENDER_URL = os.getenv("RECOMMENDER_URL")
+DEFAULT_RECOMMENDER_URL = "https://reciperec.onrender.com/recommend"
+RECOMMENDER_URL = os.getenv("RECOMMENDER_URL", DEFAULT_RECOMMENDER_URL)
 RECOMMENDER_TIMEOUT_SECONDS = float(os.getenv("RECOMMENDER_TIMEOUT_SECONDS", "15"))
 
 
@@ -33,10 +34,6 @@ class UpstreamHTTPError(Exception):
 class handler(BaseHTTPRequestHandler):
     def do_POST(self):
         try:
-            if not RECOMMENDER_URL:
-                self._send_error(500, "Server misconfigured: RECOMMENDER_URL is not set")
-                return
-
             content_length = int(self.headers.get("Content-Length", 0))
             body = json.loads(self.rfile.read(content_length)) if content_length > 0 else {}
 
@@ -77,6 +74,7 @@ class handler(BaseHTTPRequestHandler):
             "status": "ok",
             "engine": "RecipeRec v2",
             "recommender_configured": bool(RECOMMENDER_URL),
+            "recommender_url": RECOMMENDER_URL,
             "timeout_seconds": RECOMMENDER_TIMEOUT_SECONDS,
         })
 
