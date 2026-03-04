@@ -1,4 +1,4 @@
-import { collection, addDoc, deleteDoc, doc, query, where, getDocs } from 'firebase/firestore';
+import { collection, addDoc, deleteDoc, doc, query, where, getDocs, setDoc } from 'firebase/firestore';
 import { db } from './firebaseConfig';
 import type { FavoriteRecipe } from '../types';
 
@@ -42,7 +42,23 @@ export async function addFavoriteRecipe(
     // Check if already favorited
     const existing = await getFavoriteRecipeByRecipeId(userId, recipeId);
     if (existing) {
-      return existing; // Already favorited, return existing
+      const updatedData = {
+        userId,
+        recipeId,
+        recipeName: recipe.recipeName,
+        recipeSource: recipe.recipeSource,
+        recipeDescription: recipe.recipeDescription,
+        recipeImage: recipe.recipeImage,
+        ingredients: recipe.ingredients,
+        instructions: recipe.instructions,
+        prepTime: recipe.prepTime,
+        createdAt: existing.createdAt || new Date().toISOString(),
+      };
+      await setDoc(doc(db, 'favoriteRecipes', existing.favoriteId), updatedData, { merge: true });
+      return {
+        ...existing,
+        ...updatedData,
+      };
     }
 
     const favoriteData = {
