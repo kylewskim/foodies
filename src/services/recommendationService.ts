@@ -15,7 +15,7 @@ import type { Item, StoredRecipe, UserPreferences } from '../types';
 import { getUserPreferences } from '../firebase/saveReceipt';
 
 const REMOTE_RECOMMEND_FALLBACK_URL = 'https://foodies-dusky-pi.vercel.app/api/recommend';
-const TARGET_MIN_RECOMMENDATIONS = 6;
+const TARGET_MIN_RECOMMENDATIONS = 10;
 
 // ─── Types matching RecipeRec engine output ──────────────────────────────────
 
@@ -442,7 +442,13 @@ function dedupeRecipesByIdentity(recipes: APIRecipe[]): APIRecipe[] {
     out.push(recipe);
   }
 
-  return out.sort((a, b) => (b.score || 0) - (a.score || 0));
+  return out.sort((a, b) => {
+    const matchedDiff = (b.matched?.length || 0) - (a.matched?.length || 0);
+    if (matchedDiff !== 0) return matchedDiff;
+    const coverageDiff = (b.coverage || 0) - (a.coverage || 0);
+    if (coverageDiff !== 0) return coverageDiff;
+    return (b.score || 0) - (a.score || 0);
+  });
 }
 
 function buildExpansionItemSets(items: Item[]): Item[][] {
@@ -468,11 +474,20 @@ function buildExpansionItemSets(items: Item[]): Item[][] {
     return score(a.category) - score(b.category);
   });
 
-  const recentWindow = byExpiry.slice(0, 20);
-  const diverseWindow = byCategoryPriority.slice(0, 20);
-  const tailWindow = uniqueItems.slice(Math.max(0, uniqueItems.length - 20));
+  const recentWindow = byExpiry.slice(0, 24);
+  const diverseWindow = byCategoryPriority.slice(0, 24);
+  const tailWindow = uniqueItems.slice(Math.max(0, uniqueItems.length - 24));
+  const proteinFirstWindow = [
+    ...byCategoryPriority.filter((item) => item.category === 'Protein'),
+    ...byCategoryPriority.filter((item) => item.category !== 'Protein'),
+  ].slice(0, 24);
+  const produceFirstWindow = [
+    ...byCategoryPriority.filter((item) => item.category === 'Produce'),
+    ...byCategoryPriority.filter((item) => item.category !== 'Produce'),
+  ].slice(0, 24);
 
-  return [recentWindow, diverseWindow, tailWindow].filter((set) => set.length > 0);
+  return [recentWindow, diverseWindow, tailWindow, proteinFirstWindow, produceFirstWindow]
+    .filter((set) => set.length > 0);
 }
 
 // ─── API Call ────────────────────────────────────────────────────────────────
@@ -715,7 +730,7 @@ export async function getRecommendations(
       itemSets.map(async (set, index) => {
         try {
           const strategy: 'raw' | 'canonical' = index === 1 ? 'raw' : 'canonical';
-          return await callRecommendAPI(set, restrictions, 24, strategy);
+          return await callRecommendAPI(set, restrictions, 64, strategy);
         } catch (err) {
           console.warn(`Expansion pass ${index + 1} failed:`, err);
           return null;
