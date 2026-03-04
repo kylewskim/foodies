@@ -388,6 +388,19 @@ export function ItemDetailPage() {
               <Link
                 key={recipe.id || index}
                 to={`/recipes/${recipe.id}`}
+                state={{
+                  name: recipe.name,
+                  description: recipe.description,
+                  image: recipe.image,
+                  ingredients: recipe.ingredients,
+                  matchedIngredients: recipe.matchedIngredients,
+                  missingIngredients: recipe.missingIngredients,
+                  prepTime: recipe.prepTime,
+                  calories: recipe.calories,
+                  difficulty: recipe.difficulty,
+                  instructions: recipe.instructions,
+                  url: recipe.url || null,
+                }}
                 style={{ textDecoration: 'none' }}
               >
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>

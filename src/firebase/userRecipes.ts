@@ -100,11 +100,11 @@ export function shouldRegenerateRecipes(
   addedCount: number;
   removedCount: number;
 } {
-  // Check age (regenerate if older than 24 hours)
+  // Check age (regenerate if older than 2 hours)
   const cacheAge = Date.now() - new Date(cachedRecipes.generatedAt).getTime();
-  const twentyFourHours = 24 * 60 * 60 * 1000;
+  const twoHours = 2 * 60 * 60 * 1000;
 
-  if (cacheAge > twentyFourHours) {
+  if (cacheAge > twoHours) {
     return {
       shouldRegenerate: true,
       reason: 'Recipes older than 24 hours',
