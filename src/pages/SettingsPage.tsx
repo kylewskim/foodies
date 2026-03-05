@@ -36,9 +36,9 @@ export function SettingsPage() {
     try {
       const now = new Date();
       const usedItems = await getUsedItems(user.uid, now.getMonth() + 1, now.getFullYear());
-      const totalValue = usedItems.reduce((sum, item) => sum + (item.price ? item.price / 100 : 2.5), 0);
+      const totalValueCents = usedItems.reduce((sum, item) => sum + (item.price ?? 0), 0);
       setItemsWasted(usedItems.length);
-      setValueSaved(Math.round(totalValue));
+      setValueSaved(Math.round(totalValueCents / 100));
     } catch (err) {
       console.error('Error loading impact stats:', err);
     }
@@ -249,10 +249,10 @@ export function SettingsPage() {
             </div>
             <div style={{ padding: '20px 20px 32px' }}>
               <p style={{ fontFamily: '"Poppins", sans-serif', fontSize: '14px', color: '#073d33', lineHeight: '1.6', margin: '0 0 16px' }}>
-                <strong>Items wasted:</strong> Items that expired during the current month.
+                Items wasted is the number of food items that ended up being thrown away during {getCurrentMonth()}—typically items marked as discarded or expired without being used. We count items (each inventory entry), not weight.
               </p>
               <p style={{ fontFamily: '"Poppins", sans-serif', fontSize: '14px', color: '#073d33', lineHeight: '1.6', margin: 0 }}>
-                <strong>Est. value saved:</strong> The estimated dollar value of items you used before they expired, based on purchase price or an average of $2.50 per item.
+                Estimated value saved is the estimated dollar amount of food you likely saved from being wasted during {getCurrentMonth()}. It’s calculated from items that were at risk of expiring but were later used up instead of being discarded, using available price info (such as receipt prices or typical estimates). This number reflects overall impact trends rather than an exact total.
               </p>
             </div>
           </div>

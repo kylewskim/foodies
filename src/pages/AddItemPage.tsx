@@ -121,6 +121,7 @@ export function AddItemPage() {
         predictionSource: lifecycle.predictionSource,
         autoExpireLabel: lifecycle.autoExpireLabel,
         autoExpireStatus: lifecycle.autoExpireStatus,
+        price: rawItem.price_cents ?? null,
         imageUrl: rawItem._store_image_url ?? null, // pre-populate from store lookup
       };
     });

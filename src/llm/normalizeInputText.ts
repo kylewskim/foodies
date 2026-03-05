@@ -87,16 +87,16 @@ OUTPUT FORMAT:
 {
   "purchase_date": "ISO 8601 date string or null",
   "items": [
-    { "raw_name": "item name as written", "quantity": "number as string or null" }
+    { "raw_name": "item name as written", "quantity": "number as string or null", "price_cents": "integer or null" }
   ]
 }
 
 EXAMPLES:
 Input: "2 Apples $3.99"
-Output: { "purchase_date": null, "items": [{ "raw_name": "Apples", "quantity": "2" }] }
+Output: { "purchase_date": null, "items": [{ "raw_name": "Apples", "quantity": "2", "price_cents": 399 }] }
 
 Input: "Date: 01/15/2024\\nMilk\\nBread"
-Output: { "purchase_date": "2024-01-15T00:00:00.000Z", "items": [{ "raw_name": "Milk", "quantity": null }, { "raw_name": "Bread", "quantity": null }] }`;
+Output: { "purchase_date": "2024-01-15T00:00:00.000Z", "items": [{ "raw_name": "Milk", "quantity": null, "price_cents": null }, { "raw_name": "Bread", "quantity": null, "price_cents": null }] }`;
 
   try {
     const response = await openai.chat.completions.create({
@@ -128,6 +128,7 @@ Output: { "purchase_date": "2024-01-15T00:00:00.000Z", "items": [{ "raw_name": "
     parsed.items = parsed.items.map((item) => ({
       ...item,
       item_code: item.item_code ?? null,
+      price_cents: toPriceCents(item.price_cents),
     }));
 
     return parsed;
@@ -137,6 +138,21 @@ Output: { "purchase_date": "2024-01-15T00:00:00.000Z", "items": [{ "raw_name": "
     }
     return normalizeWithPatternMatching(rawText);
   }
+}
+
+function toPriceCents(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return Math.max(0, Math.round(value));
+  }
+  if (typeof value === 'string') {
+    const cleaned = value.replace(/[^\d.]/g, '').trim();
+    if (!cleaned) return null;
+    const parsed = Number(cleaned);
+    if (!Number.isFinite(parsed)) return null;
+    if (cleaned.includes('.')) return Math.max(0, Math.round(parsed * 100));
+    return Math.max(0, Math.round(parsed));
+  }
+  return null;
 }
 
 // ─── Enhanced Pattern Matching ────────────────────────────────────────────────
@@ -375,7 +391,7 @@ function normalizeWithPatternMatching(rawText: string): NormalizeInputTextOutput
     .filter(line => line.length > 0);
 
   let purchaseDate: string | null = null;
-  const items: Array<{ raw_name: string; quantity: string | null; item_code: string | null }> = [];
+  const items: Array<{ raw_name: string; quantity: string | null; item_code: string | null; price_cents: number | null }> = [];
 
   for (const line of lines) {
     // 1. Try to extract purchase date (first match wins)
@@ -443,7 +459,7 @@ function normalizeWithPatternMatching(rawText: string): NormalizeInputTextOutput
     // 9. Skip if name is too short after all cleanup
     if (rawName.length <= 2) continue;
 
-    items.push({ raw_name: rawName, quantity, item_code: null });
+    items.push({ raw_name: rawName, quantity, item_code: null, price_cents: null });
   }
 
   return { purchase_date: purchaseDate, store_name: null, items };

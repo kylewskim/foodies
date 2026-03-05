@@ -24,7 +24,7 @@ export async function parseReceiptWithVision(file: File): Promise<NormalizeInput
 
     const response = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
-      max_tokens: 640,  // ~20 items × ~25 tokens each (name + quantity + item_code) + store_name overhead
+      max_tokens: 800,  // include per-item price fields in addition to name/qty/code
       temperature: 0,   // deterministic output — same receipt → same items every time
       response_format: { type: 'json_object' },
       messages: [
@@ -35,9 +35,10 @@ export async function parseReceiptWithVision(file: File): Promise<NormalizeInput
 Also capture:
 - store_name: the retailer name if visible on the receipt (e.g. "Costco", "Trader Joe's", "Whole Foods"), else null
 - item_code: per-item product code if printed next to the item (e.g. Costco item numbers like "47019"), else null
+- price_cents: item's line price in cents (integer, e.g. $3.99 -> 399), else null
 
 Return JSON:
-{"store_name":"string or null","purchase_date":"YYYY-MM-DD or null","items":[{"raw_name":"clean product name","quantity":"number as string or null","item_code":"string or null"}]}
+{"store_name":"string or null","purchase_date":"YYYY-MM-DD or null","items":[{"raw_name":"clean product name","quantity":"number as string or null","item_code":"string or null","price_cents":123 or null}]}
 
 Include: produce, meat, seafood, dairy, eggs, grains, bread, snacks, beverages, condiments, frozen food, canned food.
 Exclude: totals, taxes, non-food (medicine, cleaning supplies, pet supplies, batteries, gift cards).
@@ -86,6 +87,11 @@ Exclude: totals, taxes, non-food (medicine, cleaning supplies, pet supplies, bat
       return true;
     });
 
+    parsed.items = parsed.items.map((item) => ({
+      ...item,
+      price_cents: toPriceCents(item.price_cents),
+    }));
+
     if (parsed.items.length === 0) {
       console.warn('[Vision] All items filtered out during sanitization');
       return null;
@@ -96,6 +102,23 @@ Exclude: totals, taxes, non-food (medicine, cleaning supplies, pet supplies, bat
     console.warn('[Vision] parseReceiptWithVision failed:', error);
     return null;
   }
+}
+
+function toPriceCents(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return Math.max(0, Math.round(value));
+  }
+  if (typeof value === 'string') {
+    const cleaned = value.replace(/[^\d.]/g, '').trim();
+    if (!cleaned) return null;
+    const parsed = Number(cleaned);
+    if (!Number.isFinite(parsed)) return null;
+    // If model returned dollars like "3.99", convert to cents.
+    if (cleaned.includes('.')) return Math.max(0, Math.round(parsed * 100));
+    // If model returned integer cents like "399", keep as cents.
+    return Math.max(0, Math.round(parsed));
+  }
+  return null;
 }
 
 function fileToBase64(file: File): Promise<string> {
