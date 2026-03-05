@@ -967,7 +967,10 @@ export async function getRecipeDetailById(recipeId: string): Promise<StoredRecip
 
 function apiRecipeToStoredRecipe(rec: APIRecipe): StoredRecipe {
   const record = asRecord(rec);
-  const reasonSummary = rec.reasons.filter(Boolean).join(' · ');
+  const reasons = Array.isArray(rec.reasons) ? rec.reasons : [];
+  const matched = Array.isArray(rec.matched) ? rec.matched : [];
+  const missing = Array.isArray(rec.missing) ? rec.missing : [];
+  const reasonSummary = reasons.filter(Boolean).join(' · ');
   const coveragePct = Number.isFinite(rec.coverage) ? Math.round(rec.coverage * 100) : 0;
   const description = firstString(record, ['description', 'summary', 'short_description', 'intro'])
     ?? (reasonSummary || `${coveragePct}% match`);
@@ -994,8 +997,8 @@ function apiRecipeToStoredRecipe(rec: APIRecipe): StoredRecipe {
     image: image || undefined,
     description,
     ingredients: normalizeIngredients(rec),
-    matchedIngredients: rec.matched,
-    missingIngredients: rec.missing,
+    matchedIngredients: matched,
+    missingIngredients: missing,
     prepTime,
     cookTime,
     totalTime,
