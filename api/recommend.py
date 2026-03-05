@@ -281,6 +281,35 @@ def _fatsecret_search(search_expression: str, top_k: int):
     raise RuntimeError(f"FatSecret search failed: {last_error}")
 
 
+def _fatsecret_recipe_get(recipe_id: str):
+    token = _fatsecret_token()
+    methods = ["recipe.get.v2", "recipe.get"]
+    last_error = None
+
+    for method in methods:
+        params = {
+            "method": method,
+            "recipe_id": str(recipe_id),
+            "format": "json",
+        }
+        url = f"{FATSECRET_API_URL}?{urlencode(params)}"
+        req = Request(url, headers={"Authorization": f"Bearer {token}"}, method="GET")
+        try:
+            with urlopen(req, timeout=FATSECRET_TIMEOUT_SECONDS) as resp:
+                payload = json.loads(resp.read().decode("utf-8") or "{}")
+            if "error" in payload:
+                last_error = payload["error"]
+                continue
+            return payload
+        except HTTPError as e:
+            body = e.read().decode("utf-8") if hasattr(e, "read") else ""
+            last_error = {"status": e.code, "body": body}
+        except URLError as e:
+            raise RuntimeError(f"FatSecret unreachable: {str(e)}") from e
+
+    raise RuntimeError(f"FatSecret recipe.get failed: {last_error}")
+
+
 def _extract_recipe_list(search_payload):
     recipes_obj = search_payload.get("recipes") if isinstance(search_payload, dict) else None
     if not isinstance(recipes_obj, dict):
@@ -304,10 +333,40 @@ def _to_list(value):
     return []
 
 
+def _to_dict_list(value):
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return [v for v in value if isinstance(v, dict)]
+    if isinstance(value, dict):
+        return [value]
+    return []
+
+
 def _first_non_empty(*values):
     for v in values:
         if isinstance(v, str) and v.strip():
             return v.strip()
+    return None
+
+
+def _extract_recipe_image(obj: dict):
+    direct = _first_non_empty(obj.get("recipe_image"), obj.get("image_url"), obj.get("image"))
+    if direct:
+        return direct
+    images = obj.get("recipe_images")
+    if isinstance(images, dict):
+        raw = images.get("recipe_image")
+        if isinstance(raw, list):
+            for item in raw:
+                if isinstance(item, str) and item.strip():
+                    return item.strip()
+                if isinstance(item, dict):
+                    nested = _first_non_empty(item.get("recipe_image"), item.get("image"), item.get("url"))
+                    if nested:
+                        return nested
+        elif isinstance(raw, str) and raw.strip():
+            return raw.strip()
     return None
 
 
@@ -316,6 +375,119 @@ def _pick_bucket(category_text: str):
     if any(k in low for k in ["snack", "dessert", "beverage", "drink", "breakfast"]):
         return "quick_bites"
     return "main"
+
+
+def _extract_recipe_types(recipe_obj: dict) -> list[str]:
+    types_obj = recipe_obj.get("recipe_types")
+    if isinstance(types_obj, dict):
+        rt = types_obj.get("recipe_type")
+        if isinstance(rt, list):
+            return [str(v).strip() for v in rt if str(v).strip()]
+        if isinstance(rt, str) and rt.strip():
+            return [rt.strip()]
+    raw = recipe_obj.get("recipe_type")
+    if isinstance(raw, list):
+        return [str(v).strip() for v in raw if str(v).strip()]
+    if isinstance(raw, str) and raw.strip():
+        return [raw.strip()]
+    return []
+
+
+def _extract_ingredients(recipe_obj: dict) -> list[dict]:
+    ingredients_obj = recipe_obj.get("ingredients")
+    if not isinstance(ingredients_obj, dict):
+        return []
+    rows = _to_dict_list(ingredients_obj.get("ingredient"))
+    out = []
+    for row in rows:
+        description = _first_non_empty(
+            row.get("ingredient_description"),
+            row.get("ingredient_name"),
+            row.get("food_name"),
+            row.get("measurement_description"),
+        )
+        if not description:
+            continue
+        out.append({
+            "name": _first_non_empty(row.get("ingredient_name"), row.get("food_name"), description),
+            "amount": _first_non_empty(row.get("number_of_units"), row.get("measurement_description"), row.get("quantity"), ""),
+            "text": description,
+        })
+    return out
+
+
+def _extract_directions(recipe_obj: dict) -> list[str]:
+    directions_obj = recipe_obj.get("directions")
+    if not isinstance(directions_obj, dict):
+        return []
+    rows = _to_dict_list(directions_obj.get("direction"))
+    out = []
+    for row in rows:
+        text = _first_non_empty(row.get("direction_description"), row.get("instruction"), row.get("text"), "")
+        if text:
+            out.append(text)
+    return out
+
+
+def _extract_serving_info(recipe_obj: dict):
+    serving_size = None
+    calories = None
+
+    serving_sizes_obj = recipe_obj.get("serving_sizes")
+    if isinstance(serving_sizes_obj, dict):
+        servings = _to_dict_list(serving_sizes_obj.get("serving"))
+        if servings:
+            first = servings[0]
+            serving_size = _first_non_empty(
+                first.get("serving_description"),
+                first.get("metric_serving_amount"),
+                first.get("number_of_units"),
+            )
+            cal_raw = first.get("calories")
+            try:
+                calories = int(float(str(cal_raw))) if cal_raw is not None else None
+            except (TypeError, ValueError):
+                calories = None
+
+    if calories is None:
+        cal_raw = recipe_obj.get("calories")
+        try:
+            calories = int(float(str(cal_raw))) if cal_raw is not None else None
+        except (TypeError, ValueError):
+            calories = None
+
+    return serving_size, calories
+
+
+def _map_recipe_detail(recipe_obj: dict):
+    recipe_types = _extract_recipe_types(recipe_obj)
+    recipe_type = recipe_types[0] if recipe_types else _first_non_empty(
+        recipe_obj.get("recipe_type"),
+        recipe_obj.get("recipe_category"),
+        recipe_obj.get("category"),
+        "",
+    )
+    serving_size, calories = _extract_serving_info(recipe_obj)
+    ingredients = _extract_ingredients(recipe_obj)
+    directions = _extract_directions(recipe_obj)
+
+    return {
+        "recipe_id": str(recipe_obj.get("recipe_id") or ""),
+        "title": _first_non_empty(recipe_obj.get("recipe_name"), recipe_obj.get("title"), "Untitled"),
+        "url": _first_non_empty(recipe_obj.get("recipe_url"), recipe_obj.get("url")),
+        "image_url": _extract_recipe_image(recipe_obj),
+        "description": _first_non_empty(recipe_obj.get("recipe_description"), recipe_obj.get("description"), ""),
+        "prep_time": _first_non_empty(recipe_obj.get("preparation_time_min"), recipe_obj.get("prep_time"), ""),
+        "cook_time": _first_non_empty(recipe_obj.get("cooking_time_min"), recipe_obj.get("cook_time"), ""),
+        "serving_size": serving_size,
+        "calories": calories,
+        "recipe_type": recipe_type,
+        "recipe_types": recipe_types,
+        "ingredients": ingredients,
+        "instructions": directions,
+        "source": "fatsecret",
+        "provider": "fatsecret",
+    }
 
 
 def _match_inventory_ingredients(recipe_text: str, inventory_names: list[str]):
@@ -353,7 +525,7 @@ def _build_recommendations(inventory, raw_recipes):
         missing = [name for name in inventory_names if name not in matched]
         coverage = len(matched) / max(len(inventory_names), 1)
         score = round((len(matched) * 10) + (coverage * 100), 3)
-        image_url = _first_non_empty(rec.get("recipe_image"), rec.get("recipe_images"), rec.get("image_url"), rec.get("image"))
+        image_url = _extract_recipe_image(rec)
 
         out.append({
             "recipe_id": str(rec.get("recipe_id") or title),
@@ -395,6 +567,28 @@ class handler(BaseHTTPRequestHandler):
         try:
             content_length = int(self.headers.get("Content-Length", 0))
             body = json.loads(self.rfile.read(content_length)) if content_length > 0 else {}
+
+            detail_recipe_id = body.get("recipe_id")
+            if isinstance(detail_recipe_id, str) and detail_recipe_id.strip():
+                normalized_id = detail_recipe_id.strip()
+                if normalized_id.lower().startswith("fatsecret:"):
+                    normalized_id = normalized_id.split(":", 1)[1]
+                detail_payload = _fatsecret_recipe_get(normalized_id)
+                recipe_obj = detail_payload.get("recipe")
+                if not isinstance(recipe_obj, dict):
+                    self._send_error(502, "FatSecret recipe.get response missing recipe object")
+                    return
+                mapped_detail = _map_recipe_detail(recipe_obj)
+                self._send_json(200, {
+                    "mode": "detail",
+                    "source": "fatsecret",
+                    "recipe": mapped_detail,
+                    "debug": {
+                        "requested_recipe_id": detail_recipe_id,
+                        "normalized_recipe_id": normalized_id,
+                    },
+                })
+                return
 
             inventory = body.get("inventory", [])
             restrictions = body.get("restrictions", [])

@@ -389,6 +389,7 @@ export function ItemDetailPage() {
                 key={recipe.id || index}
                 to={`/recipes/${recipe.id}`}
                 state={{
+                  id: recipe.id,
                   name: recipe.name,
                   source: recipe.source,
                   description: recipe.description,
@@ -397,6 +398,10 @@ export function ItemDetailPage() {
                   matchedIngredients: recipe.matchedIngredients,
                   missingIngredients: recipe.missingIngredients,
                   prepTime: recipe.prepTime,
+                  cookTime: recipe.cookTime,
+                  totalTime: recipe.totalTime,
+                  servingSize: recipe.servingSize,
+                  recipeType: recipe.recipeType,
                   calories: recipe.calories,
                   difficulty: recipe.difficulty,
                   instructions: recipe.instructions,

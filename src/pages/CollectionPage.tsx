@@ -130,6 +130,7 @@ export function CollectionPage() {
                 onClick={() => {
                   navigate(`/recipes/${recipe.recipeId}`, {
                     state: {
+                      id: recipe.recipeId,
                       name: recipe.recipeName,
                       source: recipe.recipeSource,
                       description: recipe.recipeDescription,
@@ -137,6 +138,11 @@ export function CollectionPage() {
                       ingredients: recipe.ingredients,
                       instructions: recipe.instructions,
                       prepTime: recipe.prepTime,
+                      cookTime: recipe.cookTime,
+                      totalTime: recipe.totalTime,
+                      servingSize: recipe.servingSize,
+                      recipeType: recipe.recipeType,
+                      calories: recipe.calories,
                     }
                   });
                 }}

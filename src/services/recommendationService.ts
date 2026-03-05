@@ -35,6 +35,13 @@ export interface RecommendationResponse {
   debug?: Record<string, unknown>;
 }
 
+export interface RecipeDetailResponse {
+  mode: 'detail';
+  source?: string;
+  recipe: APIRecipe;
+  debug?: Record<string, unknown>;
+}
+
 export interface APIRecipe {
   recipe_id: string;
   title: string;
@@ -79,6 +86,8 @@ export interface APIRecipe {
   meal_types?: string[] | null;
   dish_type?: string | null;
   dish_types?: string[] | null;
+  serving_size?: string | null;
+  servingSize?: string | null;
 }
 
 type UiRecipeCategory = 'Breakfast' | 'Lunch/Dinner' | 'Snack' | 'Dessert' | 'Beverage' | 'Others';
@@ -475,6 +484,25 @@ function normalizeTotalTime(recipe: APIRecipe): string | undefined {
   return toMinutesLabel(parseMinutesFromUnknown(raw));
 }
 
+function normalizeServingSize(recipe: APIRecipe): string | undefined {
+  const rec = asRecord(recipe);
+  return firstString(rec, ['serving_size', 'servingSize', 'serving', 'servings']) ?? undefined;
+}
+
+function normalizeRecipeType(recipe: APIRecipe): string | undefined {
+  const rec = asRecord(recipe);
+  const single = firstString(rec, ['recipe_type', 'meal_type', 'category', 'recipe_category', 'bucket']);
+  if (single) return single;
+  for (const key of ['recipe_types', 'meal_types', 'categories']) {
+    const value = rec[key];
+    if (Array.isArray(value)) {
+      const first = value.find((v) => typeof v === 'string' && v.trim());
+      if (typeof first === 'string') return first.trim();
+    }
+  }
+  return undefined;
+}
+
 function getRecipeSortMinutes(recipe: Pick<StoredRecipe, 'cookTime' | 'prepTime' | 'totalTime'>): number {
   return (
     parseMinutesFromUnknown(recipe.cookTime)
@@ -526,7 +554,7 @@ function normalizeInstructions(recipe: APIRecipe): string[] {
 function normalizeIngredients(recipe: APIRecipe): string[] {
   const rec = asRecord(recipe);
   const raw = rec.ingredients;
-  if (!Array.isArray(raw)) return [...recipe.matched, ...recipe.missing];
+  if (!Array.isArray(raw)) return [];
 
   const parsed = raw
     .map((item) => {
@@ -539,7 +567,7 @@ function normalizeIngredients(recipe: APIRecipe): string[] {
     })
     .filter(Boolean);
 
-  return parsed.length > 0 ? parsed : [...recipe.matched, ...recipe.missing];
+  return parsed;
 }
 
 function extractExplicitRecipeIngredients(recipe: APIRecipe): string[] {
@@ -886,6 +914,39 @@ async function callRecommendAPI(
   return data;
 }
 
+export async function getRecipeDetailById(recipeId: string): Promise<StoredRecipe | null> {
+  const trimmed = (recipeId || '').trim();
+  if (!trimmed) return null;
+  if (!trimmed.toLowerCase().startsWith('fatsecret:')) return null;
+
+  const configuredEndpoint = (import.meta.env.VITE_RECOMMEND_API_URL || '').trim();
+  const primaryEndpoint = configuredEndpoint || '/api/recommend';
+
+  const response = await fetch(primaryEndpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      recipe_id: trimmed,
+      debug: true,
+      provider_enabled: true,
+    }),
+  });
+
+  if (!response.ok) {
+    let errText = '';
+    try {
+      errText = await response.clone().text();
+    } catch {
+      errText = '';
+    }
+    throw new Error(`Recipe detail API error: ${response.status} — ${errText}`);
+  }
+
+  const data = await response.json() as RecipeDetailResponse;
+  if (!data?.recipe || typeof data.recipe !== 'object') return null;
+  return apiRecipeToStoredRecipe(data.recipe);
+}
+
 // ─── API Response → StoredRecipe ─────────────────────────────────────────────
 
 function apiRecipeToStoredRecipe(rec: APIRecipe): StoredRecipe {
@@ -904,6 +965,8 @@ function apiRecipeToStoredRecipe(rec: APIRecipe): StoredRecipe {
   const prepTime = normalizePrepTime(rec);
   const cookTime = normalizeCookTime(rec);
   const totalTime = normalizeTotalTime(rec);
+  const servingSize = normalizeServingSize(rec);
+  const recipeType = normalizeRecipeType(rec);
   const uiCategory = mapToUiCategory(rawCategory, rec.bucket);
 
   const mappedRecipe: StoredRecipe = {
@@ -920,6 +983,8 @@ function apiRecipeToStoredRecipe(rec: APIRecipe): StoredRecipe {
     prepTime,
     cookTime,
     totalTime,
+    servingSize,
+    recipeType,
     calories,
     difficulty: (difficultyRaw === 'Easy' || difficultyRaw === 'Medium' || difficultyRaw === 'Hard')
       ? difficultyRaw

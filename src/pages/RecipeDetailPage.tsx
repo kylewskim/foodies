@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useState, useEffect, useMemo } from 'react';
+import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { getRecipeDetailById } from '../services/recommendationService';
 import {
   addFavoriteRecipe,
   removeFavoriteRecipe,
@@ -9,6 +10,7 @@ import {
 } from '../firebase/favoriteRecipes';
 
 interface RecipeDetailState {
+  id?: string;
   name: string;
   source?: string;
   description?: string;
@@ -20,6 +22,8 @@ interface RecipeDetailState {
   prepTime?: string;
   cookTime?: string;
   totalTime?: string;
+  servingSize?: string;
+  recipeType?: string;
   calories?: number;
   difficulty?: 'Easy' | 'Medium' | 'Hard';
   rawCategory?: string;
@@ -81,22 +85,71 @@ function sourceLabel(source?: string, url?: string | null): string {
 export function RecipeDetailPage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { recipeId: routeRecipeId } = useParams();
   const { user } = useAuth();
-  const recipe = location.state as RecipeDetailState;
+  const initialRecipe = location.state as RecipeDetailState | undefined;
+  const [apiRecipe, setApiRecipe] = useState<RecipeDetailState | null>(null);
+  const [isLoadingDetail, setIsLoadingDetail] = useState(false);
+  const displayRecipe = apiRecipe ?? initialRecipe;
 
   const [isFavorited, setIsFavorited] = useState(false);
   const [isTogglingFavorite, setIsTogglingFavorite] = useState(false);
 
-  const recipeId = recipe ? generateRecipeId(recipe.name) : '';
+  const favoriteRecipeId = displayRecipe ? generateRecipeId(displayRecipe.name) : '';
 
   useEffect(() => {
-    if (user && recipeId) loadFavoriteStatus();
-  }, [user, recipeId]);
+    if (user && favoriteRecipeId) loadFavoriteStatus();
+  }, [user, favoriteRecipeId]);
+
+  useEffect(() => {
+    const targetId = (routeRecipeId || initialRecipe?.id || '').trim();
+    const source = (initialRecipe?.source || '').toLowerCase();
+    const shouldFetch = targetId.toLowerCase().startsWith('fatsecret:') || source === 'fatsecret';
+    if (!targetId || !shouldFetch) return;
+
+    let cancelled = false;
+    setIsLoadingDetail(true);
+    getRecipeDetailById(targetId)
+      .then((detail) => {
+        if (cancelled || !detail) return;
+        setApiRecipe({
+          id: detail.id,
+          name: detail.name,
+          source: detail.source,
+          description: detail.description,
+          image: detail.image,
+          ingredients: detail.ingredients,
+          matchedIngredients: detail.matchedIngredients,
+          missingIngredients: detail.missingIngredients,
+          instructions: detail.instructions,
+          prepTime: detail.prepTime,
+          cookTime: detail.cookTime,
+          totalTime: detail.totalTime,
+          servingSize: detail.servingSize,
+          recipeType: detail.recipeType,
+          calories: detail.calories,
+          difficulty: detail.difficulty,
+          rawCategory: detail.rawCategory,
+          uiCategory: detail.uiCategory,
+          url: detail.url,
+        });
+      })
+      .catch((error) => {
+        console.error('Recipe detail fetch failed, using summary payload only:', error);
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingDetail(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [routeRecipeId, initialRecipe?.id, initialRecipe?.source]);
 
   const loadFavoriteStatus = async () => {
-    if (!user || !recipeId) return;
+    if (!user || !favoriteRecipeId) return;
     try {
-      const favorited = await isRecipeFavorited(user.uid, recipeId);
+      const favorited = await isRecipeFavorited(user.uid, favoriteRecipeId);
       setIsFavorited(favorited);
     } catch (error) {
       console.error('Error loading favorite status:', error);
@@ -104,23 +157,26 @@ export function RecipeDetailPage() {
   };
 
   const handleToggleFavorite = async () => {
-    if (!user || !recipe || isTogglingFavorite) return;
+    if (!user || !displayRecipe || isTogglingFavorite) return;
     setIsTogglingFavorite(true);
     try {
       if (isFavorited) {
-        await removeFavoriteRecipe(user.uid, recipeId);
+        await removeFavoriteRecipe(user.uid, favoriteRecipeId);
         setIsFavorited(false);
       } else {
         await addFavoriteRecipe(user.uid, {
-          recipeName: recipe.name,
-          recipeSource: recipe.source,
-          recipeDescription: recipe.description,
-          recipeImage: recipe.image,
-          ingredients: recipe.ingredients,
-          instructions: recipe.instructions,
-          prepTime: recipe.prepTime,
-          cookTime: recipe.cookTime,
-          totalTime: recipe.totalTime,
+          recipeName: displayRecipe.name,
+          recipeSource: displayRecipe.source,
+          recipeDescription: displayRecipe.description,
+          recipeImage: displayRecipe.image,
+          ingredients: displayRecipe.ingredients,
+          instructions: displayRecipe.instructions,
+          prepTime: displayRecipe.prepTime,
+          cookTime: displayRecipe.cookTime,
+          totalTime: displayRecipe.totalTime,
+          servingSize: displayRecipe.servingSize,
+          recipeType: displayRecipe.recipeType,
+          calories: displayRecipe.calories,
         });
         setIsFavorited(true);
       }
@@ -132,9 +188,9 @@ export function RecipeDetailPage() {
   };
 
   const isInFridge = (ingredientName: string): boolean => {
-    if (!recipe.matchedIngredients || recipe.matchedIngredients.length === 0) return false;
+    if (!displayRecipe?.matchedIngredients || displayRecipe.matchedIngredients.length === 0) return false;
     const lower = ingredientName.toLowerCase();
-    return recipe.matchedIngredients.some(matched => {
+    return displayRecipe.matchedIngredients.some(matched => {
       const ml = matched.toLowerCase();
       return lower.includes(ml) || ml.includes(lower) ||
         lower.split(/[\s,]+/).some(word => word.length > 2 && ml.includes(word));
@@ -142,40 +198,53 @@ export function RecipeDetailPage() {
   };
 
   useEffect(() => {
-    if (!recipe) {
+    if (!displayRecipe && !routeRecipeId) {
       console.warn('RecipeDetailPage: no location.state — redirecting to /recipes');
       navigate('/recipes', { replace: true });
     }
-  }, [recipe, navigate]);
+  }, [displayRecipe, routeRecipeId, navigate]);
 
-  if (!recipe) return null;
+  if (!displayRecipe && isLoadingDetail) {
+    return (
+      <div style={{ minHeight: '100vh', backgroundColor: '#f7f6ef', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <p style={{ margin: 0, fontSize: '14px', fontFamily: '"Poppins", sans-serif', color: '#666' }}>
+          Loading recipe details...
+        </p>
+      </div>
+    );
+  }
+  if (!displayRecipe) return null;
 
-  const validInstructions = (recipe.instructions ?? [])
+  const validInstructions = useMemo(() => (displayRecipe.instructions ?? [])
     .map((item) => (item || '').trim())
-    .filter((item) => item.length > 0 && !item.startsWith('Full recipe:'));
+    .filter((item) => item.length > 0 && !item.startsWith('Full recipe:')), [displayRecipe.instructions]);
 
   useEffect(() => {
-    if (!recipe) return;
+    if (!displayRecipe) return;
     console.log('🍽️ Recipe detail state:', {
-      name: recipe.name,
-      source: recipe.source,
-      prepTime: recipe.prepTime,
-      cookTime: recipe.cookTime,
-      totalTime: recipe.totalTime,
-      calories: recipe.calories,
-      difficulty: recipe.difficulty,
-      instructionsCount: recipe.instructions?.length ?? 0,
+      name: displayRecipe.name,
+      source: displayRecipe.source,
+      prepTime: displayRecipe.prepTime,
+      cookTime: displayRecipe.cookTime,
+      totalTime: displayRecipe.totalTime,
+      calories: displayRecipe.calories,
+      servingSize: displayRecipe.servingSize,
+      recipeType: displayRecipe.recipeType,
+      difficulty: displayRecipe.difficulty,
+      instructionsCount: displayRecipe.instructions?.length ?? 0,
       validInstructionsCount: validInstructions.length,
-      image: recipe.image,
+      ingredientCount: displayRecipe.ingredients?.length ?? 0,
+      image: displayRecipe.image,
+      detailFetched: !!apiRecipe,
     });
-  }, [recipe, validInstructions.length]);
+  }, [displayRecipe, validInstructions.length, apiRecipe]);
 
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#f7f6ef', position: 'relative' }}>
       {/* Hero image */}
       <div style={{ position: 'relative', width: '100%', height: '240px', overflow: 'hidden' }}>
-        {recipe.image ? (
-          <img src={recipe.image} alt={recipe.name}
+        {displayRecipe.image ? (
+          <img src={displayRecipe.image} alt={displayRecipe.name}
             style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
         ) : (
           <div style={{
@@ -251,7 +320,7 @@ export function RecipeDetailPage() {
             color: '#333',
             letterSpacing: '-0.036px',
           }}>
-            {recipe.name}
+            {displayRecipe.name}
           </h1>
 
           <p style={{
@@ -263,35 +332,45 @@ export function RecipeDetailPage() {
             lineHeight: '1.35',
             letterSpacing: '-0.4316px',
           }}>
-            By {sourceLabel(recipe.source, recipe.url)}
+            By {sourceLabel(displayRecipe.source, displayRecipe.url)}
           </p>
 
           {/* Stats list */}
-          {(recipe.prepTime || recipe.cookTime || recipe.totalTime || recipe.calories != null || recipe.difficulty) && (
+          {(displayRecipe.prepTime || displayRecipe.cookTime || displayRecipe.totalTime || displayRecipe.servingSize || displayRecipe.recipeType || displayRecipe.calories != null || displayRecipe.difficulty) && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              {recipe.prepTime && (
+              {displayRecipe.prepTime && (
                 <p style={{ margin: 0, fontFamily: '"Poppins", sans-serif', fontSize: '12px', color: '#333' }}>
-                  Prep time: {recipe.prepTime}
+                  Prep time: {displayRecipe.prepTime}
                 </p>
               )}
-              {recipe.cookTime && (
+              {displayRecipe.cookTime && (
                 <p style={{ margin: 0, fontFamily: '"Poppins", sans-serif', fontSize: '12px', color: '#333' }}>
-                  Cook time: {recipe.cookTime}
+                  Cook time: {displayRecipe.cookTime}
                 </p>
               )}
-              {recipe.totalTime && (
+              {displayRecipe.totalTime && (
                 <p style={{ margin: 0, fontFamily: '"Poppins", sans-serif', fontSize: '12px', color: '#333' }}>
-                  Total time: {recipe.totalTime}
+                  Total time: {displayRecipe.totalTime}
                 </p>
               )}
-              {recipe.calories != null && (
+              {displayRecipe.servingSize && (
                 <p style={{ margin: 0, fontFamily: '"Poppins", sans-serif', fontSize: '12px', color: '#333' }}>
-                  Calories: {recipe.calories} Cal
+                  Serving size: {displayRecipe.servingSize}
                 </p>
               )}
-              {recipe.difficulty && (
+              {displayRecipe.recipeType && (
                 <p style={{ margin: 0, fontFamily: '"Poppins", sans-serif', fontSize: '12px', color: '#333' }}>
-                  Difficulty: {recipe.difficulty}
+                  Recipe type: {displayRecipe.recipeType}
+                </p>
+              )}
+              {displayRecipe.calories != null && (
+                <p style={{ margin: 0, fontFamily: '"Poppins", sans-serif', fontSize: '12px', color: '#333' }}>
+                  Calories: {displayRecipe.calories} Cal
+                </p>
+              )}
+              {displayRecipe.difficulty && (
+                <p style={{ margin: 0, fontFamily: '"Poppins", sans-serif', fontSize: '12px', color: '#333' }}>
+                  Difficulty: {displayRecipe.difficulty}
                 </p>
               )}
             </div>
@@ -299,7 +378,7 @@ export function RecipeDetailPage() {
         </div>
 
         {/* Description */}
-        {recipe.description && (
+        {displayRecipe.description && (
           <div style={{
             display: 'flex', flexDirection: 'column', gap: '12px',
             paddingBottom: '12px',
@@ -319,7 +398,7 @@ export function RecipeDetailPage() {
               fontFamily: '"Poppins", sans-serif',
               color: 'rgba(0,0,0,0.4)',
             }}>
-              {recipe.description}
+              {displayRecipe.description}
             </p>
           </div>
         )}
@@ -335,7 +414,17 @@ export function RecipeDetailPage() {
             Ingredients
           </h2>
           <div style={{ display: 'flex', flexDirection: 'column' }}>
-            {recipe.ingredients.map((ingredient, idx) => {
+            {isLoadingDetail && (
+              <p style={{ margin: '0 0 12px', fontSize: '12px', fontFamily: '"Poppins", sans-serif', color: 'rgba(0,0,0,0.5)' }}>
+                Loading recipe ingredients from FatSecret...
+              </p>
+            )}
+            {displayRecipe.ingredients.length === 0 && !isLoadingDetail && (
+              <p style={{ margin: '0 0 12px', fontSize: '12px', fontFamily: '"Poppins", sans-serif', color: 'rgba(0,0,0,0.5)' }}>
+                Ingredient details are not available for this recipe.
+              </p>
+            )}
+            {displayRecipe.ingredients.map((ingredient, idx) => {
               const { name, quantity } = parseIngredient(ingredient);
               const inFridge = isInFridge(name);
               return (
@@ -387,24 +476,26 @@ export function RecipeDetailPage() {
                   </div>
 
                   {/* Right: In fridge / Unstocked badge */}
-                  <div style={{
-                    backgroundColor: '#d3e2d0',
-                    borderRadius: '8px',
-                    padding: '0 8px',
-                    height: '20px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    flexShrink: 0,
-                    marginLeft: '8px',
-                  }}>
-                    <span style={{
-                      fontFamily: '"Poppins", sans-serif',
-                      fontSize: '10px',
-                      color: '#073d33',
+                  {displayRecipe.matchedIngredients && displayRecipe.matchedIngredients.length > 0 && (
+                    <div style={{
+                      backgroundColor: '#d3e2d0',
+                      borderRadius: '8px',
+                      padding: '0 8px',
+                      height: '20px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      flexShrink: 0,
+                      marginLeft: '8px',
                     }}>
-                      {inFridge ? 'In fridge' : 'Unstocked'}
-                    </span>
-                  </div>
+                      <span style={{
+                        fontFamily: '"Poppins", sans-serif',
+                        fontSize: '10px',
+                        color: '#073d33',
+                      }}>
+                        {inFridge ? 'In fridge' : 'Unstocked'}
+                      </span>
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -443,11 +534,16 @@ export function RecipeDetailPage() {
             ))}
           </div>
         )}
+        {!isLoadingDetail && validInstructions.length === 0 && (
+          <p style={{ margin: '0 0 28px', fontSize: '12px', fontFamily: '"Poppins", sans-serif', color: 'rgba(0,0,0,0.5)' }}>
+            Cooking directions are not available for this recipe.
+          </p>
+        )}
 
         {/* View Original Recipe */}
-        {recipe.url && (
+        {displayRecipe.url && (
           <a
-            href={recipe.url}
+            href={displayRecipe.url}
             target="_blank"
             rel="noopener noreferrer"
             style={{

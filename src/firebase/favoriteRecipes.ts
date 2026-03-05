@@ -42,6 +42,9 @@ export async function addFavoriteRecipe(
     prepTime?: string;
     cookTime?: string;
     totalTime?: string;
+    servingSize?: string;
+    recipeType?: string;
+    calories?: number;
   }
 ): Promise<FavoriteRecipe> {
   try {
@@ -62,6 +65,9 @@ export async function addFavoriteRecipe(
         prepTime: recipe.prepTime,
         cookTime: recipe.cookTime,
         totalTime: recipe.totalTime,
+        servingSize: recipe.servingSize,
+        recipeType: recipe.recipeType,
+        calories: recipe.calories,
         createdAt: existing.createdAt || new Date().toISOString(),
       });
       await setDoc(doc(db, 'favoriteRecipes', existing.favoriteId), updatedData, { merge: true });
@@ -83,6 +89,9 @@ export async function addFavoriteRecipe(
       prepTime: recipe.prepTime,
       cookTime: recipe.cookTime,
       totalTime: recipe.totalTime,
+      servingSize: recipe.servingSize,
+      recipeType: recipe.recipeType,
+      calories: recipe.calories,
       createdAt: new Date().toISOString(),
     });
 

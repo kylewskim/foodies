@@ -156,6 +156,9 @@ export function RecipesPage() {
         prepTime: recipe.prepTime,
         cookTime: recipe.cookTime,
         totalTime: recipe.totalTime,
+        servingSize: recipe.servingSize,
+        recipeType: recipe.recipeType,
+        calories: recipe.calories,
       });
     }
   };
@@ -325,6 +328,7 @@ export function RecipesPage() {
                 key={recipe.id}
                 onClick={() => navigate(`/recipes/${recipe.id}`, {
                   state: {
+                    id: recipe.id,
                     name: recipe.name,
                     source: recipe.source,
                     description: recipe.description,
@@ -335,6 +339,8 @@ export function RecipesPage() {
                     prepTime: recipe.prepTime,
                     cookTime: recipe.cookTime,
                     totalTime: recipe.totalTime,
+                    servingSize: recipe.servingSize,
+                    recipeType: recipe.recipeType,
                     calories: recipe.calories,
                     difficulty: recipe.difficulty,
                     instructions: recipe.instructions,

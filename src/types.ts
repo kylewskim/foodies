@@ -137,6 +137,9 @@ export interface FavoriteRecipe {
   prepTime?: string;
   cookTime?: string;
   totalTime?: string;
+  servingSize?: string;
+  recipeType?: string;
+  calories?: number;
   createdAt: string;
 }
 
@@ -157,6 +160,8 @@ export interface StoredRecipe {
   prepTime?: string;
   cookTime?: string;
   totalTime?: string;
+  servingSize?: string;
+  recipeType?: string;
   calories?: number;
   difficulty?: 'Easy' | 'Medium' | 'Hard';
   instructions: string[];
