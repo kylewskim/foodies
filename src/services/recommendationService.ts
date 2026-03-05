@@ -954,6 +954,13 @@ export async function getRecommendations(
     total_duration_ms: Math.round(performance.now() - startedAt),
     recipe_titles: recipes.map((r) => r.name),
   });
+  console.groupCollapsed('📦 Recipe raw payload');
+  console.log('raw_response', response);
+  console.log('raw_recommendations', response.recommendations);
+  response.recommendations.forEach((rec, index) => {
+    console.log(`raw_recipe[${index}]`, rec);
+  });
+  console.groupEnd();
 
   return {
     mode: response.mode,
