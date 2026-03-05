@@ -506,6 +506,7 @@ def _match_inventory_ingredients(recipe_text: str, inventory_names: list[str]):
 def _build_recommendations(inventory, raw_recipes):
     inventory_names = [i["name"] for i in inventory]
     out = []
+    dropped_no_image = 0
 
     for rec in raw_recipes:
         if not isinstance(rec, dict):
@@ -527,6 +528,9 @@ def _build_recommendations(inventory, raw_recipes):
         coverage = len(matched) / max(len(inventory_names), 1)
         score = round((len(matched) * 10) + (coverage * 100), 3)
         image_url = _extract_recipe_image(rec)
+        if not image_url:
+            dropped_no_image += 1
+            continue
 
         out.append({
             "recipe_id": str(rec.get("recipe_id") or title),
@@ -560,7 +564,7 @@ def _build_recommendations(inventory, raw_recipes):
         seen.add(key)
         deduped.append(rec)
 
-    return deduped
+    return deduped, dropped_no_image
 
 
 class handler(BaseHTTPRequestHandler):
@@ -628,7 +632,8 @@ class handler(BaseHTTPRequestHandler):
 
             raw_payload = _fatsecret_search(search_expression, top_k)
             raw_recipes = _extract_recipe_list(raw_payload)
-            mapped = _build_recommendations(normalized_inventory, raw_recipes)[:top_k]
+            mapped, dropped_no_image = _build_recommendations(normalized_inventory, raw_recipes)
+            mapped = mapped[:top_k]
 
             expiring_soon = [i["name"] for i in normalized_inventory[:10]]
             mode = "abundant" if len(normalized_inventory) >= 6 else "low_stock"
@@ -653,6 +658,7 @@ class handler(BaseHTTPRequestHandler):
                     "search_terms": search_terms,
                     "raw_recipe_count": len(raw_recipes),
                     "mapped_recipe_count": len(mapped),
+                    "dropped_no_image": dropped_no_image,
                     "restrictions": restrictions,
                 }
 
