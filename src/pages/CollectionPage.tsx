@@ -128,9 +128,10 @@ export function CollectionPage() {
               <div
                 key={recipe.favoriteId}
                 onClick={() => {
-                  navigate(`/recipes/${recipe.recipeId}`, {
+                  const detailRecipeId = recipe.sourceRecipeId || recipe.recipeId;
+                  navigate(`/recipes/${detailRecipeId}`, {
                     state: {
-                      id: recipe.recipeId,
+                      id: detailRecipeId,
                       name: recipe.recipeName,
                       source: recipe.recipeSource,
                       description: recipe.recipeDescription,

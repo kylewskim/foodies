@@ -128,6 +128,7 @@ export interface FavoriteRecipe {
   favoriteId: string;  // Document ID in Firestore
   userId: string;  // User who favorited this recipe
   recipeId: string;  // Unique identifier for the recipe (hash of name)
+  sourceRecipeId?: string; // Provider-native recipe id (e.g. fatsecret:12345)
   recipeName: string;
   recipeSource?: string;
   recipeDescription?: string;

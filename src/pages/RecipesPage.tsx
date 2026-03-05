@@ -147,6 +147,7 @@ export function RecipesPage() {
       newFavs.add(recipeId);
       setFavoritedIds(newFavs);
       await addFavoriteRecipe(user.uid, {
+        sourceRecipeId: recipe.id,
         recipeName: recipe.name,
         recipeSource: recipe.source,
         recipeDescription: recipe.description,

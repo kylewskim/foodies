@@ -33,6 +33,7 @@ function stripUndefined<T extends Record<string, unknown>>(input: T): T {
 export async function addFavoriteRecipe(
   userId: string,
   recipe: {
+    sourceRecipeId?: string;
     recipeName: string;
     recipeSource?: string;
     recipeDescription?: string;
@@ -56,6 +57,7 @@ export async function addFavoriteRecipe(
       const updatedData = stripUndefined({
         userId,
         recipeId,
+        sourceRecipeId: recipe.sourceRecipeId,
         recipeName: recipe.recipeName,
         recipeSource: recipe.recipeSource,
         recipeDescription: recipe.recipeDescription,
@@ -80,6 +82,7 @@ export async function addFavoriteRecipe(
     const favoriteData = stripUndefined({
       userId,
       recipeId,
+      sourceRecipeId: recipe.sourceRecipeId,
       recipeName: recipe.recipeName,
       recipeSource: recipe.recipeSource,
       recipeDescription: recipe.recipeDescription,

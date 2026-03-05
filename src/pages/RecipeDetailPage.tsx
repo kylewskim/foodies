@@ -82,6 +82,29 @@ function sourceLabel(source?: string, url?: string | null): string {
   return 'Freshli';
 }
 
+function isFatsecretRecipeId(value?: string | null): boolean {
+  if (!value) return false;
+  const trimmed = value.trim();
+  return /^fatsecret:\d+$/i.test(trimmed) || /^\d+$/.test(trimmed);
+}
+
+function extractFatsecretRecipeIdFromUrl(url?: string | null): string | null {
+  if (!url) return null;
+  try {
+    const parsed = new URL(url);
+    const fromParam = parsed.searchParams.get('recipe_id') || parsed.searchParams.get('id');
+    if (fromParam && /^\d+$/.test(fromParam)) return `fatsecret:${fromParam}`;
+    const parts = parsed.pathname.split('/').filter(Boolean);
+    for (let i = parts.length - 1; i >= 0; i--) {
+      const p = parts[i];
+      if (/^\d+$/.test(p)) return `fatsecret:${p}`;
+    }
+  } catch {
+    // no-op
+  }
+  return null;
+}
+
 export function RecipeDetailPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -102,10 +125,24 @@ export function RecipeDetailPage() {
   }, [user, favoriteRecipeId]);
 
   useEffect(() => {
-    const targetId = (routeRecipeId || initialRecipe?.id || '').trim();
+    const routeId = (routeRecipeId || '').trim();
+    const stateId = (initialRecipe?.id || '').trim();
+    const urlDerivedId = extractFatsecretRecipeIdFromUrl(initialRecipe?.url);
+    const targetId = isFatsecretRecipeId(routeId)
+      ? routeId
+      : (isFatsecretRecipeId(stateId) ? stateId : (urlDerivedId || ''));
     const source = (initialRecipe?.source || '').toLowerCase();
     const shouldFetch = targetId.toLowerCase().startsWith('fatsecret:') || source === 'fatsecret';
-    if (!targetId || !shouldFetch) return;
+    if (!targetId || !shouldFetch) {
+      if (source === 'fatsecret') {
+        console.warn('Recipe detail fetch skipped: no valid FatSecret recipe id', {
+          routeRecipeId,
+          stateRecipeId: initialRecipe?.id,
+          url: initialRecipe?.url,
+        });
+      }
+      return;
+    }
 
     let cancelled = false;
     setIsLoadingDetail(true);
@@ -165,6 +202,7 @@ export function RecipeDetailPage() {
         setIsFavorited(false);
       } else {
         await addFavoriteRecipe(user.uid, {
+          sourceRecipeId: displayRecipe.id,
           recipeName: displayRecipe.name,
           recipeSource: displayRecipe.source,
           recipeDescription: displayRecipe.description,

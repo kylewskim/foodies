@@ -947,7 +947,20 @@ export async function getRecipeDetailById(recipeId: string): Promise<StoredRecip
 
   const data = await response.json() as RecipeDetailResponse;
   if (!data?.recipe || typeof data.recipe !== 'object') return null;
-  return apiRecipeToStoredRecipe(data.recipe);
+  const mapped = apiRecipeToStoredRecipe(data.recipe);
+  console.log('📥 Recipe detail summary:', {
+    requested_recipe_id: recipeId,
+    resolved_id: mapped.id,
+    title: mapped.name,
+    prepTime: mapped.prepTime,
+    cookTime: mapped.cookTime,
+    servingSize: mapped.servingSize,
+    calories: mapped.calories,
+    ingredientCount: mapped.ingredients.length,
+    instructionsCount: mapped.instructions.length,
+    recipeType: mapped.recipeType,
+  });
+  return mapped;
 }
 
 // ─── API Response → StoredRecipe ─────────────────────────────────────────────
