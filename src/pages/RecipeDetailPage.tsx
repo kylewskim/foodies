@@ -18,8 +18,12 @@ interface RecipeDetailState {
   missingIngredients?: string[];
   instructions?: string[];
   prepTime?: string;
+  cookTime?: string;
+  totalTime?: string;
   calories?: number;
   difficulty?: 'Easy' | 'Medium' | 'Hard';
+  rawCategory?: string;
+  uiCategory?: 'Breakfast' | 'Lunch/Dinner' | 'Snack' | 'Dessert' | 'Beverage' | 'Others';
   url?: string | null;
 }
 
@@ -115,6 +119,8 @@ export function RecipeDetailPage() {
           ingredients: recipe.ingredients,
           instructions: recipe.instructions,
           prepTime: recipe.prepTime,
+          cookTime: recipe.cookTime,
+          totalTime: recipe.totalTime,
         });
         setIsFavorited(true);
       }
@@ -154,6 +160,8 @@ export function RecipeDetailPage() {
       name: recipe.name,
       source: recipe.source,
       prepTime: recipe.prepTime,
+      cookTime: recipe.cookTime,
+      totalTime: recipe.totalTime,
       calories: recipe.calories,
       difficulty: recipe.difficulty,
       instructionsCount: recipe.instructions?.length ?? 0,
@@ -258,41 +266,33 @@ export function RecipeDetailPage() {
             By {sourceLabel(recipe.source, recipe.url)}
           </p>
 
-          {/* Stats row */}
-          {(recipe.prepTime || recipe.calories != null || recipe.difficulty) && (
-            <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
+          {/* Stats list */}
+          {(recipe.prepTime || recipe.cookTime || recipe.totalTime || recipe.calories != null || recipe.difficulty) && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
               {recipe.prepTime && (
-                <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-                  <span style={{ fontFamily: '"Sora", sans-serif', fontSize: '12px', color: '#333' }}>
-                    {recipe.prepTime}
-                  </span>
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                    <circle cx="8" cy="8" r="6.5" stroke="#333" strokeWidth="1.2" />
-                    <path d="M8 4.5V8L10.5 10" stroke="#333" strokeWidth="1.2" strokeLinecap="round" />
-                  </svg>
-                </div>
+                <p style={{ margin: 0, fontFamily: '"Poppins", sans-serif', fontSize: '12px', color: '#333' }}>
+                  Prep time: {recipe.prepTime}
+                </p>
+              )}
+              {recipe.cookTime && (
+                <p style={{ margin: 0, fontFamily: '"Poppins", sans-serif', fontSize: '12px', color: '#333' }}>
+                  Cook time: {recipe.cookTime}
+                </p>
+              )}
+              {recipe.totalTime && (
+                <p style={{ margin: 0, fontFamily: '"Poppins", sans-serif', fontSize: '12px', color: '#333' }}>
+                  Total time: {recipe.totalTime}
+                </p>
               )}
               {recipe.calories != null && (
-                <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-                  <span style={{ fontFamily: '"Sora", sans-serif', fontSize: '12px', color: '#333' }}>
-                    {recipe.calories} Cal
-                  </span>
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                    <path d="M8 2C8 2 5 6 5 9a3 3 0 0 0 6 0c0-3-3-7-3-7z"
-                      stroke="#333" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </div>
+                <p style={{ margin: 0, fontFamily: '"Poppins", sans-serif', fontSize: '12px', color: '#333' }}>
+                  Calories: {recipe.calories} Cal
+                </p>
               )}
               {recipe.difficulty && (
-                <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-                  <span style={{ fontFamily: '"Sora", sans-serif', fontSize: '12px', color: '#333' }}>
-                    {recipe.difficulty}
-                  </span>
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                    <path d="M8 2l1.5 3.5 3.5.5-2.5 2.5.5 3.5L8 10.5 5 12l.5-3.5L3 6l3.5-.5L8 2z"
-                      stroke="#333" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </div>
+                <p style={{ margin: 0, fontFamily: '"Poppins", sans-serif', fontSize: '12px', color: '#333' }}>
+                  Difficulty: {recipe.difficulty}
+                </p>
               )}
             </div>
           )}

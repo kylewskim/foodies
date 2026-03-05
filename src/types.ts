@@ -135,6 +135,8 @@ export interface FavoriteRecipe {
   ingredients: string[];
   instructions?: string[];
   prepTime?: string;
+  cookTime?: string;
+  totalTime?: string;
   createdAt: string;
 }
 
@@ -144,6 +146,8 @@ export interface StoredRecipe {
   id: string;
   name: string;
   category?: RecipeCategory;
+  rawCategory?: string;
+  uiCategory?: 'Breakfast' | 'Lunch/Dinner' | 'Snack' | 'Dessert' | 'Beverage' | 'Others';
   source?: string;
   description: string;
   image?: string;
@@ -151,6 +155,8 @@ export interface StoredRecipe {
   matchedIngredients: string[];
   missingIngredients: string[];
   prepTime?: string;
+  cookTime?: string;
+  totalTime?: string;
   calories?: number;
   difficulty?: 'Easy' | 'Medium' | 'Hard';
   instructions: string[];

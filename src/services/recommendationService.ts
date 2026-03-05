@@ -15,7 +15,7 @@ import type { Item, StoredRecipe, UserPreferences } from '../types';
 import { getUserPreferences } from '../firebase/saveReceipt';
 
 const REMOTE_RECOMMEND_FALLBACK_URL = 'https://foodies-dusky-pi.vercel.app/api/recommend';
-const TARGET_MIN_RECOMMENDATIONS = 10;
+const TARGET_RECOMMENDATION_COUNT = 50;
 
 // ─── Types matching RecipeRec engine output ──────────────────────────────────
 
@@ -78,6 +78,8 @@ export interface APIRecipe {
   dish_type?: string | null;
   dish_types?: string[] | null;
 }
+
+type UiRecipeCategory = 'Breakfast' | 'Lunch/Dinner' | 'Snack' | 'Dessert' | 'Beverage' | 'Others';
 
 export interface ShoppingListItem {
   item: string;
@@ -194,6 +196,35 @@ const DROP_TOKENS = new Set([
   'now',
   'ft',
   'app',
+  'brand',
+  'value',
+  'grocery',
+  'grocer',
+  'natural',
+  'balanced',
+  'protein',
+  'dry',
+  'cat',
+  'food',
+  'toaster',
+  'pastries',
+  'biscuit',
+  'biscuits',
+  'sticks',
+  'stick',
+  'optic',
+  'white',
+  'pro',
+  'zero',
+  'sugar',
+  'high',
+  'less',
+  'series',
+  'now',
+  'ft',
+  'oz',
+  'can',
+  'pack',
   'series',
 ]);
 
@@ -247,7 +278,34 @@ const WEAK_TAIL_TOKENS = new Set([
   'stick',
   'high',
   'food',
+  'cat',
+  'dry',
+  'natural',
+  'balanced',
+  'grocery',
+  'grocer',
+  'app',
+  'ft',
+  'now',
 ]);
+
+const RESTRICTION_ALLERGEN_TOKENS: Record<string, string[]> = {
+  Nuts: ['nut', 'nuts', 'almond', 'walnut', 'pecan', 'cashew', 'pistachio', 'hazelnut', 'peanut'],
+  Shellfish: ['shellfish', 'shrimp', 'prawn', 'crab', 'lobster', 'clam', 'mussel', 'oyster', 'scallop'],
+  Eggs: ['egg', 'eggs', 'yolk', 'albumin'],
+  Soy: ['soy', 'soybean', 'tofu', 'edamame', 'miso', 'tempeh'],
+  Dairy: ['dairy', 'milk', 'butter', 'cheese', 'cream', 'yogurt', 'ghee', 'whey'],
+  Wheat: ['wheat', 'flour', 'bread', 'pasta', 'noodle', 'semolina', 'bulgur'],
+};
+
+const RAW_TO_UI_CATEGORY: Array<{ pattern: RegExp; category: UiRecipeCategory }> = [
+  { pattern: /\bbreakfast\b/i, category: 'Breakfast' },
+  { pattern: /\b(snack|quick[\s-]?bite|quick[\s-]?bites?)\b/i, category: 'Snack' },
+  { pattern: /\bdessert\b/i, category: 'Dessert' },
+  { pattern: /\b(beverage|drink|smoothie|juice)\b/i, category: 'Beverage' },
+  { pattern: /\b(appetizer|soup|main(\s*dish)?|side(\s*dish)?|baked|salad|dressing|sauce|condiment|lunch|dinner)\b/i, category: 'Lunch/Dinner' },
+  { pattern: /\bother\b/i, category: 'Others' },
+];
 
 /**
  * Convert user preferences into restriction keys for the engine.
@@ -365,26 +423,63 @@ function deriveSourceFromUrl(url?: string): string | undefined {
   }
 }
 
+function parseMinutesFromUnknown(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value) && value > 0) return Math.round(value);
+  if (typeof value !== 'string') return undefined;
+  const text = value.trim();
+  if (!text) return undefined;
+  if (/^PT\d+H(\d+M)?$/i.test(text) || /^PT\d+M$/i.test(text)) {
+    const h = text.match(/(\d+)H/i);
+    const m = text.match(/(\d+)M/i);
+    const total = (h ? Number(h[1]) * 60 : 0) + (m ? Number(m[1]) : 0);
+    return total > 0 ? total : undefined;
+  }
+  const hourMatch = text.match(/(\d+(?:\.\d+)?)\s*(h|hr|hour)/i);
+  const minMatch = text.match(/(\d+(?:\.\d+)?)\s*(m|min|minute)/i);
+  if (hourMatch || minMatch) {
+    const hours = hourMatch ? Number(hourMatch[1]) : 0;
+    const mins = minMatch ? Number(minMatch[1]) : 0;
+    const total = Math.round(hours * 60 + mins);
+    return total > 0 ? total : undefined;
+  }
+  const numMatch = text.match(/(\d+(?:\.\d+)?)/);
+  if (!numMatch) return undefined;
+  return Math.round(Number(numMatch[1]));
+}
+
+function toMinutesLabel(minutes?: number): string | undefined {
+  if (!minutes || !Number.isFinite(minutes) || minutes <= 0) return undefined;
+  return `${Math.round(minutes)} min`;
+}
+
 function normalizePrepTime(recipe: APIRecipe): string | undefined {
   const rec = asRecord(recipe);
-  const raw = firstString(rec, ['cook_time', 'cookTime', 'prep_time', 'prepTime', 'total_time', 'totalTime', 'time_minutes', 'timeMinutes', 'ready_in'])
-    ?? firstNumber(rec, ['cook_time', 'cookTime', 'prep_time', 'prepTime', 'total_time', 'totalTime', 'time_minutes', 'timeMinutes', 'ready_in']);
+  const raw = firstString(rec, ['prep_time', 'prepTime'])
+    ?? firstNumber(rec, ['prep_time', 'prepTime']);
+  return toMinutesLabel(parseMinutesFromUnknown(raw));
+}
 
-  if (typeof raw === 'number' && raw > 0) return `${Math.round(raw)} min`;
-  if (typeof raw === 'string') {
-    const text = raw.trim();
-    if (/^PT\d+H(\d+M)?$/i.test(text) || /^PT\d+M$/i.test(text)) {
-      const h = text.match(/(\d+)H/i);
-      const m = text.match(/(\d+)M/i);
-      const total = (h ? Number(h[1]) * 60 : 0) + (m ? Number(m[1]) : 0);
-      if (total > 0) return `${total} min`;
-    }
-    if (/\bmin\b|\bhour\b|\bhr\b/i.test(text)) return text;
-    const n = text.match(/(\d+)/);
-    if (n) return `${n[1]} min`;
-  }
+function normalizeCookTime(recipe: APIRecipe): string | undefined {
+  const rec = asRecord(recipe);
+  const raw = firstString(rec, ['cook_time', 'cookTime', 'time_minutes', 'timeMinutes'])
+    ?? firstNumber(rec, ['cook_time', 'cookTime', 'time_minutes', 'timeMinutes']);
+  return toMinutesLabel(parseMinutesFromUnknown(raw));
+}
 
-  return undefined;
+function normalizeTotalTime(recipe: APIRecipe): string | undefined {
+  const rec = asRecord(recipe);
+  const raw = firstString(rec, ['total_time', 'totalTime', 'ready_in'])
+    ?? firstNumber(rec, ['total_time', 'totalTime', 'ready_in']);
+  return toMinutesLabel(parseMinutesFromUnknown(raw));
+}
+
+function getRecipeSortMinutes(recipe: Pick<StoredRecipe, 'cookTime' | 'prepTime' | 'totalTime'>): number {
+  return (
+    parseMinutesFromUnknown(recipe.cookTime)
+    ?? parseMinutesFromUnknown(recipe.prepTime)
+    ?? parseMinutesFromUnknown(recipe.totalTime)
+    ?? Number.MAX_SAFE_INTEGER
+  );
 }
 
 function normalizeCalories(recipe: APIRecipe): number | undefined {
@@ -478,6 +573,17 @@ function extractRawRecipeCategory(recipe: APIRecipe): string | undefined {
   return undefined;
 }
 
+function mapToUiCategory(rawCategory?: string, bucket?: string): UiRecipeCategory {
+  const raw = (rawCategory || '').trim();
+  for (const candidate of RAW_TO_UI_CATEGORY) {
+    if (candidate.pattern.test(raw)) return candidate.category;
+  }
+
+  if (bucket === 'quick_bites') return 'Snack';
+  if (bucket === 'main') return 'Lunch/Dinner';
+  return 'Others';
+}
+
 function itemsToPayload(items: Item[], strategy: 'raw' | 'canonical'): Array<{
   name: string;
   expiration_date: string;
@@ -529,6 +635,38 @@ function summarizeUpstreamDebug(debug: unknown): Record<string, unknown> | undef
   };
 }
 
+function buildStrictBlockedTokens(prefs?: UserPreferences | null): Set<string> {
+  const blocked = new Set<string>();
+  if (!prefs) return blocked;
+
+  for (const exclusion of prefs.ingredientExclusions || []) {
+    const canonical = pickPrimaryIngredientName(parseIngredientTokens(exclusion)) || canonicalizeText(exclusion);
+    if (canonical) blocked.add(canonical);
+  }
+
+  for (const allergy of prefs.allergies || []) {
+    const tokens = RESTRICTION_ALLERGEN_TOKENS[allergy] || [];
+    for (const token of tokens) blocked.add(token);
+  }
+
+  return blocked;
+}
+
+function recipeContainsBlockedIngredient(recipe: APIRecipe, blockedTokens: Set<string>): boolean {
+  if (blockedTokens.size === 0) return false;
+  const ingredients = normalizeIngredients(recipe);
+  for (const ingredient of ingredients) {
+    const canonical = pickPrimaryIngredientName(parseIngredientTokens(ingredient)) || canonicalizeText(ingredient);
+    if (!canonical) continue;
+    for (const blocked of blockedTokens) {
+      if (canonical === blocked || canonical.includes(blocked) || blocked.includes(canonical)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 function recipeKey(recipe: APIRecipe): string {
   return (recipe.recipe_id || '').trim().toLowerCase() || (recipe.title || '').trim().toLowerCase();
 }
@@ -578,71 +716,18 @@ function dedupeRecipesByIdentity(recipes: APIRecipe[]): APIRecipe[] {
     if (matchedDiff !== 0) return matchedDiff;
     const coverageDiff = (b.coverage || 0) - (a.coverage || 0);
     if (coverageDiff !== 0) return coverageDiff;
-    return (b.score || 0) - (a.score || 0);
+    const scoreDiff = (b.score || 0) - (a.score || 0);
+    if (scoreDiff !== 0) return scoreDiff;
+    const aMinutes = parseMinutesFromUnknown(
+      firstNumber(asRecord(a), ['cook_time', 'cookTime', 'prep_time', 'prepTime', 'total_time', 'totalTime', 'time_minutes', 'timeMinutes', 'ready_in'])
+      ?? firstString(asRecord(a), ['cook_time', 'cookTime', 'prep_time', 'prepTime', 'total_time', 'totalTime', 'time_minutes', 'timeMinutes', 'ready_in'])
+    ) ?? Number.MAX_SAFE_INTEGER;
+    const bMinutes = parseMinutesFromUnknown(
+      firstNumber(asRecord(b), ['cook_time', 'cookTime', 'prep_time', 'prepTime', 'total_time', 'totalTime', 'time_minutes', 'timeMinutes', 'ready_in'])
+      ?? firstString(asRecord(b), ['cook_time', 'cookTime', 'prep_time', 'prepTime', 'total_time', 'totalTime', 'time_minutes', 'timeMinutes', 'ready_in'])
+    ) ?? Number.MAX_SAFE_INTEGER;
+    return aMinutes - bMinutes;
   });
-}
-
-function buildExpansionItemSets(items: Item[]): Item[][] {
-  if (items.length <= 6) return [items];
-
-  const byExpiry = [...items].sort((a, b) => {
-    const aDate = new Date(normalizeDate(a.manualExpirationDate || a.autoExpirationDate)).getTime();
-    const bDate = new Date(normalizeDate(b.manualExpirationDate || b.autoExpirationDate)).getTime();
-    return aDate - bDate;
-  });
-
-  const uniqueByCanonical = new Map<string, Item>();
-  for (const item of byExpiry) {
-    const canonicalTokens = parseIngredientTokens(item.name);
-    const key = pickPrimaryIngredientName(canonicalTokens);
-    if (!key || key.length < 3) continue;
-    if (!uniqueByCanonical.has(key)) uniqueByCanonical.set(key, item);
-  }
-  const uniqueItems = [...uniqueByCanonical.values()];
-  if (uniqueItems.length <= 6) return [byExpiry.slice(0, 16)];
-
-  const byCategoryPriority = [...uniqueItems].sort((a, b) => {
-    const score = (cat: string) => (cat === 'Protein' ? 0 : cat === 'Produce' ? 1 : cat === 'Dairy' ? 2 : 3);
-    return score(a.category) - score(b.category);
-  });
-
-  const recentWindow = byExpiry.slice(0, 24);
-  const diverseWindow = byCategoryPriority.slice(0, 24);
-  const tailWindow = uniqueItems.slice(Math.max(0, uniqueItems.length - 24));
-  const proteinFirstWindow = [
-    ...byCategoryPriority.filter((item) => item.category === 'Protein'),
-    ...byCategoryPriority.filter((item) => item.category !== 'Protein'),
-  ].slice(0, 24);
-  const produceFirstWindow = [
-    ...byCategoryPriority.filter((item) => item.category === 'Produce'),
-    ...byCategoryPriority.filter((item) => item.category !== 'Produce'),
-  ].slice(0, 24);
-
-  const chunkWindows: Item[][] = [];
-  const chunkSize = 10;
-  const stride = 6;
-  for (let i = 0; i < uniqueItems.length; i += stride) {
-    const chunk = uniqueItems.slice(i, i + chunkSize);
-    if (chunk.length >= 5) chunkWindows.push(chunk);
-  }
-
-  const allWindows = [recentWindow, diverseWindow, tailWindow, proteinFirstWindow, produceFirstWindow, ...chunkWindows]
-    .filter((set) => set.length > 0);
-
-  const seen = new Set<string>();
-  const dedupedWindows: Item[][] = [];
-  for (const win of allWindows) {
-    const sig = win
-      .map((item) => canonicalizeText(item.name))
-      .filter(Boolean)
-      .sort()
-      .join('|');
-    if (!sig || seen.has(sig)) continue;
-    seen.add(sig);
-    dedupedWindows.push(win);
-  }
-
-  return dedupedWindows.slice(0, 10);
 }
 
 // ─── API Call ────────────────────────────────────────────────────────────────
@@ -736,17 +821,26 @@ function apiRecipeToStoredRecipe(rec: APIRecipe): StoredRecipe {
   const instructions = normalizeInstructions(rec);
   const calories = normalizeCalories(rec);
   const difficultyRaw = firstString(record, ['difficulty', 'level', 'skill_level']);
+  const rawCategory = extractRawRecipeCategory(rec);
+  const prepTime = normalizePrepTime(rec);
+  const cookTime = normalizeCookTime(rec);
+  const totalTime = normalizeTotalTime(rec);
+  const uiCategory = mapToUiCategory(rawCategory, rec.bucket);
 
   const mappedRecipe: StoredRecipe = {
     id: rec.recipe_id,
     name: rec.title || 'Untitled Recipe',
-    category: extractRawRecipeCategory(rec),
+    category: rawCategory,
+    rawCategory,
+    uiCategory,
     image: image || undefined,
     description,
     ingredients: normalizeIngredients(rec),
     matchedIngredients: rec.matched,
     missingIngredients: rec.missing,
-    prepTime: normalizePrepTime(rec),
+    prepTime,
+    cookTime,
+    totalTime,
     calories,
     difficulty: (difficultyRaw === 'Easy' || difficultyRaw === 'Medium' || difficultyRaw === 'Hard')
       ? difficultyRaw
@@ -842,10 +936,10 @@ export async function getRecommendations(
   _forceRegenerate: boolean = false,
 ): Promise<RecommendationResult> {
   const startedAt = performance.now();
-  // Fetch user preferences for restrictions
+  let prefs: UserPreferences | null = null;
   let restrictions: string[] = [];
   try {
-    const prefs = await getUserPreferences(userId);
+    prefs = await getUserPreferences(userId);
     if (prefs) {
       restrictions = preferencesToRestrictions(prefs);
     }
@@ -853,124 +947,104 @@ export async function getRecommendations(
     console.warn('Could not load user preferences for restrictions:', err);
   }
 
-  // Always call the recommendation API with normalized ingredient names first.
-  const canonicalSummary = summarizePayload(items, restrictions, 'canonical', 8);
+  const blockedIngredientTokens = buildStrictBlockedTokens(prefs);
+  const canonicalSummary = summarizePayload(items, restrictions, 'canonical', 64);
   console.log('📤 Recipe request summary:', canonicalSummary);
+
   const passTraces: RecommendCallTrace[] = [];
   const canonicalResponse = await callRecommendAPI(
     items,
     restrictions,
-    8,
+    64,
     'canonical',
     'primary-canonical',
     (trace) => passTraces.push(trace),
   );
-  let response = canonicalResponse;
+  let candidates = [...(canonicalResponse.recommendations || [])];
+  let responseMeta = canonicalResponse;
   let usedFallbackRaw = false;
-  let usedExpansion = false;
 
-  // Safety fallback: if normalized pass is too low, retry with raw names only.
-  // Do NOT use provider_disabled/local fallback results.
-  if ((canonicalResponse.recommendations?.length ?? 0) <= 2 && items.length >= 6) {
+  if (candidates.length < TARGET_RECOMMENDATION_COUNT) {
     try {
       const rawProviderResponse = await callRecommendAPI(
         items,
         restrictions,
-        16,
+        64,
         'raw',
         'fallback-raw',
         (trace) => passTraces.push(trace),
       );
-      const canonicalCount = canonicalResponse.recommendations?.length ?? 0;
-      const rawCount = rawProviderResponse.recommendations?.length ?? 0;
-
-      if (rawCount > canonicalCount) {
-        response = rawProviderResponse;
-        usedFallbackRaw = true;
-      }
+      candidates = [...candidates, ...(rawProviderResponse.recommendations || [])];
+      usedFallbackRaw = true;
     } catch (err) {
-      console.warn('Raw-name provider retry failed; keeping canonical provider response:', err);
+      console.warn('Raw-name provider retry failed; keeping canonical-only results:', err);
     }
   }
 
-  if ((response.recommendations?.length ?? 0) < TARGET_MIN_RECOMMENDATIONS && items.length >= 8) {
-    const itemSets = buildExpansionItemSets(items);
-    const expansionResponses = await Promise.all(
-      itemSets.map(async (set, index) => {
-        try {
-          const strategy: 'raw' | 'canonical' = index === 1 ? 'raw' : 'canonical';
-          return await callRecommendAPI(
-            set,
-            restrictions,
-            64,
-            strategy,
-            `expansion-${index + 1}-${strategy}`,
-            (trace) => passTraces.push(trace),
-          );
-        } catch (err) {
-          console.warn(`Expansion pass ${index + 1} failed:`, err);
-          return null;
-        }
-      }),
-    );
+  const dedupedCandidates = dedupeRecipesByIdentity(candidates);
+  const filteredByRestrictions = dedupedCandidates.filter((recipe) => !recipeContainsBlockedIngredient(recipe, blockedIngredientTokens));
+  const excludedByRestrictionCount = dedupedCandidates.length - filteredByRestrictions.length;
+  const selectedApiRecipes = filteredByRestrictions.slice(0, TARGET_RECOMMENDATION_COUNT);
 
-    const allCandidates = [
-      ...(response.recommendations || []),
-      ...expansionResponses.flatMap((r) => r?.recommendations || []),
-    ];
-    const merged = dedupeRecipesByIdentity(allCandidates);
+  responseMeta = {
+    ...responseMeta,
+    recommendations: selectedApiRecipes,
+  };
 
-    if (merged.length > (response.recommendations?.length ?? 0)) {
-      response = {
-        ...response,
-        recommendations: merged,
-      };
-      usedExpansion = true;
-    }
+  const recipes = selectedApiRecipes.map(apiRecipeToStoredRecipe);
+  recipes.sort((a, b) => {
+    const matchedDiff = (b.matchedIngredients?.length || 0) - (a.matchedIngredients?.length || 0);
+    if (matchedDiff !== 0) return matchedDiff;
+    const coverageDiff = (b.coverage || 0) - (a.coverage || 0);
+    if (coverageDiff !== 0) return coverageDiff;
+    const scoreDiff = (b.score || 0) - (a.score || 0);
+    if (scoreDiff !== 0) return scoreDiff;
+    return getRecipeSortMinutes(a) - getRecipeSortMinutes(b);
+  });
 
-    console.log('🧪 Recipe decision trace:', {
-      request: canonicalSummary,
-      passes: passTraces,
-      merge: summarizeMerge(
-        allCandidates,
-        response.recommendations || [],
-      ),
-    });
-  } else {
-    console.log('🧪 Recipe decision trace:', {
-      request: canonicalSummary,
-      passes: passTraces,
-      merge: summarizeMerge(response.recommendations || [], response.recommendations || []),
-    });
-  }
+  console.log('🧪 Recipe pipeline trace:', {
+    request: canonicalSummary,
+    passes: passTraces.map((trace) => ({
+      label: trace.label,
+      strategy: trace.strategy,
+      top_k: trace.top_k,
+      request_ingredient_count: trace.request_ingredient_count,
+      response_count: trace.response_count,
+      duration_ms: trace.duration_ms,
+      source: trace.source,
+    })),
+    deduped_count: dedupedCandidates.length,
+    excluded_by_restriction_count: excludedByRestrictionCount,
+    selected_count: recipes.length,
+    blocked_ingredient_tokens: [...blockedIngredientTokens],
+    merge: summarizeMerge(candidates, selectedApiRecipes),
+  });
 
-  const recipes = response.recommendations.map(apiRecipeToStoredRecipe);
   console.log('📥 Recipe response summary:', {
-    source: response.source ?? 'unknown',
-    mode: response.mode,
+    source: responseMeta.source ?? 'unknown',
+    mode: responseMeta.mode,
     recommendation_count: recipes.length,
     used_fallback_raw: usedFallbackRaw,
-    used_expansion: usedExpansion,
     total_duration_ms: Math.round(performance.now() - startedAt),
     recipe_titles: recipes.map((r) => r.name),
   });
   console.groupCollapsed('📦 Recipe raw payload');
-  console.log('raw_response', response);
-  console.log('raw_recommendations', response.recommendations);
-  response.recommendations.forEach((rec, index) => {
+  console.log('raw_response', responseMeta);
+  console.log('raw_recommendations', responseMeta.recommendations);
+  responseMeta.recommendations.forEach((rec, index) => {
     console.log(`raw_recipe[${index}]`, rec);
   });
   console.groupEnd();
 
   return {
-    mode: response.mode,
+    mode: responseMeta.mode,
     inventorySummary: {
-      uniqueItemsCount: response.inventory_summary.unique_items_count,
-      expiringSoonCount: response.inventory_summary.expiring_soon_count,
-      expiringSoonItems: response.inventory_summary.expiring_soon_items,
+      uniqueItemsCount: responseMeta.inventory_summary.unique_items_count,
+      expiringSoonCount: responseMeta.inventory_summary.expiring_soon_count,
+      expiringSoonItems: responseMeta.inventory_summary.expiring_soon_items,
     },
     recipes,
-    shoppingList: response.shopping_list || [],
+    shoppingList: responseMeta.shopping_list || [],
     fromCache: false,
-  };
+  }
 }
