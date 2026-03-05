@@ -58,9 +58,11 @@ export interface APIRecipe {
   cookTime?: string | number | null;
   prep_time?: string | number | null;
   prepTime?: string | number | null;
+  preparation_time_min?: string | number | null;
   total_time?: string | number | null;
   time_minutes?: string | number | null;
   timeMinutes?: string | number | null;
+  cooking_time_min?: string | number | null;
   calories?: string | number | null;
   kcal?: string | number | null;
   description?: string | null;
@@ -466,15 +468,15 @@ function toMinutesLabel(minutes?: number): string | undefined {
 
 function normalizePrepTime(recipe: APIRecipe): string | undefined {
   const rec = asRecord(recipe);
-  const raw = firstString(rec, ['prep_time', 'prepTime'])
-    ?? firstNumber(rec, ['prep_time', 'prepTime']);
+  const raw = firstString(rec, ['prep_time', 'prepTime', 'preparation_time_min'])
+    ?? firstNumber(rec, ['prep_time', 'prepTime', 'preparation_time_min']);
   return toMinutesLabel(parseMinutesFromUnknown(raw));
 }
 
 function normalizeCookTime(recipe: APIRecipe): string | undefined {
   const rec = asRecord(recipe);
-  const raw = firstString(rec, ['cook_time', 'cookTime', 'time_minutes', 'timeMinutes'])
-    ?? firstNumber(rec, ['cook_time', 'cookTime', 'time_minutes', 'timeMinutes']);
+  const raw = firstString(rec, ['cook_time', 'cookTime', 'cooking_time_min', 'time_minutes', 'timeMinutes'])
+    ?? firstNumber(rec, ['cook_time', 'cookTime', 'cooking_time_min', 'time_minutes', 'timeMinutes']);
   return toMinutesLabel(parseMinutesFromUnknown(raw));
 }
 
@@ -492,7 +494,7 @@ function normalizeServingSize(recipe: APIRecipe): string | undefined {
 
 function normalizeRecipeType(recipe: APIRecipe): string | undefined {
   const rec = asRecord(recipe);
-  const single = firstString(rec, ['recipe_type', 'meal_type', 'category', 'recipe_category', 'bucket']);
+  const single = firstString(rec, ['recipe_type', 'meal_type', 'category', 'recipe_category']);
   if (single) return single;
   for (const key of ['recipe_types', 'meal_types', 'categories']) {
     const value = rec[key];
@@ -529,7 +531,7 @@ function normalizeRecipeTypes(recipe: APIRecipe): string[] {
     }
   }
 
-  return [...new Set(out)];
+  return [...new Set(out)].filter((v) => v.toLowerCase() !== 'main' && v.toLowerCase() !== 'quick_bites');
 }
 
 function getRecipeSortMinutes(recipe: Pick<StoredRecipe, 'cookTime' | 'prepTime' | 'totalTime'>): number {

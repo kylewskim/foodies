@@ -64,7 +64,9 @@ function recipeTypeChips(recipe: Recipe): string[] {
   const types = recipe.recipeTypes && recipe.recipeTypes.length > 0
     ? recipe.recipeTypes
     : (recipe.recipeType ? recipe.recipeType.split(',').map((t) => t.trim()).filter(Boolean) : []);
-  return [...new Set(types)].slice(0, 4);
+  return [...new Set(types)]
+    .filter((t) => t && t.toLowerCase() !== 'main' && t.toLowerCase() !== 'quick_bites')
+    .slice(0, 4);
 }
 
 export function RecipesPage() {

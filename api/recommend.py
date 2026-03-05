@@ -393,6 +393,18 @@ def _extract_recipe_types(recipe_obj: dict) -> list[str]:
     return []
 
 
+def _extract_primary_recipe_type(recipe_obj: dict) -> str:
+    types = _extract_recipe_types(recipe_obj)
+    if types:
+        return types[0]
+    return _first_non_empty(
+        recipe_obj.get("recipe_type"),
+        recipe_obj.get("recipe_category"),
+        recipe_obj.get("category"),
+        "",
+    )
+
+
 def _extract_ingredients(recipe_obj: dict) -> list[dict]:
     ingredients_obj = recipe_obj.get("ingredients")
     if not isinstance(ingredients_obj, dict):
@@ -517,7 +529,8 @@ def _build_recommendations(inventory, raw_recipes):
             continue
 
         desc = _first_non_empty(rec.get("recipe_description"), rec.get("description"), "")
-        raw_category = _first_non_empty(rec.get("recipe_type"), rec.get("recipe_types"), rec.get("category"), rec.get("recipe_category"), "")
+        raw_types = _extract_recipe_types(rec)
+        raw_category = _extract_primary_recipe_type(rec)
         recipe_text = f"{title} {desc} {raw_category}".strip()
         matched = _match_inventory_ingredients(recipe_text, inventory_names)
 
@@ -538,6 +551,8 @@ def _build_recommendations(inventory, raw_recipes):
             "url": _first_non_empty(rec.get("recipe_url"), rec.get("url")),
             "image_url": image_url,
             "description": desc,
+            "prep_time": _first_non_empty(rec.get("preparation_time_min"), rec.get("prep_time")),
+            "cook_time": _first_non_empty(rec.get("cooking_time_min"), rec.get("cook_time")),
             "time_minutes": _first_non_empty(rec.get("preparation_time_min"), rec.get("cooking_time_min"), rec.get("time_minutes")),
             "instructions": [],
             "bucket": _pick_bucket(raw_category),
@@ -549,6 +564,8 @@ def _build_recommendations(inventory, raw_recipes):
             "violations": [],
             "category": raw_category,
             "recipe_category": raw_category,
+            "recipe_type": raw_category,
+            "recipe_types": raw_types,
             "source": "fatsecret",
             "provider": "fatsecret",
         })

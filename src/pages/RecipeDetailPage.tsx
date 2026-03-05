@@ -129,7 +129,8 @@ function displayRecipeMinutes(recipe: RecipeDetailState): number {
 function recipeTypeChips(recipe: RecipeDetailState): string[] {
   const byArray = recipe.recipeTypes ?? [];
   const byString = recipe.recipeType ? recipe.recipeType.split(',').map((s) => s.trim()).filter(Boolean) : [];
-  return [...new Set([...byArray, ...byString])];
+  return [...new Set([...byArray, ...byString])]
+    .filter((t) => t && t.toLowerCase() !== 'main' && t.toLowerCase() !== 'quick_bites');
 }
 
 export function RecipeDetailPage() {
