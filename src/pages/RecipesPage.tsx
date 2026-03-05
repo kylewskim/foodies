@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { getItemsByUser } from '../firebase/saveReceipt';
-import type { Item, StoredRecipe } from '../types';
+import type { Item, RecipeCategory, StoredRecipe } from '../types';
 import { BottomNavigation } from '../components/BottomNavigation';
 import { RecipeCardSkeleton } from '../components/RecipeCardSkeleton';
 import { getRecommendations } from '../services/recommendationService';
@@ -17,9 +17,24 @@ interface Recipe extends StoredRecipe {
   userItems: Item[];
 }
 
-type FilterTag = 'All' | 'Quick and easy' | 'Use my food' | 'Vegetarian' | 'Protein max';
+type FilterTag = 'All' | RecipeCategory;
 
-const TAGS: FilterTag[] = ['All', 'Quick and easy', 'Use my food', 'Vegetarian', 'Protein max'];
+const TAGS: FilterTag[] = [
+  'All',
+  'Appetizer',
+  'Soup',
+  'Main Dish',
+  'Side Dish',
+  'Baked',
+  'Salad and Salad Dressing',
+  'Sauce and Condiment',
+  'Dessert',
+  'Snack',
+  'Beverage',
+  'Other',
+  'Breakfast',
+  'Lunch',
+];
 
 export function RecipesPage() {
   const navigate = useNavigate();
@@ -108,17 +123,9 @@ export function RecipesPage() {
     }
   };
 
-  const parseMinutes = (prepTime?: string): number => {
-    if (!prepTime) return Number.POSITIVE_INFINITY;
-    const match = prepTime.match(/(\d+)/);
-    return match ? parseInt(match[1]) : Number.POSITIVE_INFINITY;
-  };
-
   const filteredRecipes = recipes.filter(recipe => {
     if (activeTag === 'All') return true;
-    if (activeTag === 'Quick and easy') return parseMinutes(recipe.prepTime) <= 30;
-    if (activeTag === 'Use my food') return recipe.matchedIngredients.length > 0;
-    return true;
+    return recipe.category === activeTag;
   });
 
   return (

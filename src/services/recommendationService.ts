@@ -11,7 +11,7 @@
  *   - Converting API response to StoredRecipe format
  */
 
-import type { Item, StoredRecipe, UserPreferences } from '../types';
+import type { Item, RecipeCategory, StoredRecipe, UserPreferences } from '../types';
 import { getUserPreferences } from '../firebase/saveReceipt';
 
 const REMOTE_RECOMMEND_FALLBACK_URL = 'https://foodies-dusky-pi.vercel.app/api/recommend';
@@ -68,6 +68,15 @@ export interface APIRecipe {
   photo_url?: string | null;
   thumbnail?: string | null;
   difficulty?: string | null;
+  category?: string | null;
+  recipe_category?: string | null;
+  recipe_type?: string | string[] | null;
+  categories?: string[] | null;
+  recipe_types?: string[] | null;
+  meal_type?: string | null;
+  meal_types?: string[] | null;
+  dish_type?: string | null;
+  dish_types?: string[] | null;
 }
 
 export interface ShoppingListItem {
@@ -238,6 +247,22 @@ const WEAK_TAIL_TOKENS = new Set([
   'high',
   'food',
 ]);
+
+const CATEGORY_ALIAS_MAP: Array<[RegExp, RecipeCategory]> = [
+  [/\bappetizer\b|\bstarter\b/i, 'Appetizer'],
+  [/\bsoup\b/i, 'Soup'],
+  [/\bmain\b|\bmain dish\b|\bentree\b/i, 'Main Dish'],
+  [/\bside\b|\bside dish\b/i, 'Side Dish'],
+  [/\bbaked\b|\bbaking\b/i, 'Baked'],
+  [/\bsalad\b|\bdressing\b/i, 'Salad and Salad Dressing'],
+  [/\bsauce\b|\bcondiment\b/i, 'Sauce and Condiment'],
+  [/\bdessert\b|\bsweet\b/i, 'Dessert'],
+  [/\bsnack\b|\bquick bite\b/i, 'Snack'],
+  [/\bbeverage\b|\bdrink\b|\bsmoothie\b|\bjuice\b/i, 'Beverage'],
+  [/\bbreakfast\b|\bbrunch\b/i, 'Breakfast'],
+  [/\blunch\b/i, 'Lunch'],
+  [/\bother\b/i, 'Other'],
+];
 
 /**
  * Convert user preferences into restriction keys for the engine.
@@ -433,6 +458,50 @@ function normalizeIngredients(recipe: APIRecipe): string[] {
     .filter(Boolean);
 
   return parsed.length > 0 ? parsed : [...recipe.matched, ...recipe.missing];
+}
+
+function normalizeRecipeCategory(recipe: APIRecipe): RecipeCategory {
+  const rec = asRecord(recipe);
+  const candidates: string[] = [];
+
+  const singleFields = [
+    'category',
+    'recipe_category',
+    'recipe_type',
+    'meal_type',
+    'dish_type',
+    'category_name',
+  ];
+
+  for (const key of singleFields) {
+    const value = rec[key];
+    if (typeof value === 'string' && value.trim()) candidates.push(value.trim());
+  }
+
+  const arrayFields = ['categories', 'recipe_types', 'meal_types', 'dish_types'];
+  for (const key of arrayFields) {
+    const value = rec[key];
+    if (Array.isArray(value)) {
+      for (const v of value) {
+        if (typeof v === 'string' && v.trim()) candidates.push(v.trim());
+      }
+    }
+  }
+
+  for (const candidate of candidates) {
+    for (const [pattern, category] of CATEGORY_ALIAS_MAP) {
+      if (pattern.test(candidate)) return category;
+    }
+  }
+
+  if (recipe.bucket === 'quick_bites') return 'Snack';
+
+  const title = (recipe.title || '').toLowerCase();
+  for (const [pattern, category] of CATEGORY_ALIAS_MAP) {
+    if (pattern.test(title)) return category;
+  }
+
+  return 'Other';
 }
 
 function itemsToPayload(items: Item[], strategy: 'raw' | 'canonical'): Array<{
@@ -695,6 +764,7 @@ function apiRecipeToStoredRecipe(rec: APIRecipe): StoredRecipe {
   const mappedRecipe: StoredRecipe = {
     id: rec.recipe_id,
     name: rec.title || 'Untitled Recipe',
+    category: normalizeRecipeCategory(rec),
     image: image || undefined,
     description,
     ingredients: normalizeIngredients(rec),
