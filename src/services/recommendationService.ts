@@ -15,6 +15,7 @@ import type { Item, StoredRecipe, UserPreferences } from '../types';
 import { getUserPreferences } from '../firebase/saveReceipt';
 const TARGET_RECOMMENDATION_COUNT = 50;
 const API_TOP_K = 50;
+const MAX_TIME_ENRICH_COUNT = 20;
 const MAX_CANONICAL_INGREDIENTS = 26;
 const MAX_RAW_INGREDIENTS = 18;
 const TIMEOUT_RETRY_INGREDIENT_CAP = 14;
@@ -1107,6 +1108,62 @@ export interface RecommendationResult {
   fromCache: boolean;
 }
 
+function hasAnyTimeInApiRecipe(recipe: APIRecipe): boolean {
+  const record = asRecord(recipe);
+  const value = firstString(record, [
+    'prep_time', 'prepTime', 'preparation_time_min',
+    'cook_time', 'cookTime', 'cooking_time_min',
+    'total_time', 'totalTime', 'time_minutes', 'timeMinutes',
+  ]) ?? firstNumber(record, [
+    'prep_time', 'prepTime', 'preparation_time_min',
+    'cook_time', 'cookTime', 'cooking_time_min',
+    'total_time', 'totalTime', 'time_minutes', 'timeMinutes',
+  ]);
+  return parseMinutesFromUnknown(value) != null;
+}
+
+async function enrichMissingTimes(recipes: APIRecipe[]): Promise<{ enriched: APIRecipe[]; enrichedCount: number; triedCount: number }> {
+  const enriched = [...recipes];
+  const targets = recipes
+    .map((recipe, index) => ({ recipe, index }))
+    .filter(({ recipe }) => !hasAnyTimeInApiRecipe(recipe))
+    .slice(0, MAX_TIME_ENRICH_COUNT);
+
+  if (targets.length === 0) {
+    return { enriched, enrichedCount: 0, triedCount: 0 };
+  }
+
+  const settled = await Promise.allSettled(
+    targets.map(async ({ recipe, index }) => {
+      const detail = await getRecipeDetailById(recipe.recipe_id);
+      if (!detail) return { index, patched: false as const };
+      return {
+        index,
+        patched: true as const,
+        prep_time: detail.prepTime,
+        cook_time: detail.cookTime,
+        total_time: detail.totalTime,
+      };
+    }),
+  );
+
+  let enrichedCount = 0;
+  for (const result of settled) {
+    if (result.status !== 'fulfilled' || !result.value.patched) continue;
+    const { index, prep_time, cook_time, total_time } = result.value;
+    const target = enriched[index];
+    enriched[index] = {
+      ...target,
+      prep_time: prep_time ?? target.prep_time,
+      cook_time: cook_time ?? target.cook_time,
+      total_time: total_time ?? target.total_time,
+    };
+    if (prep_time || cook_time || total_time) enrichedCount += 1;
+  }
+
+  return { enriched, enrichedCount, triedCount: targets.length };
+}
+
 /**
  * Get recipe recommendations for a user.
  *
@@ -1194,13 +1251,14 @@ export async function getRecommendations(
   });
   const excludedByRestrictionCount = excludedByRestrictions.length;
   const selectedApiRecipes = filteredByRestrictions.slice(0, TARGET_RECOMMENDATION_COUNT);
+  const timeEnrichment = await enrichMissingTimes(selectedApiRecipes);
 
   responseMeta = {
     ...responseMeta,
-    recommendations: selectedApiRecipes,
+    recommendations: timeEnrichment.enriched,
   };
 
-  const recipes = selectedApiRecipes.map(apiRecipeToStoredRecipe);
+  const recipes = timeEnrichment.enriched.map(apiRecipeToStoredRecipe);
   recipes.sort((a, b) => {
     const matchedDiff = (b.matchedIngredients?.length || 0) - (a.matchedIngredients?.length || 0);
     if (matchedDiff !== 0) return matchedDiff;
@@ -1226,8 +1284,13 @@ export async function getRecommendations(
     excluded_by_restriction_count: excludedByRestrictionCount,
     exclusion_examples: excludedByRestrictions.slice(0, 10),
     selected_count: recipes.length,
+    time_enrichment: {
+      tried: timeEnrichment.triedCount,
+      enriched: timeEnrichment.enrichedCount,
+      max_cap: MAX_TIME_ENRICH_COUNT,
+    },
     blocked_ingredient_tokens: [...blockedIngredientTokens],
-    merge: summarizeMerge(candidates, selectedApiRecipes),
+    merge: summarizeMerge(candidates, timeEnrichment.enriched),
   });
 
   console.log('📥 Recipe response summary:', {
