@@ -18,7 +18,7 @@ export function AddFoodModal({ isOpen, onClose }: AddFoodModalProps) {
   };
 
   const handleManualEntry = () => {
-    navigate('/add-item?method=manual');
+    navigate('/add-item?method=form');
     onClose();
   };
 

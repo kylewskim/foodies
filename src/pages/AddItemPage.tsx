@@ -2,13 +2,11 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { ImageUpload } from '../components/ImageUpload';
-import { ManualInput } from '../components/ManualInput';
 import { ProcessingScreen } from '../components/ProcessingScreen';
 import { ScanResultPage } from '../components/ScanResultPage';
 import type { Item, StorageLocation, FoodCategory } from '../types';
 import { saveReceipt, saveItems } from '../firebase/saveReceipt';
 import { getCurrentDateISO } from '../utils/dateHelpers';
-import { normalizeInputText } from '../llm/normalizeInputText';
 import { parseReceiptWithVision } from '../llm/parseReceiptWithVision';
 import { isOpenAIConfigured } from '../llm/openaiClient';
 import { predictLifecycle } from '../lifecycle/predictLifecycle';
@@ -19,7 +17,7 @@ import { fetchProductImage } from '../services/productImageService';
 import { verifyItemNames } from '../llm/verifyItemNames';
 import { lookupStoreProduct } from '../llm/lookupStoreProduct';
 
-type InputMethod = 'image' | 'manual' | 'form' | 'review';
+type InputMethod = 'image' | 'form' | 'review';
 
 export function AddItemPage() {
   const navigate = useNavigate();
@@ -48,7 +46,10 @@ export function AddItemPage() {
       return 'image';
     }
     if (methodParam === 'manual') {
-      return 'manual';
+      return 'form';
+    }
+    if (methodParam === 'form') {
+      return 'form';
     }
     // No method specified - go back to home
     return 'image'; // Default to image since we removed select screen
@@ -240,50 +241,6 @@ export function AddItemPage() {
   );
   const [locationValue, setLocationValue] = useState<StorageLocation>(editItem?.location || 'fridge');
   const [category, setCategory] = useState<FoodCategory>(editItem?.category || 'Produce');
-
-  const preprocessManualInput = (text: string): string => {
-    return text
-      .replace(/[，、]/g, ',')
-      .replace(/;/g, ',')
-      .split('\n')
-      .flatMap((line) => line.split(','))
-      .map((segment) => segment.trim())
-      .filter(Boolean)
-      .map((segment) => segment.replace(/(^|\s)(\d+)([A-Za-z])/g, '$1$2 $3').trim())
-      .flatMap((segment) => {
-        const numberedParts = segment.match(/\b\d+\s+[A-Za-z]/g);
-        if (numberedParts && numberedParts.length > 1) {
-          return segment
-            .split(/(?=\s\d+\s+[A-Za-z])/g)
-            .map((part) => part.trim())
-            .filter(Boolean);
-        }
-        return [segment];
-      })
-      .join('\n');
-  };
-
-  const processExtractedText = async (extractedText: string, options?: { preferAI?: boolean }) => {
-    setProcessing(true);
-    const tStart = performance.now();
-    try {
-      const tNormStart = performance.now();
-      const normalized = await normalizeInputText(extractedText, { preferAI: options?.preferAI });
-      console.log(`⏱️ [Pipeline] normalizeInputText: ${(performance.now() - tNormStart).toFixed(0)}ms (${normalized.items.length} items extracted)`);
-      console.log(`⏱️ [Pipeline] processExtractedText total: ${(performance.now() - tStart).toFixed(0)}ms`);
-      await processNormalized(normalized);
-    } catch (error) {
-      console.error('Error processing input:', error);
-      alert('Failed to process input. Please try again.');
-    } finally {
-      setProcessing(false);
-    }
-  };
-
-  const handleManualInput = (text: string) => {
-    const preprocessed = preprocessManualInput(text);
-    processExtractedText(preprocessed, { preferAI: true });
-  };
 
   const handleAddNewItem = () => {
     // Navigate to form view to add a new item manually
@@ -500,29 +457,6 @@ export function AddItemPage() {
           ← Back
         </button>
         <ImageUpload onFileSelected={processSelectedFile} useCamera={useCamera} />
-      </div>
-    );
-  }
-
-  if (inputMethod === 'manual') {
-    return (
-      <div style={{ minHeight: '100vh', backgroundColor: '#f7f6ef', padding: '20px' }}>
-        <button
-          onClick={() => navigate('/')}
-          style={{
-            marginBottom: '20px',
-            padding: '8px 16px',
-            fontSize: '14px',
-            backgroundColor: 'transparent',
-            color: '#073d35',
-            border: 'none',
-            cursor: 'pointer',
-            fontFamily: '"Poppins", sans-serif',
-          }}
-        >
-          ← Back
-        </button>
-        <ManualInput onTextSubmitted={handleManualInput} />
       </div>
     );
   }
