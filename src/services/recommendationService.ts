@@ -14,6 +14,7 @@
 import type { Item, StoredRecipe, UserPreferences } from '../types';
 import { getUserPreferences } from '../firebase/saveReceipt';
 const TARGET_RECOMMENDATION_COUNT = 50;
+const API_TOP_K = 50;
 const MAX_CANONICAL_INGREDIENTS = 26;
 const MAX_RAW_INGREDIENTS = 18;
 const TIMEOUT_RETRY_INGREDIENT_CAP = 14;
@@ -917,7 +918,9 @@ async function callRecommendAPI(
 export async function getRecipeDetailById(recipeId: string): Promise<StoredRecipe | null> {
   const trimmed = (recipeId || '').trim();
   if (!trimmed) return null;
-  if (!trimmed.toLowerCase().startsWith('fatsecret:')) return null;
+  const isPrefixed = trimmed.toLowerCase().startsWith('fatsecret:');
+  const isNumeric = /^\d+$/.test(trimmed);
+  if (!isPrefixed && !isNumeric) return null;
 
   const configuredEndpoint = (import.meta.env.VITE_RECOMMEND_API_URL || '').trim();
   const primaryEndpoint = configuredEndpoint || '/api/recommend';
@@ -926,7 +929,7 @@ export async function getRecipeDetailById(recipeId: string): Promise<StoredRecip
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      recipe_id: trimmed,
+      recipe_id: isPrefixed ? trimmed : `fatsecret:${trimmed}`,
       debug: true,
       provider_enabled: true,
     }),
@@ -1079,7 +1082,7 @@ export async function getRecommendations(
   }
 
   const blockedIngredientTokens = buildStrictBlockedTokens(prefs);
-  const canonicalSummary = summarizePayload(items, restrictions, 'canonical', 64);
+  const canonicalSummary = summarizePayload(items, restrictions, 'canonical', API_TOP_K);
   console.log('📤 Recipe request summary:', canonicalSummary);
   if (blockedIngredientTokens.size > 0) {
     console.log('🚫 Active blocked ingredient tokens:', [...blockedIngredientTokens]);
@@ -1091,7 +1094,7 @@ export async function getRecommendations(
     canonicalResponse = await callRecommendAPI(
       items,
       restrictions,
-      64,
+      API_TOP_K,
       'canonical',
       'primary-canonical',
       (trace) => passTraces.push(trace),
@@ -1116,7 +1119,7 @@ export async function getRecommendations(
       const rawProviderResponse = await callRecommendAPI(
         items,
         restrictions,
-        64,
+        API_TOP_K,
         'raw',
         'fallback-raw',
         (trace) => passTraces.push(trace),

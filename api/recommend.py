@@ -439,6 +439,7 @@ def _extract_serving_info(recipe_obj: dict):
         if servings:
             first = servings[0]
             serving_size = _first_non_empty(
+                first.get("serving_size"),
                 first.get("serving_description"),
                 first.get("metric_serving_amount"),
                 first.get("number_of_units"),
@@ -620,7 +621,7 @@ class handler(BaseHTTPRequestHandler):
                 top_k_int = int(requested_top_k)
             except (TypeError, ValueError):
                 top_k_int = 8
-            top_k = max(8, min(64, top_k_int))
+            top_k = max(8, min(50, top_k_int))
 
             search_terms = [i["name"] for i in normalized_inventory][:8]
             search_expression = " ".join(search_terms)
