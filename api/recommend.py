@@ -1,30 +1,23 @@
 """
 Vercel Python Serverless Function — /api/recommend
 
-Proxies to the standalone RecipeRec service.
-
-POST /api/recommend
-Body: {
-  "inventory": [{"name": "Eggs", "expiration_date": "2026-02-12"}, ...],
-  "restrictions": ["allergy_nuts", "diet_vegan"],
-  "top_k": 8,
-  "debug": false,
-  "provider_enabled": true
-}
+Direct FatSecret integration (no RecipeRec proxy).
 """
 
+import base64
 import json
 import os
 import re
-import socket
+import time
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler
 from urllib.error import HTTPError, URLError
+from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
-DEFAULT_RECOMMENDER_URL = "https://reciperec.onrender.com/recommend"
-RECOMMENDER_URL = os.getenv("RECOMMENDER_URL", DEFAULT_RECOMMENDER_URL)
-RECOMMENDER_TIMEOUT_SECONDS = float(os.getenv("RECOMMENDER_TIMEOUT_SECONDS", "25"))
+FATSECRET_OAUTH_URL = "https://oauth.fatsecret.com/connect/token"
+FATSECRET_API_URL = "https://platform.fatsecret.com/rest/server.api"
+FATSECRET_TIMEOUT_SECONDS = float(os.getenv("FATSECRET_TIMEOUT_SECONDS", "20"))
 
 VALID_CATEGORIES = {
     "produce",
@@ -55,219 +48,41 @@ CATEGORY_PRIORITY = {
 }
 
 DROP_TOKENS = {
-    "fresh",
-    "organic",
-    "large",
-    "small",
-    "pack",
-    "packs",
-    "package",
-    "bottle",
-    "bottles",
-    "jar",
-    "bag",
-    "bags",
-    "lb",
-    "lbs",
-    "oz",
-    "g",
-    "kg",
-    "ml",
-    "l",
-    "ct",
-    "count",
-    "piece",
-    "pieces",
-    "each",
-    "bunch",
-    "series",
-    "now",
-    "app",
-    "ft",
-    "f",
-    "t",
-    "pro",
+    "fresh", "organic", "large", "small", "pack", "packs", "package", "bottle", "bottles",
+    "jar", "bag", "bags", "lb", "lbs", "oz", "g", "kg", "ml", "l", "ct", "count",
+    "piece", "pieces", "each", "bunch", "series", "now", "app", "ft", "f", "t", "pro",
+    "brand", "value", "grocery", "grocer", "natural", "balanced", "food", "stick", "sticks",
 }
 
 NON_FOOD_HINTS = {
-    "colgate",
-    "toothpaste",
-    "toothbrush",
-    "mouthwash",
-    "detergent",
-    "soap",
-    "shampoo",
-    "conditioner",
-    "deodorant",
-    "lotion",
-    "cleaner",
-    "bleach",
-    "cat food",
-    "dog food",
-    "purina",
-    "litter",
+    "colgate", "toothpaste", "toothbrush", "mouthwash", "detergent", "soap", "shampoo", "conditioner",
+    "deodorant", "lotion", "cleaner", "bleach", "purina", "litter",
 }
 
 ALIASES = [
-    (re.compile(r"\bbanana(s)?\b"), "banana"),
-    (re.compile(r"\begg(s)?\b"), "egg"),
-    (re.compile(r"\bonion(s)?\b"), "onion"),
-    (re.compile(r"\bzucchini\b"), "zucchini"),
-    (re.compile(r"\b(cara cara )?orange(s)?\b"), "orange"),
-    (re.compile(r"\bmozzarella\b"), "mozzarella"),
-    (re.compile(r"\bgreek yogurt\b|\byogurt\b"), "yogurt"),
-    (re.compile(r"\bmilk\b"), "milk"),
-    (re.compile(r"\bpork\s*belly\b|\bporkbelly\b"), "pork belly"),
-    (re.compile(r"\bsalmon(s)?\b"), "salmon"),
-    (re.compile(r"\bchicken\s*feet\b"), "chicken feet"),
-    (re.compile(r"\bchicken\b"), "chicken"),
-    (re.compile(r"\bwater\b|\bwate\b"), "water"),
-    (re.compile(r"\bcoconut water\b"), "coconut water"),
-    (re.compile(r"\bpasta\b|\blasagn[ea]\b"), "pasta"),
-    (re.compile(r"\bcoca[\s-]?cola\b"), "coca cola"),
-    (re.compile(r"\bpepsi\b"), "pepsi"),
-    (re.compile(r"\bpocky\b"), "pocky"),
-    (re.compile(r"\bpop[\s-]?tarts?\b"), "pop tarts"),
-    (re.compile(r"\bcheese\b"), "cheese"),
+    (re.compile(r"\\bbanana(s)?\\b"), "banana"),
+    (re.compile(r"\\begg(s)?\\b"), "egg"),
+    (re.compile(r"\\bonion(s)?\\b"), "onion"),
+    (re.compile(r"\\bzucchini\\b"), "zucchini"),
+    (re.compile(r"\\b(cara cara )?orange(s)?\\b"), "orange"),
+    (re.compile(r"\\bmozzarella\\b"), "mozzarella"),
+    (re.compile(r"\\bgreek yogurt\\b|\\byogurt\\b"), "yogurt"),
+    (re.compile(r"\\bmilk\\b"), "milk"),
+    (re.compile(r"\\bpork\\s*belly\\b|\\bporkbelly\\b"), "pork belly"),
+    (re.compile(r"\\bsalmon(s)?\\b"), "salmon"),
+    (re.compile(r"\\bchicken\\s*feet\\b"), "chicken"),
+    (re.compile(r"\\bchicken\\b"), "chicken"),
+    (re.compile(r"\\bwater\\b|\\bwate\\b"), "water"),
+    (re.compile(r"\\bcoconut water\\b"), "coconut water"),
+    (re.compile(r"\\bpasta\\b|\\blasagn[ea]\\b"), "pasta"),
+    (re.compile(r"\\bcoca[\\s-]?cola\\b"), "coca cola"),
+    (re.compile(r"\\bpepsi\\b"), "pepsi"),
+    (re.compile(r"\\bpocky\\b"), "pocky"),
+    (re.compile(r"\\bpop[\\s-]?tarts?\\b"), "pop tarts"),
+    (re.compile(r"\\bcheese\\b"), "cheese"),
 ]
 
-
-class UpstreamHTTPError(Exception):
-    def __init__(self, status: int, body: str):
-        self.status = status
-        self.body = body
-        super().__init__(f"Recommender error {status}: {body}")
-
-
-class handler(BaseHTTPRequestHandler):
-    def do_POST(self):
-        try:
-            content_length = int(self.headers.get("Content-Length", 0))
-            body = json.loads(self.rfile.read(content_length)) if content_length > 0 else {}
-
-            inventory = body.get("inventory", [])
-            restrictions = body.get("restrictions", [])
-            requested_top_k = body.get("top_k", 8)
-            debug = body.get("debug", False)
-            requested_provider_enabled = body.get("provider_enabled", True)
-            provider_enabled = True
-
-            if debug:
-                print("[/api/recommend] incoming request body:")
-                print(json.dumps(body, ensure_ascii=False))
-            if requested_provider_enabled is False:
-                print("[/api/recommend] provider_enabled=false requested by client; forcing provider_enabled=true by policy.")
-
-            if not isinstance(inventory, list):
-                self._send_error(400, "inventory must be a list")
-                return
-
-            normalized_inventory, preprocess_debug = _preprocess_inventory(inventory)
-
-            try:
-                top_k_int = int(requested_top_k)
-            except (TypeError, ValueError):
-                top_k_int = 8
-            top_k = max(12, min(64, top_k_int))
-
-            result = self._call_recommender(
-                {
-                    "inventory": normalized_inventory,
-                    "restrictions": restrictions,
-                    "top_k": top_k,
-                    "debug": debug,
-                    "provider_enabled": provider_enabled,
-                },
-                debug=bool(debug),
-            )
-
-            if isinstance(result, dict) and result.get("source") == "local_fallback":
-                self._send_error(502, "Upstream provider fallback blocked by policy (source=local_fallback)")
-                return
-
-            if debug and isinstance(result, dict):
-                existing_debug = result.get("debug")
-                if not isinstance(existing_debug, dict):
-                    existing_debug = {}
-                existing_debug["preprocess"] = preprocess_debug
-                result["debug"] = existing_debug
-
-                print("[/api/recommend] upstream parsed response:")
-                print(json.dumps(result, ensure_ascii=False))
-
-            if isinstance(result, dict):
-                recs = result.get("recommendations")
-                if not isinstance(recs, list):
-                    print("[/api/recommend] warning: upstream response has no recommendations array")
-                elif debug and recs:
-                    first = recs[0]
-                    if isinstance(first, dict):
-                        print("[/api/recommend] first recommendation keys:")
-                        print(json.dumps(list(first.keys()), ensure_ascii=False))
-
-            self._send_json(200, result)
-
-        except json.JSONDecodeError:
-            self._send_error(400, "Invalid JSON in request body")
-        except UpstreamHTTPError as e:
-            # Preserve upstream error semantics (4xx/5xx) instead of collapsing to 500.
-            self._send_error(e.status, f"Upstream recommender returned {e.status}: {e.body}")
-        except socket.timeout as e:
-            self._send_error(504, f"Recommender timeout: {str(e)}")
-        except URLError as e:
-            self._send_error(502, f"Recommender unreachable: {str(e)}")
-        except Exception as e:
-            self._send_error(500, f"Internal error: {str(e)}")
-
-    def do_GET(self):
-        self._send_json(200, {
-            "status": "ok",
-            "engine": "RecipeRec v2",
-            "recommender_configured": bool(RECOMMENDER_URL),
-            "recommender_url": RECOMMENDER_URL,
-            "timeout_seconds": RECOMMENDER_TIMEOUT_SECONDS,
-        })
-
-    def _send_json(self, status: int, data: dict):
-        self.send_response(status)
-        self.send_header("Content-Type", "application/json")
-        self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
-        self.end_headers()
-        self.wfile.write(json.dumps(data).encode("utf-8"))
-
-    def _send_error(self, status: int, message: str):
-        self._send_json(status, {"error": message})
-
-    def do_OPTIONS(self):
-        self.send_response(200)
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
-        self.end_headers()
-
-    def _call_recommender(self, payload: dict, debug: bool = False):
-        data = json.dumps(payload).encode("utf-8")
-        req = Request(
-            RECOMMENDER_URL,
-            data=data,
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
-        try:
-            with urlopen(req, timeout=RECOMMENDER_TIMEOUT_SECONDS) as resp:
-                resp_body = resp.read().decode("utf-8")
-                if debug:
-                    print("[/api/recommend] upstream raw response body:")
-                    print(resp_body)
-                return json.loads(resp_body) if resp_body else {}
-        except HTTPError as e:
-            body = e.read().decode("utf-8") if hasattr(e, "read") else ""
-            raise UpstreamHTTPError(e.code, body) from e
-        except socket.timeout as e:
-            raise URLError(f"timeout: {str(e)}") from e
+_token_cache = {"access_token": None, "expires_at": 0}
 
 
 def _today_ymd() -> str:
@@ -276,11 +91,10 @@ def _today_ymd() -> str:
 
 def _normalize_text(value: str) -> str:
     text = (value or "").lower()
-    text = re.sub(r"\([^)]*\)", " ", text)
-    text = text.replace("…", " ")
-    text = text.replace("...", " ")
-    text = re.sub(r"[^a-z0-9\s-]", " ", text)
-    text = re.sub(r"\s+", " ", text).strip()
+    text = re.sub(r"\\([^)]*\\)", " ", text)
+    text = text.replace("…", " ").replace("...", " ")
+    text = re.sub(r"[^a-z0-9\\s-]", " ", text)
+    text = re.sub(r"\\s+", " ", text).strip()
     return text
 
 
@@ -299,14 +113,12 @@ def _normalize_item_name(raw_name: str) -> str:
             return canonical
 
     tokens = [t for t in text.split(" ") if t and t not in DROP_TOKENS]
-    tokens = [t for t in tokens if not re.fullmatch(r"\d+", t)]
-    tokens = [t for t in tokens if not re.fullmatch(r"\d+[a-z]+", t)]
-
+    tokens = [t for t in tokens if not re.fullmatch(r"\\d+", t)]
+    tokens = [t for t in tokens if not re.fullmatch(r"\\d+[a-z]+", t)]
     if not tokens:
         return ""
 
-    # Prefer meaningful tail token, but avoid weak OCR leftovers.
-    weak_tail = {"item", "items", "grocery", "grocer", "natural", "balanced", "protein"}
+    weak_tail = {"item", "items", "grocery", "grocer", "natural", "balanced", "protein", "food"}
     for token in reversed(tokens):
         if token not in weak_tail and len(token) >= 3:
             if token.endswith("s") and len(token) > 4:
@@ -317,15 +129,11 @@ def _normalize_item_name(raw_name: str) -> str:
 
 
 def _normalize_expiration_date(raw_date) -> str:
-    if isinstance(raw_date, str):
-        value = raw_date.strip()
-    else:
-        value = ""
-
+    value = raw_date.strip() if isinstance(raw_date, str) else ""
     if not value:
         return _today_ymd()
 
-    m = re.search(r"\b(\d{4}-\d{2}-\d{2})\b", value)
+    m = re.search(r"\\b(\\d{4}-\\d{2}-\\d{2})\\b", value)
     if m:
         return m.group(1)
 
@@ -340,9 +148,7 @@ def _normalize_category(raw_category) -> str:
     if not isinstance(raw_category, str):
         return "other"
     cat = raw_category.strip().lower()
-    if cat in VALID_CATEGORIES:
-        return cat
-    return "other"
+    return cat if cat in VALID_CATEGORIES else "other"
 
 
 def _preprocess_inventory(inventory):
@@ -375,12 +181,7 @@ def _preprocess_inventory(inventory):
         }
 
         existing = cleaned.get(normalized_name)
-        if existing is None:
-            cleaned[normalized_name] = normalized
-            continue
-
-        # Keep earliest expiry when duplicate ingredient names exist.
-        if normalized["expiration_date"] < existing["expiration_date"]:
+        if existing is None or normalized["expiration_date"] < existing["expiration_date"]:
             cleaned[normalized_name] = normalized
 
     normalized_inventory = sorted(
@@ -391,34 +192,7 @@ def _preprocess_inventory(inventory):
             len(item["name"]),
             item["name"],
         ),
-    )
-
-    # Keep a practical window of ingredients so upstream provider expression
-    # does not over-focus on arbitrary trailing items.
-    if len(normalized_inventory) > 36:
-        normalized_inventory = normalized_inventory[:36]
-
-    # If filtering is too aggressive, fall back to a permissive pass.
-    if len(normalized_inventory) < 3 and len(inventory) >= 3:
-        permissive = []
-        seen = set()
-        for entry in inventory:
-            if not isinstance(entry, dict):
-                continue
-            raw_name = str(entry.get("name", "")).strip()
-            text = _normalize_text(raw_name)
-            if not text or text in seen:
-                continue
-            seen.add(text)
-            permissive.append(
-                {
-                    "name": text,
-                    "expiration_date": _normalize_expiration_date(entry.get("expiration_date")),
-                    "category": _normalize_category(entry.get("category")),
-                }
-            )
-        if permissive:
-            normalized_inventory = permissive
+    )[:30]
 
     preprocess_debug = {
         "input_count": len(inventory),
@@ -427,3 +201,301 @@ def _preprocess_inventory(inventory):
         "dropped_empty_or_noise": dropped_empty,
     }
     return normalized_inventory, preprocess_debug
+
+
+def _env(name: str, fallback: str | None = None):
+    return os.getenv(name) or (os.getenv(fallback) if fallback else None)
+
+
+def _fatsecret_client_id():
+    return _env("FATSECRET_CLIENT_ID", "VITE_FATSECRET_CLIENT_ID")
+
+
+def _fatsecret_client_secret():
+    return _env("FATSECRET_CLIENT_SECRET", "VITE_FATSECRET_CLIENT_SECRET")
+
+
+def _fatsecret_token() -> str:
+    now = int(time.time())
+    if _token_cache["access_token"] and now < int(_token_cache["expires_at"]):
+        return _token_cache["access_token"]
+
+    client_id = _fatsecret_client_id()
+    client_secret = _fatsecret_client_secret()
+    if not client_id or not client_secret:
+        raise RuntimeError("Missing FATSECRET_CLIENT_ID/FATSECRET_CLIENT_SECRET")
+
+    basic = base64.b64encode(f"{client_id}:{client_secret}".encode("utf-8")).decode("utf-8")
+    body = urlencode({"grant_type": "client_credentials", "scope": "basic"}).encode("utf-8")
+    req = Request(
+        FATSECRET_OAUTH_URL,
+        data=body,
+        headers={
+            "Content-Type": "application/x-www-form-urlencoded",
+            "Authorization": f"Basic {basic}",
+        },
+        method="POST",
+    )
+
+    with urlopen(req, timeout=FATSECRET_TIMEOUT_SECONDS) as resp:
+        payload = json.loads(resp.read().decode("utf-8") or "{}")
+
+    token = payload.get("access_token")
+    expires_in = int(payload.get("expires_in", 300))
+    if not token:
+        raise RuntimeError("FatSecret token response missing access_token")
+
+    _token_cache["access_token"] = token
+    _token_cache["expires_at"] = now + max(expires_in - 30, 60)
+    return token
+
+
+def _fatsecret_search(search_expression: str, top_k: int):
+    token = _fatsecret_token()
+    methods = ["recipes.search.v3", "recipes.search.v2", "recipes.search"]
+    last_error = None
+
+    for method in methods:
+        params = {
+            "method": method,
+            "search_expression": search_expression,
+            "max_results": str(top_k),
+            "page_number": "0",
+            "format": "json",
+        }
+        url = f"{FATSECRET_API_URL}?{urlencode(params)}"
+        req = Request(url, headers={"Authorization": f"Bearer {token}"}, method="GET")
+        try:
+            with urlopen(req, timeout=FATSECRET_TIMEOUT_SECONDS) as resp:
+                payload = json.loads(resp.read().decode("utf-8") or "{}")
+            if "error" in payload:
+                last_error = payload["error"]
+                continue
+            return payload
+        except HTTPError as e:
+            body = e.read().decode("utf-8") if hasattr(e, "read") else ""
+            last_error = {"status": e.code, "body": body}
+        except URLError as e:
+            raise RuntimeError(f"FatSecret unreachable: {str(e)}") from e
+
+    raise RuntimeError(f"FatSecret search failed: {last_error}")
+
+
+def _extract_recipe_list(search_payload):
+    recipes_obj = search_payload.get("recipes") if isinstance(search_payload, dict) else None
+    if not isinstance(recipes_obj, dict):
+        return []
+
+    data = recipes_obj.get("recipe")
+    if isinstance(data, list):
+        return data
+    if isinstance(data, dict):
+        return [data]
+    return []
+
+
+def _to_list(value):
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return [v for v in value if isinstance(v, str) and v.strip()]
+    if isinstance(value, str):
+        return [value] if value.strip() else []
+    return []
+
+
+def _first_non_empty(*values):
+    for v in values:
+        if isinstance(v, str) and v.strip():
+            return v.strip()
+    return None
+
+
+def _pick_bucket(category_text: str):
+    low = (category_text or "").lower()
+    if any(k in low for k in ["snack", "dessert", "beverage", "drink", "breakfast"]):
+        return "quick_bites"
+    return "main"
+
+
+def _match_inventory_ingredients(recipe_text: str, inventory_names: list[str]):
+    text = _normalize_text(recipe_text)
+    matched = []
+    for name in inventory_names:
+        n = _normalize_text(name)
+        if not n:
+            continue
+        if f" {n} " in f" {text} " or n in text:
+            matched.append(name)
+    return matched
+
+
+def _build_recommendations(inventory, raw_recipes):
+    inventory_names = [i["name"] for i in inventory]
+    out = []
+
+    for rec in raw_recipes:
+        if not isinstance(rec, dict):
+            continue
+
+        title = _first_non_empty(rec.get("recipe_name"), rec.get("title"))
+        if not title:
+            continue
+
+        desc = _first_non_empty(rec.get("recipe_description"), rec.get("description"), "")
+        raw_category = _first_non_empty(rec.get("recipe_type"), rec.get("recipe_types"), rec.get("category"), rec.get("recipe_category"), "")
+        recipe_text = f"{title} {desc} {raw_category}".strip()
+        matched = _match_inventory_ingredients(recipe_text, inventory_names)
+
+        if not matched:
+            continue
+
+        missing = [name for name in inventory_names if name not in matched]
+        coverage = len(matched) / max(len(inventory_names), 1)
+        score = round((len(matched) * 10) + (coverage * 100), 3)
+        image_url = _first_non_empty(rec.get("recipe_image"), rec.get("recipe_images"), rec.get("image_url"), rec.get("image"))
+
+        out.append({
+            "recipe_id": str(rec.get("recipe_id") or title),
+            "title": title,
+            "url": _first_non_empty(rec.get("recipe_url"), rec.get("url")),
+            "image_url": image_url,
+            "description": desc,
+            "time_minutes": _first_non_empty(rec.get("preparation_time_min"), rec.get("cooking_time_min"), rec.get("time_minutes")),
+            "instructions": [],
+            "bucket": _pick_bucket(raw_category),
+            "score": score,
+            "coverage": coverage,
+            "matched": matched,
+            "missing": missing,
+            "reasons": [f"Matched {len(matched)} inventory ingredients"],
+            "violations": [],
+            "category": raw_category,
+            "recipe_category": raw_category,
+            "source": "fatsecret",
+            "provider": "fatsecret",
+        })
+
+    out.sort(key=lambda r: (len(r.get("matched", [])), r.get("coverage", 0), r.get("score", 0)), reverse=True)
+
+    deduped = []
+    seen = set()
+    for rec in out:
+        key = str(rec.get("recipe_id") or rec.get("title") or "").strip().lower()
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        deduped.append(rec)
+
+    return deduped
+
+
+class handler(BaseHTTPRequestHandler):
+    def do_POST(self):
+        try:
+            content_length = int(self.headers.get("Content-Length", 0))
+            body = json.loads(self.rfile.read(content_length)) if content_length > 0 else {}
+
+            inventory = body.get("inventory", [])
+            restrictions = body.get("restrictions", [])
+            requested_top_k = body.get("top_k", 8)
+            debug = bool(body.get("debug", False))
+
+            if not isinstance(inventory, list):
+                self._send_error(400, "inventory must be a list")
+                return
+
+            normalized_inventory, preprocess_debug = _preprocess_inventory(inventory)
+            if not normalized_inventory:
+                self._send_json(200, {
+                    "mode": "empty_fridge",
+                    "source": "fatsecret",
+                    "source_note": "No valid food inventory",
+                    "inventory_summary": {
+                        "unique_items_count": 0,
+                        "expiring_soon_count": 0,
+                        "expiring_soon_items": [],
+                    },
+                    "recommendations": [],
+                    "shopping_list": [],
+                    "debug": {"preprocess": preprocess_debug, "restrictions": restrictions},
+                })
+                return
+
+            try:
+                top_k_int = int(requested_top_k)
+            except (TypeError, ValueError):
+                top_k_int = 8
+            top_k = max(8, min(64, top_k_int))
+
+            search_terms = [i["name"] for i in normalized_inventory][:8]
+            search_expression = " ".join(search_terms)
+
+            raw_payload = _fatsecret_search(search_expression, top_k)
+            raw_recipes = _extract_recipe_list(raw_payload)
+            mapped = _build_recommendations(normalized_inventory, raw_recipes)[:top_k]
+
+            expiring_soon = [i["name"] for i in normalized_inventory[:10]]
+            mode = "abundant" if len(normalized_inventory) >= 6 else "low_stock"
+
+            result = {
+                "mode": mode,
+                "source": "fatsecret",
+                "source_note": f"expr='{search_expression}'",
+                "inventory_summary": {
+                    "unique_items_count": len(normalized_inventory),
+                    "expiring_soon_count": len(expiring_soon),
+                    "expiring_soon_items": expiring_soon,
+                },
+                "recommendations": mapped,
+                "shopping_list": [],
+            }
+
+            if debug:
+                result["debug"] = {
+                    "preprocess": preprocess_debug,
+                    "search_expression": search_expression,
+                    "search_terms": search_terms,
+                    "raw_recipe_count": len(raw_recipes),
+                    "mapped_recipe_count": len(mapped),
+                    "restrictions": restrictions,
+                }
+
+            self._send_json(200, result)
+
+        except HTTPError as e:
+            body = e.read().decode("utf-8") if hasattr(e, "read") else ""
+            self._send_error(e.code, f"FatSecret HTTP error: {body}")
+        except URLError as e:
+            self._send_error(502, f"FatSecret unreachable: {str(e)}")
+        except Exception as e:
+            self._send_error(500, f"Internal error: {str(e)}")
+
+    def do_GET(self):
+        configured = bool(_fatsecret_client_id() and _fatsecret_client_secret())
+        self._send_json(200, {
+            "status": "ok",
+            "engine": "fatsecret-direct",
+            "fatsecret_configured": configured,
+            "timeout_seconds": FATSECRET_TIMEOUT_SECONDS,
+        })
+
+    def _send_json(self, status: int, data: dict):
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.end_headers()
+        self.wfile.write(json.dumps(data).encode("utf-8"))
+
+    def _send_error(self, status: int, message: str):
+        self._send_json(status, {"error": message})
+
+    def do_OPTIONS(self):
+        self.send_response(200)
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.end_headers()

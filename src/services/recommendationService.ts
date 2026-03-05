@@ -13,8 +13,6 @@
 
 import type { Item, StoredRecipe, UserPreferences } from '../types';
 import { getUserPreferences } from '../firebase/saveReceipt';
-
-const REMOTE_RECOMMEND_FALLBACK_URL = 'https://foodies-dusky-pi.vercel.app/api/recommend';
 const TARGET_RECOMMENDATION_COUNT = 50;
 const MAX_CANONICAL_INGREDIENTS = 26;
 const MAX_RAW_INGREDIENTS = 18;
@@ -778,21 +776,6 @@ async function callRecommendAPI(
     body: JSON.stringify(payload),
   });
 
-  // In local Vite dev, /api/recommend is usually not hosted.
-  // Retry once against deployed API to keep development unblocked.
-  if (
-    response.status === 404 &&
-    import.meta.env.DEV &&
-    primaryEndpoint.startsWith('/')
-  ) {
-    console.warn(`⚠️ ${primaryEndpoint} returned 404 in dev. Retrying against deployed API endpoint.`);
-    response = await fetch(REMOTE_RECOMMEND_FALLBACK_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-  }
-
   if (!response.ok) {
     const text = await response.text();
     const timeoutLike = response.status >= 500 && /timed out|timeout|read operation/i.test(text);
@@ -816,18 +799,6 @@ async function callRecommendAPI(
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-
-      if (
-        response.status === 404 &&
-        import.meta.env.DEV &&
-        primaryEndpoint.startsWith('/')
-      ) {
-        response = await fetch(REMOTE_RECOMMEND_FALLBACK_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
-      }
     }
 
     if (!response.ok) {
@@ -942,19 +913,6 @@ export async function getRecipesForItem(item: Item): Promise<StoredRecipe[]> {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
-
-    if (
-      response.status === 404 &&
-      import.meta.env.DEV &&
-      primaryEndpoint.startsWith('/')
-    ) {
-      console.warn(`⚠️ ${primaryEndpoint} returned 404 in dev. Retrying item recipes against deployed API endpoint.`);
-      response = await fetch(REMOTE_RECOMMEND_FALLBACK_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-    }
 
     if (!response.ok) return [];
 
