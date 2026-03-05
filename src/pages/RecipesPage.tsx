@@ -42,13 +42,20 @@ function quickestMinutes(recipe: Recipe): number {
   const prep = parseMinutes(recipe.prepTime);
   const cook = parseMinutes(recipe.cookTime);
   if (prep !== Number.MAX_SAFE_INTEGER && cook !== Number.MAX_SAFE_INTEGER) return prep + cook;
+  return parseMinutes(recipe.totalTime);
+}
+
+function displayMinutes(recipe: Recipe): number {
+  const prep = parseMinutes(recipe.prepTime);
+  const cook = parseMinutes(recipe.cookTime);
+  if (prep !== Number.MAX_SAFE_INTEGER && cook !== Number.MAX_SAFE_INTEGER) return prep + cook;
   if (prep !== Number.MAX_SAFE_INTEGER) return prep;
   if (cook !== Number.MAX_SAFE_INTEGER) return cook;
   return parseMinutes(recipe.totalTime);
 }
 
 function totalTimeLabel(recipe: Recipe): string | null {
-  const minutes = quickestMinutes(recipe);
+  const minutes = displayMinutes(recipe);
   if (minutes === Number.MAX_SAFE_INTEGER) return null;
   return `${minutes} min`;
 }

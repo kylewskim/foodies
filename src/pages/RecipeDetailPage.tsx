@@ -117,7 +117,7 @@ function parseMinutes(value?: string): number {
   return m ? Math.round(Number(m[1])) : Number.MAX_SAFE_INTEGER;
 }
 
-function totalRecipeMinutes(recipe: RecipeDetailState): number {
+function displayRecipeMinutes(recipe: RecipeDetailState): number {
   const prep = parseMinutes(recipe.prepTime);
   const cook = parseMinutes(recipe.cookTime);
   if (prep !== Number.MAX_SAFE_INTEGER && cook !== Number.MAX_SAFE_INTEGER) return prep + cook;
@@ -285,6 +285,8 @@ export function RecipeDetailPage() {
   const validInstructions = useMemo(() => (displayRecipe.instructions ?? [])
     .map((item) => (item || '').trim())
     .filter((item) => item.length > 0 && !item.startsWith('Full recipe:')), [displayRecipe.instructions]);
+  const minutesForDisplay = displayRecipeMinutes(displayRecipe);
+  const recipeTypeChipValues = recipeTypeChips(displayRecipe);
 
   useEffect(() => {
     if (!displayRecipe) return;
@@ -404,33 +406,44 @@ export function RecipeDetailPage() {
           </p>
 
           {/* Stats list */}
-          {(totalRecipeMinutes(displayRecipe) !== Number.MAX_SAFE_INTEGER || displayRecipe.servingSize || recipeTypeChips(displayRecipe).length > 0 || displayRecipe.calories != null || displayRecipe.difficulty) && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              {totalRecipeMinutes(displayRecipe) !== Number.MAX_SAFE_INTEGER && (
-                <p style={{ margin: 0, fontFamily: '"Poppins", sans-serif', fontSize: '12px', color: '#333' }}>
-                  Time: {totalRecipeMinutes(displayRecipe)} min
-                </p>
-              )}
-              {displayRecipe.servingSize && (
-                <p style={{ margin: 0, fontFamily: '"Poppins", sans-serif', fontSize: '12px', color: '#333' }}>
-                  Serving size: {displayRecipe.servingSize}
-                </p>
+          {(minutesForDisplay !== Number.MAX_SAFE_INTEGER || displayRecipe.calories != null || displayRecipe.servingSize) && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '20px', flexWrap: 'wrap' }}>
+              {minutesForDisplay !== Number.MAX_SAFE_INTEGER && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <span style={{ fontFamily: '"Sora", "Poppins", sans-serif', fontSize: '12px', color: '#333' }}>
+                    {minutesForDisplay} min
+                  </span>
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                    <circle cx="8" cy="8" r="6.5" stroke="#333" strokeWidth="1.2" />
+                    <path d="M8 4.5V8L10.5 10" stroke="#333" strokeWidth="1.2" strokeLinecap="round" />
+                  </svg>
+                </div>
               )}
               {displayRecipe.calories != null && (
-                <p style={{ margin: 0, fontFamily: '"Poppins", sans-serif', fontSize: '12px', color: '#333' }}>
-                  Calories: {displayRecipe.calories} Cal
-                </p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <span style={{ fontFamily: '"Sora", "Poppins", sans-serif', fontSize: '12px', color: '#333' }}>
+                    {displayRecipe.calories} Cal
+                  </span>
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                    <path d="M8.2 1.8C9.1 3.1 9.4 4.2 9 5.3C8.7 6.1 8.1 6.8 7.4 7.4C6.4 8.3 5.6 9.1 5.6 10.4C5.6 12 6.9 13.2 8.5 13.2C10.4 13.2 11.9 11.7 11.9 9.8C11.9 7.1 10.3 4.5 8.2 1.8Z" stroke="#333" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </div>
               )}
-              {displayRecipe.difficulty && (
-                <p style={{ margin: 0, fontFamily: '"Poppins", sans-serif', fontSize: '12px', color: '#333' }}>
-                  Difficulty: {displayRecipe.difficulty}
-                </p>
+              {displayRecipe.servingSize && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <span style={{ fontFamily: '"Sora", "Poppins", sans-serif', fontSize: '12px', color: '#333' }}>
+                    {displayRecipe.servingSize}
+                  </span>
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                    <path d="M4.5 3.2V8.1C4.5 9.2 5.4 10.1 6.5 10.1C7.6 10.1 8.5 9.2 8.5 8.1V3.2M6.5 10.1V13.5M3.8 3.2H9.2M11.3 2.8V8.7M11.3 8.7C12.3 8.7 13.1 7.9 13.1 6.9V5.4C13.1 4.4 12.3 3.6 11.3 3.6" stroke="#333" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </div>
               )}
             </div>
           )}
-          {recipeTypeChips(displayRecipe).length > 0 && (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '6px' }}>
-              {recipeTypeChips(displayRecipe).map((chip) => (
+          {recipeTypeChipValues.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '6px' }}>
+              {recipeTypeChipValues.map((chip) => (
                 <span
                   key={`${displayRecipe.id || displayRecipe.name}-${chip}`}
                   style={{
@@ -439,7 +452,10 @@ export function RecipeDetailPage() {
                     color: '#073d33',
                     backgroundColor: '#e3e9e3',
                     borderRadius: '999px',
-                    padding: '3px 8px',
+                    padding: '2px 8px',
+                    height: '20px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
                     lineHeight: 1.2,
                   }}
                 >
