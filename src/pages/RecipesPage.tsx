@@ -8,8 +8,8 @@ import { RecipeCardSkeleton } from '../components/RecipeCardSkeleton';
 import { getRecommendations } from '../services/recommendationService';
 import {
   addFavoriteRecipe,
+  getFavoriteRecipesByUser,
   removeFavoriteRecipe,
-  isRecipeFavorited,
   generateRecipeId,
 } from '../firebase/favoriteRecipes';
 
@@ -51,8 +51,11 @@ export function RecipesPage() {
 
   const loadRecipes = async () => {
     if (!user) return;
+    const loadStartedAt = performance.now();
     try {
+      const itemsStartedAt = performance.now();
       const items = await getItemsByUser(user.uid);
+      const itemsDurationMs = Math.round(performance.now() - itemsStartedAt);
       items.sort((a, b) => {
         const expA = new Date(a.manualExpirationDate || a.autoExpirationDate);
         const expB = new Date(b.manualExpirationDate || b.autoExpirationDate);
@@ -67,7 +70,9 @@ export function RecipesPage() {
       }
 
       setIsRefreshing(true);
+      const recommendationsStartedAt = performance.now();
       const result = await getRecommendations(user.uid, items, false);
+      const recommendationsDurationMs = Math.round(performance.now() - recommendationsStartedAt);
 
       const recipesWithUI: Recipe[] = result.recipes.map(stored => {
         const matchedUserItems = items.filter(item =>
@@ -86,10 +91,21 @@ export function RecipesPage() {
 
       setRecipes(recipesWithUI);
 
-      // Load favorite status
-      const recipeIds = recipesWithUI.map(r => generateRecipeId(r.name));
-      const checks = await Promise.all(recipeIds.map(id => isRecipeFavorited(user.uid, id)));
-      setFavoritedIds(new Set(recipeIds.filter((_, i) => checks[i])));
+      // Load favorite status in one query (instead of N recipe-specific queries).
+      const favoritesStartedAt = performance.now();
+      const favoriteRecipes = await getFavoriteRecipesByUser(user.uid);
+      const favoritedSet = new Set(favoriteRecipes.map((fav) => fav.recipeId));
+      setFavoritedIds(favoritedSet);
+      const favoritesDurationMs = Math.round(performance.now() - favoritesStartedAt);
+
+      console.log('⏱️ Recipes page timing:', {
+        items_count: items.length,
+        recommended_count: recipesWithUI.length,
+        get_items_ms: itemsDurationMs,
+        get_recommendations_ms: recommendationsDurationMs,
+        get_favorites_ms: favoritesDurationMs,
+        total_load_ms: Math.round(performance.now() - loadStartedAt),
+      });
     } catch (error) {
       console.error('Error loading recipes:', error);
     } finally {

@@ -91,6 +91,7 @@ interface RecommendCallTrace {
   top_k: number;
   request_ingredients: string[];
   request_ingredient_count: number;
+  duration_ms: number;
   response_count: number;
   response_titles: string[];
   source?: string;
@@ -681,6 +682,7 @@ async function callRecommendAPI(
   traceLabel?: string,
   onTrace?: (trace: RecommendCallTrace) => void,
 ): Promise<RecommendationResponse> {
+  const startedAt = performance.now();
   const payload = {
     inventory: itemsToPayload(items, strategy),
     restrictions,
@@ -730,6 +732,7 @@ async function callRecommendAPI(
     top_k: topK,
     request_ingredients: [...new Set(payload.inventory.map((it) => it.name))],
     request_ingredient_count: payload.inventory.length,
+    duration_ms: Math.round(performance.now() - startedAt),
     response_count: Array.isArray(data?.recommendations) ? data.recommendations.length : 0,
     response_titles: Array.isArray(data?.recommendations)
       ? data.recommendations.map((r: APIRecipe) => r.title)
@@ -865,6 +868,7 @@ export async function getRecommendations(
   items: Item[],
   _forceRegenerate: boolean = false,
 ): Promise<RecommendationResult> {
+  const startedAt = performance.now();
   // Fetch user preferences for restrictions
   let restrictions: string[] = [];
   try {
@@ -974,6 +978,7 @@ export async function getRecommendations(
     recommendation_count: recipes.length,
     used_fallback_raw: usedFallbackRaw,
     used_expansion: usedExpansion,
+    total_duration_ms: Math.round(performance.now() - startedAt),
     recipe_titles: recipes.map((r) => r.name),
   });
 
