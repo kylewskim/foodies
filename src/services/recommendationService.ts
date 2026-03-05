@@ -542,6 +542,25 @@ function normalizeIngredients(recipe: APIRecipe): string[] {
   return parsed.length > 0 ? parsed : [...recipe.matched, ...recipe.missing];
 }
 
+function extractExplicitRecipeIngredients(recipe: APIRecipe): string[] {
+  const rec = asRecord(recipe);
+  const raw = rec.ingredients;
+  if (!Array.isArray(raw)) return [];
+
+  const parsed = raw
+    .map((item) => {
+      if (typeof item === 'string') return item.trim();
+      const obj = asRecord(item);
+      const name = firstString(obj, ['name', 'ingredient', 'ingredient_name', 'item']) ?? '';
+      const amount = firstString(obj, ['amount', 'quantity', 'measurement']) ?? '';
+      if (!name) return '';
+      return amount ? `${name} (${amount})` : name;
+    })
+    .filter(Boolean);
+
+  return parsed;
+}
+
 function extractRawRecipeCategory(recipe: APIRecipe): string | undefined {
   const rec = asRecord(recipe);
   const candidates: string[] = [];
@@ -672,7 +691,11 @@ function buildStrictBlockedTokens(prefs?: UserPreferences | null): Set<string> {
 
 function recipeContainsBlockedIngredient(recipe: APIRecipe, blockedTokens: Set<string>): boolean {
   if (blockedTokens.size === 0) return false;
-  const ingredients = normalizeIngredients(recipe);
+  // Only enforce strict client-side ingredient exclusion when the upstream
+  // payload includes explicit ingredient lists. Otherwise we'd over-filter
+  // by inferred matched/missing tokens and drop almost everything.
+  const ingredients = extractExplicitRecipeIngredients(recipe);
+  if (ingredients.length === 0) return false;
   for (const ingredient of ingredients) {
     const canonical = pickPrimaryIngredientName(parseIngredientTokens(ingredient)) || canonicalizeText(ingredient);
     if (!canonical) continue;
@@ -777,8 +800,13 @@ async function callRecommendAPI(
   });
 
   if (!response.ok) {
-    const text = await response.text();
-    const timeoutLike = response.status >= 500 && /timed out|timeout|read operation/i.test(text);
+    let firstErrorText = '';
+    try {
+      firstErrorText = await response.text();
+    } catch {
+      firstErrorText = '';
+    }
+    const timeoutLike = response.status >= 500 && /timed out|timeout|read operation/i.test(firstErrorText);
     if (timeoutLike && payload.inventory.length > TIMEOUT_RETRY_INGREDIENT_CAP) {
       const retryPayload = {
         ...payload,
@@ -802,9 +830,14 @@ async function callRecommendAPI(
     }
 
     if (!response.ok) {
-      const retryText = await response.text();
-      console.error('❌ RecipeRec API error response:', response.status, retryText);
-      throw new Error(`API error: ${response.status} — ${retryText}`);
+      let finalErrorText = '';
+      try {
+        finalErrorText = await response.text();
+      } catch {
+        finalErrorText = firstErrorText || 'Failed to read error body';
+      }
+      console.error('❌ RecipeRec API error response:', response.status, finalErrorText);
+      throw new Error(`API error: ${response.status} — ${finalErrorText}`);
     }
   }
 
