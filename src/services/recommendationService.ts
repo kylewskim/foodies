@@ -16,6 +16,10 @@ import { getUserPreferences } from '../firebase/saveReceipt';
 
 const REMOTE_RECOMMEND_FALLBACK_URL = 'https://foodies-dusky-pi.vercel.app/api/recommend';
 const TARGET_RECOMMENDATION_COUNT = 50;
+const MAX_CANONICAL_INGREDIENTS = 26;
+const MAX_RAW_INGREDIENTS = 18;
+const TIMEOUT_RETRY_INGREDIENT_CAP = 14;
+const TIMEOUT_RETRY_TOP_K = 24;
 
 // ─── Types matching RecipeRec engine output ──────────────────────────────────
 
@@ -589,20 +593,36 @@ function itemsToPayload(items: Item[], strategy: 'raw' | 'canonical'): Array<{
   expiration_date: string;
   category: string;
 }> {
-  return items.flatMap((item) => {
+  const byExpiry = [...items].sort((a, b) => {
+    const aDate = new Date(normalizeDate(a.manualExpirationDate || a.autoExpirationDate)).getTime();
+    const bDate = new Date(normalizeDate(b.manualExpirationDate || b.autoExpirationDate)).getTime();
+    return aDate - bDate;
+  });
+
+  const out: Array<{ name: string; expiration_date: string; category: string }> = [];
+  const seen = new Set<string>();
+
+  for (const item of byExpiry) {
     const canonicalTokens = parseIngredientTokens(item.name);
     const normalizedName = pickPrimaryIngredientName(canonicalTokens);
     const name = strategy === 'canonical' ? normalizedName : item.name;
     const cleanedName = canonicalizeText(name);
 
-    if (!cleanedName || cleanedName.length < 3) return [];
+    if (!cleanedName || cleanedName.length < 3) continue;
+    if (seen.has(cleanedName)) continue;
+    seen.add(cleanedName);
 
-    return [{
+    out.push({
       name: strategy === 'canonical' ? normalizedName : item.name,
       expiration_date: normalizeDate(item.manualExpirationDate || item.autoExpirationDate),
       category: item.category.toLowerCase(),
-    }];
-  });
+    });
+
+    const cap = strategy === 'canonical' ? MAX_CANONICAL_INGREDIENTS : MAX_RAW_INGREDIENTS;
+    if (out.length >= cap) break;
+  }
+
+  return out;
 }
 
 function summarizePayload(
@@ -741,7 +761,7 @@ async function callRecommendAPI(
   onTrace?: (trace: RecommendCallTrace) => void,
 ): Promise<RecommendationResponse> {
   const startedAt = performance.now();
-  const payload = {
+  let payload = {
     inventory: itemsToPayload(items, strategy),
     restrictions,
     top_k: topK,
@@ -775,8 +795,46 @@ async function callRecommendAPI(
 
   if (!response.ok) {
     const text = await response.text();
-    console.error('❌ RecipeRec API error response:', response.status, text);
-    throw new Error(`API error: ${response.status} — ${text}`);
+    const timeoutLike = response.status >= 500 && /timed out|timeout|read operation/i.test(text);
+    if (timeoutLike && payload.inventory.length > TIMEOUT_RETRY_INGREDIENT_CAP) {
+      const retryPayload = {
+        ...payload,
+        inventory: payload.inventory.slice(0, TIMEOUT_RETRY_INGREDIENT_CAP),
+        top_k: Math.min(payload.top_k, TIMEOUT_RETRY_TOP_K),
+      };
+
+      console.warn('⏱️ Recipe API timeout detected; retrying with reduced payload', {
+        original_inventory_count: payload.inventory.length,
+        retry_inventory_count: retryPayload.inventory.length,
+        original_top_k: payload.top_k,
+        retry_top_k: retryPayload.top_k,
+      });
+
+      payload = retryPayload;
+      response = await fetch(primaryEndpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (
+        response.status === 404 &&
+        import.meta.env.DEV &&
+        primaryEndpoint.startsWith('/')
+      ) {
+        response = await fetch(REMOTE_RECOMMEND_FALLBACK_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+      }
+    }
+
+    if (!response.ok) {
+      const retryText = await response.text();
+      console.error('❌ RecipeRec API error response:', response.status, retryText);
+      throw new Error(`API error: ${response.status} — ${retryText}`);
+    }
   }
 
   const data = await response.json();
@@ -952,14 +1010,27 @@ export async function getRecommendations(
   console.log('📤 Recipe request summary:', canonicalSummary);
 
   const passTraces: RecommendCallTrace[] = [];
-  const canonicalResponse = await callRecommendAPI(
-    items,
-    restrictions,
-    64,
-    'canonical',
-    'primary-canonical',
-    (trace) => passTraces.push(trace),
-  );
+  let canonicalResponse: RecommendationResponse;
+  try {
+    canonicalResponse = await callRecommendAPI(
+      items,
+      restrictions,
+      64,
+      'canonical',
+      'primary-canonical',
+      (trace) => passTraces.push(trace),
+    );
+  } catch (err) {
+    console.warn('Primary canonical request failed; attempting raw recovery call', err);
+    canonicalResponse = await callRecommendAPI(
+      items,
+      restrictions,
+      TIMEOUT_RETRY_TOP_K,
+      'raw',
+      'primary-raw-recovery',
+      (trace) => passTraces.push(trace),
+    );
+  }
   let candidates = [...(canonicalResponse.recommendations || [])];
   let responseMeta = canonicalResponse;
   let usedFallbackRaw = false;

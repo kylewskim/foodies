@@ -16,6 +16,7 @@ Body: {
 import json
 import os
 import re
+import socket
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler
 from urllib.error import HTTPError, URLError
@@ -23,7 +24,7 @@ from urllib.request import Request, urlopen
 
 DEFAULT_RECOMMENDER_URL = "https://reciperec.onrender.com/recommend"
 RECOMMENDER_URL = os.getenv("RECOMMENDER_URL", DEFAULT_RECOMMENDER_URL)
-RECOMMENDER_TIMEOUT_SECONDS = float(os.getenv("RECOMMENDER_TIMEOUT_SECONDS", "15"))
+RECOMMENDER_TIMEOUT_SECONDS = float(os.getenv("RECOMMENDER_TIMEOUT_SECONDS", "25"))
 
 VALID_CATEGORIES = {
     "produce",
@@ -211,6 +212,8 @@ class handler(BaseHTTPRequestHandler):
         except UpstreamHTTPError as e:
             # Preserve upstream error semantics (4xx/5xx) instead of collapsing to 500.
             self._send_error(e.status, f"Upstream recommender returned {e.status}: {e.body}")
+        except socket.timeout as e:
+            self._send_error(504, f"Recommender timeout: {str(e)}")
         except URLError as e:
             self._send_error(502, f"Recommender unreachable: {str(e)}")
         except Exception as e:
@@ -263,6 +266,8 @@ class handler(BaseHTTPRequestHandler):
         except HTTPError as e:
             body = e.read().decode("utf-8") if hasattr(e, "read") else ""
             raise UpstreamHTTPError(e.code, body) from e
+        except socket.timeout as e:
+            raise URLError(f"timeout: {str(e)}") from e
 
 
 def _today_ymd() -> str:
