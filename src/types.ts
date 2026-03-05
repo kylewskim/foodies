@@ -138,20 +138,7 @@ export interface FavoriteRecipe {
   createdAt: string;
 }
 
-export type RecipeCategory =
-  | 'Appetizer'
-  | 'Soup'
-  | 'Main Dish'
-  | 'Side Dish'
-  | 'Baked'
-  | 'Salad and Salad Dressing'
-  | 'Sauce and Condiment'
-  | 'Dessert'
-  | 'Snack'
-  | 'Beverage'
-  | 'Other'
-  | 'Breakfast'
-  | 'Lunch';
+export type RecipeCategory = string;
 
 export interface StoredRecipe {
   id: string;

@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { getItemsByUser } from '../firebase/saveReceipt';
-import type { Item, RecipeCategory, StoredRecipe } from '../types';
+import type { Item, StoredRecipe } from '../types';
 import { BottomNavigation } from '../components/BottomNavigation';
 import { RecipeCardSkeleton } from '../components/RecipeCardSkeleton';
 import { getRecommendations } from '../services/recommendationService';
@@ -17,24 +17,7 @@ interface Recipe extends StoredRecipe {
   userItems: Item[];
 }
 
-type FilterTag = 'All' | RecipeCategory;
-
-const TAGS: FilterTag[] = [
-  'All',
-  'Appetizer',
-  'Soup',
-  'Main Dish',
-  'Side Dish',
-  'Baked',
-  'Salad and Salad Dressing',
-  'Sauce and Condiment',
-  'Dessert',
-  'Snack',
-  'Beverage',
-  'Other',
-  'Breakfast',
-  'Lunch',
-];
+type FilterTag = 'All' | string;
 
 export function RecipesPage() {
   const navigate = useNavigate();
@@ -44,6 +27,14 @@ export function RecipesPage() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [activeTag, setActiveTag] = useState<FilterTag>('All');
   const [favoritedIds, setFavoritedIds] = useState<Set<string>>(new Set());
+  const tags = useMemo<FilterTag[]>(() => {
+    const categorySet = new Set<string>();
+    for (const recipe of recipes) {
+      const category = recipe.category?.trim();
+      if (category) categorySet.add(category);
+    }
+    return ['All', ...Array.from(categorySet)];
+  }, [recipes]);
 
   useEffect(() => {
     if (user) loadRecipes();
@@ -101,6 +92,7 @@ export function RecipesPage() {
       console.log('⏱️ Recipes page timing:', {
         items_count: items.length,
         recommended_count: recipesWithUI.length,
+        categories: [...new Set(recipesWithUI.map((r) => r.category).filter(Boolean))],
         get_items_ms: itemsDurationMs,
         get_recommendations_ms: recommendationsDurationMs,
         get_favorites_ms: favoritesDurationMs,
@@ -241,7 +233,7 @@ export function RecipesPage() {
         display: 'flex', gap: '8px', overflowX: 'auto',
         padding: '16px 20px', scrollbarWidth: 'none',
       }}>
-        {TAGS.map(tag => (
+        {tags.map(tag => (
           <button
             key={tag}
             onClick={() => setActiveTag(tag)}
