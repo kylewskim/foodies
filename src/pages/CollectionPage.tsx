@@ -143,6 +143,7 @@ export function CollectionPage() {
                       totalTime: recipe.totalTime,
                       servingSize: recipe.servingSize,
                       recipeType: recipe.recipeType,
+                      recipeTypes: recipe.recipeTypes,
                       calories: recipe.calories,
                     }
                   });

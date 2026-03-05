@@ -24,6 +24,7 @@ interface RecipeDetailState {
   totalTime?: string;
   servingSize?: string;
   recipeType?: string;
+  recipeTypes?: string[];
   calories?: number;
   difficulty?: 'Easy' | 'Medium' | 'Hard';
   rawCategory?: string;
@@ -59,9 +60,12 @@ function parseIngredient(ingredient: string): { name: string; quantity: string }
 
   // "Number/fraction unit Name" at start
   const qtyFirstMatch = ingredient.match(
-    /^(\d+(?:[./]\d+)?\s*(?:cups?|tbsp|tsp|oz|g|kg|lb|ml|l|pcs?|cloves?|slices?|pieces?)(?:\s+of)?)\s+(.+)$/i
+    /^(\d+(?:[./]\d+)?\s*(?:cups?|tbsp|tsp|tbsps?|oz|g|kg|lb|ml|l|pcs?|cloves?|slices?|pieces?|dash|pinch|pinches|servings?)(?:\s+of)?)\s+(.+)$/i
   );
   if (qtyFirstMatch) return { name: qtyFirstMatch[2].trim(), quantity: qtyFirstMatch[1].trim() };
+
+  const genericQty = ingredient.match(/^(\d+(?:[./]\d+)?\s+\w+(?:\s+\w+)?)\s+(.+)$/i);
+  if (genericQty) return { name: genericQty[2].trim(), quantity: genericQty[1].trim() };
 
   return { name: ingredient, quantity: '' };
 }
@@ -103,6 +107,29 @@ function extractFatsecretRecipeIdFromUrl(url?: string | null): string | null {
     // no-op
   }
   return null;
+}
+
+function parseMinutes(value?: string): number {
+  if (!value) return Number.MAX_SAFE_INTEGER;
+  const text = value.trim();
+  if (!text) return Number.MAX_SAFE_INTEGER;
+  const m = text.match(/(\d+(?:\.\d+)?)/);
+  return m ? Math.round(Number(m[1])) : Number.MAX_SAFE_INTEGER;
+}
+
+function totalRecipeMinutes(recipe: RecipeDetailState): number {
+  const prep = parseMinutes(recipe.prepTime);
+  const cook = parseMinutes(recipe.cookTime);
+  if (prep !== Number.MAX_SAFE_INTEGER && cook !== Number.MAX_SAFE_INTEGER) return prep + cook;
+  if (prep !== Number.MAX_SAFE_INTEGER) return prep;
+  if (cook !== Number.MAX_SAFE_INTEGER) return cook;
+  return parseMinutes(recipe.totalTime);
+}
+
+function recipeTypeChips(recipe: RecipeDetailState): string[] {
+  const byArray = recipe.recipeTypes ?? [];
+  const byString = recipe.recipeType ? recipe.recipeType.split(',').map((s) => s.trim()).filter(Boolean) : [];
+  return [...new Set([...byArray, ...byString])];
 }
 
 export function RecipeDetailPage() {
@@ -164,6 +191,7 @@ export function RecipeDetailPage() {
           totalTime: detail.totalTime,
           servingSize: detail.servingSize,
           recipeType: detail.recipeType,
+          recipeTypes: detail.recipeTypes,
           calories: detail.calories,
           difficulty: detail.difficulty,
           rawCategory: detail.rawCategory,
@@ -214,6 +242,7 @@ export function RecipeDetailPage() {
           totalTime: displayRecipe.totalTime,
           servingSize: displayRecipe.servingSize,
           recipeType: displayRecipe.recipeType,
+          recipeTypes: displayRecipe.recipeTypes,
           calories: displayRecipe.calories,
         });
         setIsFavorited(true);
@@ -268,6 +297,7 @@ export function RecipeDetailPage() {
       calories: displayRecipe.calories,
       servingSize: displayRecipe.servingSize,
       recipeType: displayRecipe.recipeType,
+      recipeTypes: displayRecipe.recipeTypes,
       difficulty: displayRecipe.difficulty,
       instructionsCount: displayRecipe.instructions?.length ?? 0,
       validInstructionsCount: validInstructions.length,
@@ -374,31 +404,16 @@ export function RecipeDetailPage() {
           </p>
 
           {/* Stats list */}
-          {(displayRecipe.prepTime || displayRecipe.cookTime || displayRecipe.totalTime || displayRecipe.servingSize || displayRecipe.recipeType || displayRecipe.calories != null || displayRecipe.difficulty) && (
+          {(totalRecipeMinutes(displayRecipe) !== Number.MAX_SAFE_INTEGER || displayRecipe.servingSize || recipeTypeChips(displayRecipe).length > 0 || displayRecipe.calories != null || displayRecipe.difficulty) && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              {displayRecipe.prepTime && (
+              {totalRecipeMinutes(displayRecipe) !== Number.MAX_SAFE_INTEGER && (
                 <p style={{ margin: 0, fontFamily: '"Poppins", sans-serif', fontSize: '12px', color: '#333' }}>
-                  Prep time: {displayRecipe.prepTime}
-                </p>
-              )}
-              {displayRecipe.cookTime && (
-                <p style={{ margin: 0, fontFamily: '"Poppins", sans-serif', fontSize: '12px', color: '#333' }}>
-                  Cook time: {displayRecipe.cookTime}
-                </p>
-              )}
-              {displayRecipe.totalTime && (
-                <p style={{ margin: 0, fontFamily: '"Poppins", sans-serif', fontSize: '12px', color: '#333' }}>
-                  Total time: {displayRecipe.totalTime}
+                  Time: {totalRecipeMinutes(displayRecipe)} min
                 </p>
               )}
               {displayRecipe.servingSize && (
                 <p style={{ margin: 0, fontFamily: '"Poppins", sans-serif', fontSize: '12px', color: '#333' }}>
                   Serving size: {displayRecipe.servingSize}
-                </p>
-              )}
-              {displayRecipe.recipeType && (
-                <p style={{ margin: 0, fontFamily: '"Poppins", sans-serif', fontSize: '12px', color: '#333' }}>
-                  Recipe type: {displayRecipe.recipeType}
                 </p>
               )}
               {displayRecipe.calories != null && (
@@ -411,6 +426,26 @@ export function RecipeDetailPage() {
                   Difficulty: {displayRecipe.difficulty}
                 </p>
               )}
+            </div>
+          )}
+          {recipeTypeChips(displayRecipe).length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '6px' }}>
+              {recipeTypeChips(displayRecipe).map((chip) => (
+                <span
+                  key={`${displayRecipe.id || displayRecipe.name}-${chip}`}
+                  style={{
+                    fontFamily: '"Poppins", sans-serif',
+                    fontSize: '10px',
+                    color: '#073d33',
+                    backgroundColor: '#e3e9e3',
+                    borderRadius: '999px',
+                    padding: '3px 8px',
+                    lineHeight: 1.2,
+                  }}
+                >
+                  {chip}
+                </span>
+              ))}
             </div>
           )}
         </div>

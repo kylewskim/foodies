@@ -39,11 +39,25 @@ function parseMinutes(value?: string): number {
 }
 
 function quickestMinutes(recipe: Recipe): number {
-  const cook = parseMinutes(recipe.cookTime);
-  if (cook !== Number.MAX_SAFE_INTEGER) return cook;
   const prep = parseMinutes(recipe.prepTime);
+  const cook = parseMinutes(recipe.cookTime);
+  if (prep !== Number.MAX_SAFE_INTEGER && cook !== Number.MAX_SAFE_INTEGER) return prep + cook;
   if (prep !== Number.MAX_SAFE_INTEGER) return prep;
+  if (cook !== Number.MAX_SAFE_INTEGER) return cook;
   return parseMinutes(recipe.totalTime);
+}
+
+function totalTimeLabel(recipe: Recipe): string | null {
+  const minutes = quickestMinutes(recipe);
+  if (minutes === Number.MAX_SAFE_INTEGER) return null;
+  return `${minutes} min`;
+}
+
+function recipeTypeChips(recipe: Recipe): string[] {
+  const types = recipe.recipeTypes && recipe.recipeTypes.length > 0
+    ? recipe.recipeTypes
+    : (recipe.recipeType ? recipe.recipeType.split(',').map((t) => t.trim()).filter(Boolean) : []);
+  return [...new Set(types)].slice(0, 4);
 }
 
 export function RecipesPage() {
@@ -159,6 +173,7 @@ export function RecipesPage() {
         totalTime: recipe.totalTime,
         servingSize: recipe.servingSize,
         recipeType: recipe.recipeType,
+        recipeTypes: recipe.recipeTypes,
         calories: recipe.calories,
       });
     }
@@ -342,6 +357,7 @@ export function RecipesPage() {
                     totalTime: recipe.totalTime,
                     servingSize: recipe.servingSize,
                     recipeType: recipe.recipeType,
+                    recipeTypes: recipe.recipeTypes,
                     calories: recipe.calories,
                     difficulty: recipe.difficulty,
                     instructions: recipe.instructions,
@@ -392,14 +408,14 @@ export function RecipesPage() {
                   </div>
 
                   <div style={{ display: 'flex', gap: '4px', alignItems: 'center', opacity: 0.6 }}>
-                    {(recipe.cookTime || recipe.prepTime || recipe.totalTime) && (
+                    {totalTimeLabel(recipe) && (
                       <>
                         <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                           <circle cx="8" cy="8" r="6.5" stroke="#333" strokeWidth="1.2" />
                           <path d="M8 4.5V8L10.5 10" stroke="#333" strokeWidth="1.2" strokeLinecap="round" />
                         </svg>
                         <span style={{ fontFamily: '"Poppins", sans-serif', fontSize: '12px', color: '#333' }}>
-                          {recipe.cookTime || recipe.prepTime || recipe.totalTime}
+                          {totalTimeLabel(recipe)}
                         </span>
                         <span style={{ fontFamily: '"Poppins", sans-serif', fontSize: '12px', color: '#333' }}>·</span>
                       </>
@@ -408,6 +424,26 @@ export function RecipesPage() {
                       Uses <strong>{recipe.matchedUserItemCount}</strong> of your items
                     </span>
                   </div>
+                  {recipeTypeChips(recipe).length > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '4px' }}>
+                      {recipeTypeChips(recipe).map((chip) => (
+                        <span
+                          key={`${recipe.id}-${chip}`}
+                          style={{
+                            fontFamily: '"Poppins", sans-serif',
+                            fontSize: '10px',
+                            color: '#073d33',
+                            backgroundColor: '#e3e9e3',
+                            borderRadius: '999px',
+                            padding: '3px 8px',
+                            lineHeight: 1.2,
+                          }}
+                        >
+                          {chip}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             );

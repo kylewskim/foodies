@@ -140,6 +140,7 @@ export interface FavoriteRecipe {
   totalTime?: string;
   servingSize?: string;
   recipeType?: string;
+  recipeTypes?: string[];
   calories?: number;
   createdAt: string;
 }
@@ -163,6 +164,7 @@ export interface StoredRecipe {
   totalTime?: string;
   servingSize?: string;
   recipeType?: string;
+  recipeTypes?: string[];
   calories?: number;
   difficulty?: 'Easy' | 'Medium' | 'Hard';
   instructions: string[];

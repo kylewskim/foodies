@@ -504,13 +504,41 @@ function normalizeRecipeType(recipe: APIRecipe): string | undefined {
   return undefined;
 }
 
+function normalizeRecipeTypes(recipe: APIRecipe): string[] {
+  const rec = asRecord(recipe);
+  const out: string[] = [];
+
+  const pushValue = (value: unknown) => {
+    if (typeof value === 'string' && value.trim()) {
+      for (const part of value.split(',')) {
+        const token = part.trim();
+        if (token) out.push(token);
+      }
+    }
+  };
+
+  pushValue(rec.recipe_type);
+  pushValue(rec.meal_type);
+  pushValue(rec.category);
+  pushValue(rec.recipe_category);
+
+  for (const key of ['recipe_types', 'meal_types', 'categories']) {
+    const value = rec[key];
+    if (Array.isArray(value)) {
+      for (const v of value) pushValue(v);
+    }
+  }
+
+  return [...new Set(out)];
+}
+
 function getRecipeSortMinutes(recipe: Pick<StoredRecipe, 'cookTime' | 'prepTime' | 'totalTime'>): number {
-  return (
-    parseMinutesFromUnknown(recipe.cookTime)
-    ?? parseMinutesFromUnknown(recipe.prepTime)
-    ?? parseMinutesFromUnknown(recipe.totalTime)
-    ?? Number.MAX_SAFE_INTEGER
-  );
+  const prep = parseMinutesFromUnknown(recipe.prepTime);
+  const cook = parseMinutesFromUnknown(recipe.cookTime);
+  if (prep != null && cook != null) return prep + cook;
+  if (prep != null) return prep;
+  if (cook != null) return cook;
+  return parseMinutesFromUnknown(recipe.totalTime) ?? Number.MAX_SAFE_INTEGER;
 }
 
 function normalizeCalories(recipe: APIRecipe): number | undefined {
@@ -561,6 +589,8 @@ function normalizeIngredients(recipe: APIRecipe): string[] {
     .map((item) => {
       if (typeof item === 'string') return item.trim();
       const obj = asRecord(item);
+      const text = firstString(obj, ['text', 'ingredient_description', 'description']);
+      if (text) return text;
       const name = firstString(obj, ['name', 'ingredient', 'ingredient_name', 'item']) ?? '';
       const amount = firstString(obj, ['amount', 'quantity', 'measurement']) ?? '';
       if (!name) return '';
@@ -581,9 +611,7 @@ function extractExplicitRecipeIngredients(recipe: APIRecipe): string[] {
       if (typeof item === 'string') return item.trim();
       const obj = asRecord(item);
       const name = firstString(obj, ['name', 'ingredient', 'ingredient_name', 'item']) ?? '';
-      const amount = firstString(obj, ['amount', 'quantity', 'measurement']) ?? '';
-      if (!name) return '';
-      return amount ? `${name} (${amount})` : name;
+      return name.trim();
     })
     .filter(Boolean);
 
@@ -986,6 +1014,7 @@ function apiRecipeToStoredRecipe(rec: APIRecipe): StoredRecipe {
   const totalTime = normalizeTotalTime(rec);
   const servingSize = normalizeServingSize(rec);
   const recipeType = normalizeRecipeType(rec);
+  const recipeTypes = normalizeRecipeTypes(rec);
   const uiCategory = mapToUiCategory(rawCategory, rec.bucket);
 
   const mappedRecipe: StoredRecipe = {
@@ -1004,6 +1033,7 @@ function apiRecipeToStoredRecipe(rec: APIRecipe): StoredRecipe {
     totalTime,
     servingSize,
     recipeType,
+    recipeTypes,
     calories,
     difficulty: (difficultyRaw === 'Easy' || difficultyRaw === 'Medium' || difficultyRaw === 'Hard')
       ? difficultyRaw

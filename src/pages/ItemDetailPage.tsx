@@ -402,6 +402,7 @@ export function ItemDetailPage() {
                   totalTime: recipe.totalTime,
                   servingSize: recipe.servingSize,
                   recipeType: recipe.recipeType,
+                  recipeTypes: recipe.recipeTypes,
                   calories: recipe.calories,
                   difficulty: recipe.difficulty,
                   instructions: recipe.instructions,
