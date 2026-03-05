@@ -708,6 +708,23 @@ function recipeContainsBlockedIngredient(recipe: APIRecipe, blockedTokens: Set<s
   return false;
 }
 
+function blockedIngredientMatches(recipe: APIRecipe, blockedTokens: Set<string>): string[] {
+  if (blockedTokens.size === 0) return [];
+  const ingredients = extractExplicitRecipeIngredients(recipe);
+  if (ingredients.length === 0) return [];
+  const matched = new Set<string>();
+  for (const ingredient of ingredients) {
+    const canonical = pickPrimaryIngredientName(parseIngredientTokens(ingredient)) || canonicalizeText(ingredient);
+    if (!canonical) continue;
+    for (const blocked of blockedTokens) {
+      if (canonical === blocked || canonical.includes(blocked) || blocked.includes(canonical)) {
+        matched.add(blocked);
+      }
+    }
+  }
+  return [...matched];
+}
+
 function recipeKey(recipe: APIRecipe): string {
   return (recipe.recipe_id || '').trim().toLowerCase() || (recipe.title || '').trim().toLowerCase();
 }
@@ -802,7 +819,7 @@ async function callRecommendAPI(
   if (!response.ok) {
     let firstErrorText = '';
     try {
-      firstErrorText = await response.text();
+      firstErrorText = await response.clone().text();
     } catch {
       firstErrorText = '';
     }
@@ -832,7 +849,7 @@ async function callRecommendAPI(
     if (!response.ok) {
       let finalErrorText = '';
       try {
-        finalErrorText = await response.text();
+        finalErrorText = await response.clone().text();
       } catch {
         finalErrorText = firstErrorText || 'Failed to read error body';
       }
@@ -999,6 +1016,9 @@ export async function getRecommendations(
   const blockedIngredientTokens = buildStrictBlockedTokens(prefs);
   const canonicalSummary = summarizePayload(items, restrictions, 'canonical', 64);
   console.log('📤 Recipe request summary:', canonicalSummary);
+  if (blockedIngredientTokens.size > 0) {
+    console.log('🚫 Active blocked ingredient tokens:', [...blockedIngredientTokens]);
+  }
 
   const passTraces: RecommendCallTrace[] = [];
   let canonicalResponse: RecommendationResponse;
@@ -1044,8 +1064,19 @@ export async function getRecommendations(
   }
 
   const dedupedCandidates = dedupeRecipesByIdentity(candidates);
-  const filteredByRestrictions = dedupedCandidates.filter((recipe) => !recipeContainsBlockedIngredient(recipe, blockedIngredientTokens));
-  const excludedByRestrictionCount = dedupedCandidates.length - filteredByRestrictions.length;
+  const excludedByRestrictions: Array<{ title: string; blocked_matches: string[] }> = [];
+  const filteredByRestrictions = dedupedCandidates.filter((recipe) => {
+    const matches = blockedIngredientMatches(recipe, blockedIngredientTokens);
+    if (matches.length > 0) {
+      excludedByRestrictions.push({
+        title: recipe.title || recipe.recipe_id || 'untitled',
+        blocked_matches: matches,
+      });
+      return false;
+    }
+    return !recipeContainsBlockedIngredient(recipe, blockedIngredientTokens);
+  });
+  const excludedByRestrictionCount = excludedByRestrictions.length;
   const selectedApiRecipes = filteredByRestrictions.slice(0, TARGET_RECOMMENDATION_COUNT);
 
   responseMeta = {
@@ -1077,6 +1108,7 @@ export async function getRecommendations(
     })),
     deduped_count: dedupedCandidates.length,
     excluded_by_restriction_count: excludedByRestrictionCount,
+    exclusion_examples: excludedByRestrictions.slice(0, 10),
     selected_count: recipes.length,
     blocked_ingredient_tokens: [...blockedIngredientTokens],
     merge: summarizeMerge(candidates, selectedApiRecipes),
