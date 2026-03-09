@@ -3,13 +3,16 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { getItemsByUser } from '../firebase/saveReceipt';
 import { generateCreativeRecipe, type CreativeRecipe } from '../llm/generateCreativeRecipe';
+import { generateCreativeRecipeDetail, type CreativeRecipeDetail } from '../llm/generateCreativeRecipeDetail';
 
 export function MagicKitchenResultPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [recipe, setRecipe] = useState<CreativeRecipe | null>(null);
+  const [recipeDetail, setRecipeDetail] = useState<CreativeRecipeDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [generationProgress, setGenerationProgress] = useState(0);
+  const [preparingDetail, setPreparingDetail] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -44,10 +47,13 @@ export function MagicKitchenResultPage() {
       }
 
       const creativeRecipe = await generateCreativeRecipe(items);
+      setGenerationProgress(95);
+      const creativeDetail = await generateCreativeRecipeDetail(creativeRecipe);
 
       clearInterval(progressInterval);
       setGenerationProgress(100);
       setRecipe(creativeRecipe);
+      setRecipeDetail(creativeDetail);
 
       // Small delay to show 100% before hiding loading
       setTimeout(() => {
@@ -60,21 +66,34 @@ export function MagicKitchenResultPage() {
     }
   };
 
-  const handleLearnMore = () => {
+  const handleLearnMore = async () => {
     if (!recipe) return;
 
-    navigate(`/recipes/magic-${Date.now()}`, {
+    if (!recipeDetail) return;
+
+    setPreparingDetail(true);
+    try {
+      navigate(`/recipes/magic-${Date.now()}`, {
       state: {
         name: recipe.name,
-        source: 'Magic Kitchen',
-        description: recipe.description,
+        source: 'magic-kitchen',
+        description: recipeDetail.description,
         image: recipe.imageUrl,
-        ingredients: recipe.ingredients,
+        ingredients: recipeDetail.ingredients,
         matchedIngredients: recipe.matchedIngredients,
-        instructions: recipe.instructions,
-        prepTime: recipe.prepTime,
+        instructions: recipeDetail.instructions,
+        prepTime: recipeDetail.prepTime,
+        cookTime: recipeDetail.cookTime,
+        totalTime: recipeDetail.totalTime,
+        servingSize: recipeDetail.servingSize,
+        calories: recipeDetail.calories,
+        recipeTypes: recipeDetail.recipeTypes,
+        difficulty: recipeDetail.difficulty,
       },
     });
+    } finally {
+      setPreparingDetail(false);
+    }
   };
 
   if (loading || !recipe) {
@@ -326,12 +345,12 @@ export function MagicKitchenResultPage() {
               {recipe.description}
             </p>
             <div
-              onClick={handleLearnMore}
+              onClick={preparingDetail ? undefined : handleLearnMore}
               style={{
                 display: 'flex',
                 alignItems: 'center',
                 gap: '4px',
-                cursor: 'pointer',
+                cursor: preparingDetail ? 'wait' : 'pointer',
                 opacity: 0.8,
               }}
             >
@@ -343,7 +362,7 @@ export function MagicKitchenResultPage() {
                 textTransform: 'capitalize',
                 letterSpacing: '-0.3125px',
               }}>
-                Learn More
+                {preparingDetail ? 'Preparing Details...' : 'Learn More'}
               </p>
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
                 <path
