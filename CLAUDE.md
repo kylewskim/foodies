@@ -18,7 +18,7 @@ firebase deploy --only functions # Deploy to Firebase
 
 ## Architecture
 
-**Freshli** (formerly Foodies) — a PWA for tracking grocery expiration dates, reducing food waste, and recommending recipes.
+**Freshli** — a PWA for tracking grocery expiration dates, reducing food waste, and recommending recipes.
 
 **Stack:** React 19 + TypeScript + Vite 4 + Firebase (Auth, Firestore, FCM) + vite-plugin-pwa
 

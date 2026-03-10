@@ -1,87 +1,87 @@
-# Google Cloud Vision API 설정 가이드
+# Google Cloud Vision API Setup Guide
 
-Google Vision API는 **더 정확하고 빠른 OCR**을 제공합니다!
+Google Vision API provides **more accurate and faster OCR**.
 
-## 🎯 장점
+## 🎯 Benefits
 
-- ✅ **더 정확한 인식률** (특히 한국어)
-- ✅ **빠른 처리 속도** (1-2초)
-- ✅ **무료 크레딧** (월 1,000회)
-- ✅ **다양한 언어 지원**
+- ✅ **More accurate recognition** (especially for Korean)
+- ✅ **Fast processing** (1-2 seconds)
+- ✅ **Free credits** (1,000 requests per month)
+- ✅ **Support for multiple languages**
 
-## 📋 설정 방법
+## 📋 Setup Steps
 
-### 1단계: Google Cloud 프로젝트 생성
+### Step 1: Create a Google Cloud Project
 
-1. https://console.cloud.google.com/ 접속
-2. Google 계정으로 로그인
-3. 상단 프로젝트 선택 → **새 프로젝트** 클릭
-4. 프로젝트 이름 입력 (예: "Foodies OCR")
-5. **만들기** 클릭
+1. Go to https://console.cloud.google.com/
+2. Sign in with your Google account
+3. Select the project picker at the top, then click **New Project**
+4. Enter a project name (for example, "Freshli OCR")
+5. Click **Create**
 
-### 2단계: Vision API 활성화
+### Step 2: Enable the Vision API
 
-1. 왼쪽 메뉴 → **API 및 서비스** → **라이브러리**
-2. 검색창에 "Vision API" 입력
-3. **Cloud Vision API** 선택
-4. **사용 설정** 클릭
+1. In the left menu, go to **APIs & Services** → **Library**
+2. Search for "Vision API"
+3. Select **Cloud Vision API**
+4. Click **Enable**
 
-### 3단계: API 키 발급
+### Step 3: Create an API Key
 
-1. 왼쪽 메뉴 → **API 및 서비스** → **사용자 인증 정보**
-2. 상단 **+ 사용자 인증 정보 만들기** → **API 키**
-3. API 키가 생성됨 (복사)
+1. In the left menu, go to **APIs & Services** → **Credentials**
+2. Click **+ Create Credentials** → **API key**
+3. Copy the generated API key
 
-### 4단계: API 키 제한 설정 (보안)
+### Step 4: Restrict the API Key (Security)
 
-1. 생성된 API 키 클릭
-2. **애플리케이션 제한사항**:
-   - **HTTP 리퍼러(웹사이트)** 선택
-   - **웹사이트 제한사항**에 추가:
+1. Click the generated API key
+2. Under **Application restrictions**:
+   - Select **HTTP referrers (web sites)**
+   - Add the following under **Website restrictions**:
      - `http://localhost:5173/*`
-     - `https://yourdomain.com/*` (배포 시)
-3. **API 제한사항**:
-   - **특정 API 제한** 선택
-   - **Cloud Vision API**만 체크
-4. **저장** 클릭
+     - `https://yourdomain.com/*` (for production)
+3. Under **API restrictions**:
+   - Select **Restrict key**
+   - Check only **Cloud Vision API**
+4. Click **Save**
 
-### 5단계: .env 파일에 추가
+### Step 5: Add It to the `.env` File
 
-프로젝트 루트의 `.env` 파일에 추가:
+Add this to the `.env` file in the project root:
 
 ```
-VITE_GOOGLE_VISION_API_KEY=AIzaSy여기에_복사한_키_붙여넣기
+VITE_GOOGLE_VISION_API_KEY=AIzaSy_paste_your_copied_key_here
 ```
 
-### 6단계: 서버 재시작
+### Step 6: Restart the Server
 
 ```bash
 npm run dev
 ```
 
-## 💰 무료 크레딧
+## 💰 Free Credits
 
-- **월 1,000회** 무료
-- 이후: $1.50 per 1,000 requests
-- 대부분의 사용자에게 충분합니다!
+- **1,000 requests per month** for free
+- After that: $1.50 per 1,000 requests
+- This is enough for most users.
 
-## 🔄 작동 방식
+## 🔄 How It Works
 
-1. **Google Vision API 키 있음** → Google Vision 사용 (더 정확)
-2. **API 키 없음** → Tesseract.js 사용 (폴백)
+1. **Google Vision API key available** → Use Google Vision (more accurate)
+2. **No API key available** → Use Tesseract.js as a fallback
 
-## ⚠️ 주의사항
+## ⚠️ Notes
 
-- API 키는 브라우저에 노출됩니다
-- 프로덕션에서는 **API 키 제한**을 반드시 설정하세요
-- 또는 서버 사이드에서 처리하는 것을 권장합니다
+- The API key is exposed in the browser
+- In production, make sure to configure **API key restrictions**
+- Or, preferably, handle OCR on the server side
 
-## 🧪 테스트
+## 🧪 Test
 
-1. 영수증 이미지 업로드
-2. 진행 상태에서 "Google Vision API" 표시 확인
-3. 빠르고 정확한 텍스트 추출 확인!
+1. Upload a receipt image
+2. Confirm that "Google Vision API" appears in the progress status
+3. Verify that text extraction is fast and accurate
 
 ---
 
-**설정 완료 후**: 더 정확한 OCR을 경험하세요! 🚀
+**After setup**: enjoy more accurate OCR. 🚀

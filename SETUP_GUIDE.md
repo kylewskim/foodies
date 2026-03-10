@@ -1,4 +1,4 @@
-# Foodies Setup Guide
+# Freshli Setup Guide
 
 ## Quick Start
 
@@ -8,20 +8,20 @@
 npm install
 ```
 
-### 2. Configure OpenAI API (AI 기능 활성화)
+### 2. Configure the OpenAI API (Enable AI Features)
 
-**AI 기능을 사용하려면 OpenAI API 키가 필요합니다.**
+**An OpenAI API key is required to use AI features.**
 
-1. [OpenAI Platform](https://platform.openai.com/api-keys)에서 API 키 발급
-2. 프로젝트 루트에 `.env` 파일 생성:
+1. Create an API key in [OpenAI Platform](https://platform.openai.com/api-keys)
+2. Create a `.env` file in the project root:
 
 ```bash
 VITE_OPENAI_API_KEY=sk-your-api-key-here
 ```
 
-> ⚠️ **API 키가 없으면?** 
-> - 앱은 정상 작동하지만 기본 키워드 매칭을 사용합니다
-> - AI 기능 없이도 기본적인 분류와 유통기한 추정이 가능합니다
+> ⚠️ **What if there is no API key?**
+> - The app still works, but it uses the default keyword-matching logic
+> - Basic classification and shelf-life estimation are still available without AI
 
 ### 3. Configure Firebase
 
@@ -38,7 +38,7 @@ VITE_OPENAI_API_KEY=sk-your-api-key-here
    - Go to Project Settings (⚙️ icon)
    - Scroll down to "Your apps"
    - Click the Web icon (`</>`) to add a web app
-   - Register your app (name it "Foodies")
+   - Register your app (name it "Freshli")
    - Copy the `firebaseConfig` object
 
 5. Update `src/firebase/firebaseConfig.ts`:
@@ -196,7 +196,7 @@ Serve the `dist/` folder using any static hosting service.
 ## Project Structure
 
 ```
-foodies/
+freshli/
 ├── src/
 │   ├── components/         # React components
 │   │   ├── ImageUpload.tsx

@@ -1,139 +1,199 @@
-# 🥗 Foodies - Grocery Receipt & Food Tracking App
+# Freshli
 
-A login-free MVP web app for tracking groceries and preventing food waste by monitoring expiration dates.
+Freshli is a mobile-first grocery tracking web app. It helps users add food items from receipt scans or manual entry, monitor expiration dates, organize inventory by storage location, and get recipe recommendations based on what is already at home.
 
-## Features
+## Live App
 
-- **Dual Input Methods**: Upload receipt images OR manually enter grocery items
-- **Smart Processing Pipeline**: OCR → Item parsing → Food classification → Expiration estimation
-- **Editable Expiration Dates**: AI suggests dates, but you can always override them
-- **Firebase Storage**: Save everything to Firestore without authentication
-- **Session-Based**: No login required - uses localStorage session management
+Production URL: [https://foodies-dusky-pi.vercel.app](https://foodies-dusky-pi.vercel.app)
+
+The app is also installable as a Progressive Web App (PWA), so users can add it to their phone home screen and use it like a native app.
+
+## What The App Does
+
+- Scan or upload a grocery receipt image
+- Parse item names from OCR text
+- Classify food items and estimate expiration dates
+- Let users manually correct dates and item details
+- Organize items by location such as fridge, freezer, and pantry
+- Show recipes and recommendation results based on inventory
+- Support mobile-friendly installation through Add to Home Screen
+
+## Key User Flow
+
+1. Open the app.
+2. Sign in with Google.
+3. Complete onboarding if it is your first time.
+4. Add food by scanning a receipt, uploading an image, or entering items manually.
+5. Review detected items and adjust expiration dates if needed.
+6. Save items and manage them from the home and inventory views.
+7. Explore recipe recommendations from the recipes and Magic Kitchen flows.
+
+## Add To Home Screen
+
+Freshli supports home screen installation on mobile devices.
+
+### iPhone / iPad (Safari)
+
+1. Open [https://foodies-dusky-pi.vercel.app](https://foodies-dusky-pi.vercel.app) in Safari.
+2. Tap the Share button.
+3. Tap **Add to Home Screen**.
+4. Launch Freshli from the new icon on the home screen.
+
+### Android (Chrome)
+
+1. Open [https://foodies-dusky-pi.vercel.app](https://foodies-dusky-pi.vercel.app) in Chrome.
+2. Open the browser menu.
+3. Tap **Install app** or **Add to Home screen**.
+4. Launch Freshli from the installed app icon.
+
+Installing the app improves the mobile experience and enables the standalone PWA flow used by the project.
 
 ## Tech Stack
 
-- **Frontend**: React + TypeScript
-- **Build Tool**: Vite
-- **Database**: Firebase Firestore
-- **Architecture**: Modular, client-side logic
-- **Recipe Recommender**: External service (separate repo), accessed via `/api/recommend` proxy
+- React 19
+- TypeScript
+- Vite
+- Firebase Auth
+- Firebase Firestore
+- Firebase Cloud Messaging
+- OpenAI-compatible LLM calls
+- Google OAuth
+- `vite-plugin-pwa` / Workbox
 
 ## Project Structure
 
+```text
+freshli/
+├── src/
+│   ├── assets/              # Fonts, icons, images
+│   ├── components/          # Reusable UI pieces
+│   ├── contexts/            # React context providers, including auth
+│   ├── firebase/            # Firebase config, persistence, notifications, data access
+│   ├── lifecycle/           # Lifecycle prediction logic
+│   ├── llm/                 # OCR parsing, classification, recipe-generation helpers
+│   ├── pages/               # Route-level screens
+│   ├── services/            # API-facing services such as recommendations
+│   ├── utils/               # Shared utility functions
+│   ├── App.tsx              # Route wiring and app shell
+│   ├── main.tsx             # React bootstrap and PWA registration
+│   └── sw.ts                # Service worker source for the PWA
+├── scripts/                 # Utility scripts, including API smoke tests
+├── functions/               # Backend helper functions used by the project
+├── public/                  # Static assets served directly
+├── README.md
+└── package.json
 ```
-src/
-├── components/
-│   ├── ImageUpload.tsx      # Receipt image upload
-│   ├── ManualInput.tsx       # Manual text entry
-│   ├── ItemList.tsx          # Display items list
-│   └── ItemRow.tsx           # Individual item with editable expiration
-├── llm/
-│   ├── normalizeInputText.ts # Parse raw text/OCR
-│   ├── classifyItems.ts      # Classify food items
-│   └── estimateExpirationDays.ts # Estimate expiration
-├── firebase/
-│   ├── firebaseConfig.ts     # Firebase initialization
-│   └── saveReceipt.ts        # Firestore operations
-├── utils/
-│   ├── dateHelpers.ts        # Date calculations
-│   └── session.ts            # Session management
-├── types.ts                  # TypeScript type definitions
-├── App.tsx                   # Main app component
-└── main.tsx                  # Entry point
-```
 
-## Recommender Service (Separate Repo)
+## Important Pages And Modules
 
-The deterministic RecipeRec engine lives in its own repo and is deployed separately
-(Render suggested). This repo only contains the `/api/recommend` proxy and the
-client-side integration (`src/services/recommendationService.ts`).
+- `src/App.tsx`: app routing, protected routes, onboarding flow, notification toast wiring
+- `src/pages/LoginPage.tsx`: Google sign-in and standalone PWA login handling
+- `src/pages/HomePage.tsx`: home dashboard and primary inventory overview
+- `src/pages/AddItemPage.tsx`: add-food entry flow from scan, upload, or manual input
+- `src/pages/RecipesPage.tsx`: recipe browsing and recommendation entry point
+- `src/services/recommendationService.ts`: frontend integration with the recommendation API
+- `src/firebase/saveReceipt.ts`: Firestore read/write logic for items and receipts
+- `src/llm/`: OCR parsing, classification, expiration estimation, recipe helpers
+- `vite.config.ts`: Vite config plus PWA manifest and dev proxy setup
 
-That separation keeps the frontend lightweight and allows the recommender to
-scale independently.
+## Prerequisites
 
-## Data Model
+- Node.js 18+
+- npm
+- A Firebase project
+- A Google OAuth client ID for sign-in
+- An optional external recommender service for `/api/recommend`
 
-### Session
-- `sessionId`: string (generated and stored in localStorage)
+## Local Development Setup
 
-### Receipt
-- `receiptId`: string
-- `sessionId`: string
-- `purchaseDate`: string | null
-- `createdAt`: string
-
-### Item
-- `itemId`: string
-- `receiptId`: string
-- `name`: string
-- `quantity`: string | null
-- `category`: FoodCategory
-- `purchaseDate`: string
-- `autoExpirationDate`: string
-- `manualExpirationDate`: string | null
-- `expirationSource`: 'auto' | 'manual'
-
-## Setup Instructions
-
-### 1. Install Dependencies
+### 1. Install dependencies
 
 ```bash
 npm install
 ```
 
-### 2. Run Recipe Recommender Service (separate repo)
+### 2. Configure Google sign-in
 
-This app proxies `/api/recommend` to a standalone service. Clone and run the
-recommender locally, then point `foodies` at it with `RECOMMENDER_URL`.
+Create a `.env` file in the project root and add your Google OAuth client ID:
 
 ```bash
-# In the recommender repo
-pip install -r requirements.txt
-uvicorn api.server:app --host 0.0.0.0 --port 8001
+VITE_GOOGLE_CLIENT_ID=your-google-client-id
 ```
 
-Set the URL for the proxy:
+### 3. Configure Firebase
+
+Update `src/firebase/firebaseConfig.ts` with the Firebase project you want to use if you are not using the current project configuration.
+
+### 4. Optional: run the external recommender service
+
+The frontend can call a separate recommendation backend through `/api/recommend`.
+
+Run the recommender in its own repository, then point this app to it:
 
 ```bash
 export RECOMMENDER_URL="http://localhost:8001/recommend"
 export RECOMMENDER_TIMEOUT_SECONDS="15"
 ```
 
-For production, deploy the recommender (Render suggested) and set:
-
-```bash
-export RECOMMENDER_URL="https://<your-render-service>.onrender.com/recommend"
-```
-
-If you want provider results, set:
+Optional provider credentials:
 
 ```bash
 export FATSECRET_CLIENT_ID="..."
 export FATSECRET_CLIENT_SECRET="..."
 ```
 
-When deploying `foodies` on Vercel, add `RECOMMENDER_URL` in the
-project’s Environment Variables (same value as above).
+### 5. Start the app
 
-### 2.1 CI Smoke Test for /api/recommend
-
-This repo includes a lightweight CI smoke test that calls the deployed API.
-It runs on push/PR when the GitHub Actions secret `RECOMMENDER_API_BASE_URL`
-is set.
-
-Example secret value:
-```
-https://foodies-dusky-pi.vercel.app
+```bash
+npm run dev
 ```
 
-If the secret is missing, the CI step skips the smoke test.
+Open [http://localhost:5173](http://localhost:5173).
 
-### 2.2 Calling the Deployed /api/recommend
+## What To Expect After Running The Code
 
-Your teammate can call the deployed API through the frontend proxy as long as
-the Vercel deployment has `RECOMMENDER_URL` set to the Render endpoint.
+After `npm run dev`:
 
-Example request:
+1. Vite starts a local development server at `http://localhost:5173`.
+2. The app loads the splash or login flow first.
+3. Users can sign in with Google.
+4. After authentication, the app routes to onboarding for first-time users or to the home dashboard for returning users.
+5. The home screen shows inventory summary cards and quick actions to add food.
+6. Receipt scan, image upload, and manual entry flows lead into item processing and save flows.
+7. If the recommender backend is configured, recipe recommendation features can call `/api/recommend` successfully.
+8. Because PWA support is enabled in development and production, the app also registers its service worker and can behave like an installable app.
+
+## Available Scripts
+
+```bash
+npm run dev              # Start the Vite development server
+npm run build            # Type-check and build the production bundle
+npm run preview          # Preview the production build locally
+npm run test:recommend   # Smoke test the deployed /api/recommend endpoint
+```
+
+## Production Build
+
+```bash
+npm run build
+```
+
+This generates the production bundle in `dist/`.
+
+To preview the built app locally:
+
+```bash
+npm run preview
+```
+
+## Recommendation Service Notes
+
+This repository contains the frontend integration and proxy expectations for recommendations, but the deterministic recommendation engine is deployed separately.
+
+For local development, point `RECOMMENDER_URL` to the external recommender instance.
+For production on Vercel, set `RECOMMENDER_URL` in the Vercel project settings and redeploy.
+
+Example deployed API request:
 
 ```bash
 curl -X POST "https://foodies-dusky-pi.vercel.app/api/recommend" \
@@ -149,123 +209,33 @@ curl -X POST "https://foodies-dusky-pi.vercel.app/api/recommend" \
   }'
 ```
 
-If the request fails with a 5xx or “Recommender unreachable”, the Vercel
-environment likely does not have `RECOMMENDER_URL` set. In that case, your
-teammate should add it in Vercel:
+## PWA Notes
 
-- Vercel → Project → Settings → Environment Variables
-- Name: `RECOMMENDER_URL`
-- Value: `https://<your-render-service>.onrender.com/recommend`
-- Redeploy after saving the env var
+- The app uses `vite-plugin-pwa` with an injected service worker.
+- The manifest is configured for standalone display.
+- The project includes dedicated standalone login handling for installed PWAs.
+- Home screen installation is supported on iOS Safari and Android Chrome.
 
-### 2. Configure Firebase
+## Troubleshooting
 
-1. Create a Firebase project at [https://console.firebase.google.com](https://console.firebase.google.com)
-2. Enable Firestore Database
-3. Get your Firebase configuration
-4. Update `src/firebase/firebaseConfig.ts` with your credentials:
+### Google sign-in fails
 
-```typescript
-const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_AUTH_DOMAIN",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_STORAGE_BUCKET",
-  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-  appId: "YOUR_APP_ID"
-};
-```
+- Confirm `VITE_GOOGLE_CLIENT_ID` is set correctly.
+- Confirm the authorized JavaScript origins in Google Cloud include your local and deployed URLs.
 
-### 3. Run Development Server
+### Recipe requests fail
 
-```bash
-npm run dev
-```
+- Confirm `RECOMMENDER_URL` is set.
+- Confirm the external recommender service is running and reachable.
+- On Vercel, update the environment variable and redeploy if `/api/recommend` returns a 5xx.
 
-Open [http://localhost:5173](http://localhost:5173) in your browser.
+### Firebase access issues
 
-### 4. Build for Production
+- Confirm the Firebase project configuration is correct.
+- Confirm Firestore and Auth are enabled for the selected Firebase project.
 
-```bash
-npm run build
-```
+## Current Deployment
 
-The built files will be in the `dist/` directory.
-
-## Usage Flow
-
-1. **Choose Input Method**: Select between image upload or manual entry
-2. **Process Items**: The app will:
-   - Normalize the input text
-   - Classify items as food/non-food
-   - Categorize items (produce, dairy, meat, etc.)
-   - Estimate expiration dates
-3. **Review & Edit**: View the processed items and manually adjust expiration dates if needed
-4. **Save**: Click "Save All to Firestore" to persist the data
-
-## LLM Functions
-
-The app uses three focused LLM functions:
-
-### 1. normalizeInputText
-- **Input**: Raw OCR text or manual user text
-- **Output**: Purchase date + array of items with quantities
-- **Rules**: Ignores prices, totals, store info
-
-### 2. classifyItems
-- **Input**: Array of raw item names
-- **Output**: Food classification and category
-- **Categories**: produce, dairy, meat, seafood, bakery, pantry, frozen, snack, beverage, non-food, unknown
-
-### 3. estimateExpirationDays
-- **Input**: Normalized name + category
-- **Output**: Days until expiration + confidence level
-- **Assumptions**: Typical household storage, unopened items
-
-## MVP Notes
-
-- **OCR**: Currently using mock implementation - replace with actual OCR service (Google Cloud Vision, Tesseract.js, etc.)
-- **LLM**: Using keyword-based mock implementations - replace with actual LLM API calls for production
-- **Authentication**: None required for MVP - uses localStorage sessions
-- **Styling**: Minimal inline styles - can be enhanced with CSS framework
-
-## Future Extensions
-
-This codebase is designed to easily add:
-- User authentication
-- Push notifications for expiring items
-- Smart reminders
-- Inventory analytics
-- Recipe suggestions based on available ingredients
-- Barcode scanning
-- Shopping list generation
-
-## Development
-
-### Type Safety
-All data flows through strict TypeScript types defined in `src/types.ts`
-
-### Testing
-Run the development server and test:
-1. Manual entry flow
-2. Image upload flow (mock data)
-3. Expiration date editing
-4. Firebase save operation
-
-### Common Issues
-
-**Firebase errors**: Make sure you've updated the Firebase configuration with your actual project credentials.
-
-**Build errors**: Ensure you have Node.js installed (v18+ recommended).
-
-## License
-
-ISC
-
-## Contributing
-
-This is an MVP project. Feel free to extend and improve!
-
----
-
-Built with ❤️ for reducing food waste
+- App: [https://foodies-dusky-pi.vercel.app](https://foodies-dusky-pi.vercel.app)
+- Platform: Vercel
+- Installable: Yes, via Add to Home Screen / Install App

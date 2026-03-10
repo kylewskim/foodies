@@ -1,4 +1,4 @@
-# Foodies - Project Summary
+# Freshli - Project Summary
 
 ## 🎯 Project Status: **MVP COMPLETE** ✅
 
@@ -39,7 +39,7 @@ A fully functional, login-free grocery receipt and food tracking web application
 ## 📁 Complete File Structure
 
 ```
-foodies/
+freshli/
 ├── src/
 │   ├── components/
 │   │   ├── ImageUpload.tsx       # Receipt image upload + mock OCR
@@ -115,7 +115,7 @@ foodies/
 
 ### 1. Quick Start
 ```bash
-cd /Users/kylewskim/Documents/foodies
+cd /Users/kylewskim/Documents/freshli
 npm run dev
 ```
 Open http://localhost:5173

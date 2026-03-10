@@ -1,9 +1,17 @@
-const SESSION_ID_KEY = 'foodies_session_id';
+const SESSION_ID_KEY = 'freshli_session_id';
+const LEGACY_SESSION_ID_KEY = 'foodies_session_id';
 
 /**
  * Get or create a session ID from localStorage
  */
 export function getOrCreateSessionId(): string {
+  const migratedSessionId = localStorage.getItem(LEGACY_SESSION_ID_KEY);
+  if (migratedSessionId) {
+    localStorage.setItem(SESSION_ID_KEY, migratedSessionId);
+    localStorage.removeItem(LEGACY_SESSION_ID_KEY);
+    return migratedSessionId;
+  }
+
   const existingSessionId = localStorage.getItem(SESSION_ID_KEY);
   
   if (existingSessionId) {
@@ -22,4 +30,5 @@ export function getOrCreateSessionId(): string {
  */
 export function clearSession(): void {
   localStorage.removeItem(SESSION_ID_KEY);
+  localStorage.removeItem(LEGACY_SESSION_ID_KEY);
 }

@@ -202,10 +202,10 @@ export interface Item {
 **Implementation**:
 ```typescript
 export function getOrCreateSessionId(): string {
-  const existing = localStorage.getItem('foodies_session_id');
+  const existing = localStorage.getItem('freshli_session_id');
   if (existing) return existing;
   const newId = `session_${Date.now()}_${random()}`;
-  localStorage.setItem('foodies_session_id', newId);
+  localStorage.setItem('freshli_session_id', newId);
   return newId;
 }
 ```
@@ -483,51 +483,51 @@ npm update           # Update dependencies
 ## Issue 5: OpenAI API Rate Limit (429 Error)
 
 ### Problem
-OpenAI API 호출 시 429 에러 발생:
+429 errors occurred while calling the OpenAI API:
 ```
 RateLimitError: 429 You exceeded your current quota, please check your plan and billing details.
 ```
 
-매 API 호출마다 3번 재시도하여 콘솔에 에러 로그가 대량으로 출력됨.
+Each API call retried three times, flooding the console with repeated error logs.
 
 ### Root Cause
-- OpenAI API 키의 무료 크레딧 소진
-- 또는 결제 수단 미등록
-- 또는 월간 사용량 한도 도달
+- OpenAI API free credits were exhausted
+- Or no billing method was configured
+- Or the monthly usage limit was reached
 
 ### Solution Implemented
-1. **재시도 비활성화**: `maxRetries: 0` 설정으로 429 에러 시 즉시 폴백
-2. **전역 API 상태 관리**: 첫 429 에러 발생 시 세션 동안 API 비활성화
-3. **단일 경고 메시지**: 반복적인 에러 로그 대신 한 번만 경고 출력
+1. **Disable retries**: set `maxRetries: 0` so 429 errors fall back immediately
+2. **Global API state management**: disable the API for the rest of the session after the first 429 error
+3. **Single warning message**: print one warning instead of repeated error logs
 
 ```typescript
 // openaiClient.ts
 export const openai = new OpenAI({
   apiKey: apiKey || 'YOUR_API_KEY_HERE',
   dangerouslyAllowBrowser: true,
-  maxRetries: 0, // 429 에러 시 재시도 하지 않음
+  maxRetries: 0, // Do not retry on 429 errors
 });
 
 let apiAvailable = true;
 
 export const disableOpenAI = (): void => {
   if (apiAvailable) {
-    console.warn('⚠️ OpenAI API 한도 초과! 기본 키워드 매칭 모드로 전환합니다.');
+    console.warn('⚠️ OpenAI API quota exceeded. Switching to the default keyword-matching mode.');
     apiAvailable = false;
   }
 };
 ```
 
 ### User Action Required
-OpenAI API를 사용하려면:
-1. https://platform.openai.com/account/billing 에서 결제 수단 등록
-2. 또는 새 API 키 발급: https://platform.openai.com/api-keys
+To use the OpenAI API:
+1. Add a billing method at https://platform.openai.com/account/billing
+2. Or create a new API key at https://platform.openai.com/api-keys
 
 ### Fallback Behavior
-API 사용 불가 시 자동으로 키워드 매칭 기반 로직 사용:
-- `normalizeInputText`: 정규식 기반 텍스트 파싱
-- `classifyItems`: 키워드 매칭 기반 분류
-- `estimateExpirationDays`: 카테고리별 규칙 기반 추정
+When the API is unavailable, the app automatically uses keyword-matching logic:
+- `normalizeInputText`: regex-based text parsing
+- `classifyItems`: keyword-matching classification
+- `estimateExpirationDays`: category rule-based estimation
 
 ---
 
