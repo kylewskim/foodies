@@ -1,73 +1,265 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import broccoliImage from '../assets/img/broccoli.png';
 import { useAuth } from '../contexts/AuthContext';
 import { saveUserPreferences } from '../firebase/saveReceipt';
 import { requestNotificationPermission } from '../firebase/notifications';
 
-type OnboardingStep = 1 | 2 | 3;
+type OnboardingStep = 1 | 2 | 3 | 4;
 
-// Step 1 options
-const helpWithOptions = [
-  { id: 'using_what_i_have', label: 'Using what I already have' },
-  { id: 'meal_ideas', label: 'Getting meal ideas quickly' },
-  { id: 'limiting_waste', label: 'Limiting food waste' },
-  { id: 'meal_variety', label: 'Having meal variety' },
-];
-
-// Step 2 options
 const dietaryOptions = ['Vegetarian', 'Vegan', 'Pescatarian', 'Gluten-free', 'Dairy-free', 'Low-carb'];
 const allergyOptions = ['Nuts', 'Shellfish', 'Eggs', 'Soy', 'Dairy', 'Wheat'];
 const exclusionOptions = ['Beef', 'Pork', 'Shellfish', 'Mushrooms', 'Cilantro', 'Onions'];
 
-// Step 3 options
 const expireInOptions = [
   { id: '1_day', label: '1 day' },
   { id: '3_days', label: '3 days' },
   { id: '1_week', label: '1 week' },
 ];
+
 const timeOfDayOptions = [
   { id: 'morning', label: 'Morning' },
   { id: 'afternoon', label: 'Afternoon' },
   { id: 'evening', label: 'Evening' },
 ];
 
+const pageStyle: React.CSSProperties = {
+  minHeight: '100dvh',
+  backgroundColor: '#f7f6ef',
+  display: 'flex',
+  flexDirection: 'column',
+  color: '#11130b',
+};
+
+const headingStyle: React.CSSProperties = {
+  fontFamily: '"Canela", serif',
+  fontSize: '28px',
+  fontWeight: 300,
+  letterSpacing: '-1.12px',
+  lineHeight: 1.15,
+  margin: 0,
+};
+
+const subheadingStyle: React.CSSProperties = {
+  fontFamily: '"Poppins", sans-serif',
+  fontSize: '13px',
+  fontWeight: 400,
+  lineHeight: 1.45,
+  margin: 0,
+};
+
+const sectionLabelStyle: React.CSSProperties = {
+  ...subheadingStyle,
+  fontSize: '13px',
+};
+
+const primaryButtonStyle: React.CSSProperties = {
+  width: '100%',
+  border: 'none',
+  borderRadius: '9999px',
+  backgroundColor: '#074135',
+  color: '#f7f6ef',
+  fontFamily: '"Poppins", sans-serif',
+  fontSize: '16px',
+  fontWeight: 500,
+  lineHeight: 1.25,
+  padding: '16px 24px',
+  cursor: 'pointer',
+};
+
+function ProgressHeader({
+  activeBars,
+  onBack,
+  onSkip,
+}: {
+  activeBars: number;
+  onBack: () => void;
+  onSkip: () => void;
+}) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 20px 0 12px' }}>
+      <button
+        onClick={onBack}
+        style={{
+          width: '48px',
+          height: '40px',
+          border: 'none',
+          background: 'transparent',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'flex-start',
+          cursor: 'pointer',
+          padding: 0,
+        }}
+        aria-label="Go back"
+      >
+        <svg width="15" height="12" viewBox="0 0 15 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M6 1L1 6L6 11" stroke="#1A1A1A" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M1 6H14" stroke="#1A1A1A" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
+
+      <div style={{ flex: 1, display: 'flex', gap: '8px' }}>
+        {[1, 2].map((bar) => (
+          <div
+            key={bar}
+            style={{
+              flex: 1,
+              height: '2px',
+              borderRadius: '100px',
+              backgroundColor: bar <= activeBars ? '#333333' : '#e7e6db',
+            }}
+          />
+        ))}
+      </div>
+
+      <button
+        onClick={onSkip}
+        style={{
+          width: '48px',
+          height: '40px',
+          border: 'none',
+          background: 'transparent',
+          fontFamily: '"Poppins", sans-serif',
+          fontSize: '14px',
+          fontWeight: 400,
+          color: '#1a1a1a',
+          cursor: 'pointer',
+          padding: 0,
+        }}
+      >
+        Skip
+      </button>
+    </div>
+  );
+}
+
+function SkipHeader({ onSkip }: { onSkip: () => void }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '8px 20px 0 12px' }}>
+      <button
+        onClick={onSkip}
+        style={{
+          width: '48px',
+          height: '40px',
+          border: 'none',
+          background: 'transparent',
+          fontFamily: '"Poppins", sans-serif',
+          fontSize: '14px',
+          fontWeight: 400,
+          color: '#1a1a1a',
+          cursor: 'pointer',
+          padding: 0,
+        }}
+      >
+        Skip
+      </button>
+    </div>
+  );
+}
+
+function SelectChip({
+  label,
+  selected,
+  onClick,
+  grow,
+}: {
+  label: string;
+  selected: boolean;
+  onClick: () => void;
+  grow?: boolean;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        flex: grow ? 1 : undefined,
+        minWidth: grow ? 0 : undefined,
+        padding: '8px 12px',
+        borderRadius: '16px',
+        border: selected ? '1px solid #074135' : '1px solid transparent',
+        backgroundColor: selected ? '#e3e9e3' : '#efeee7',
+        color: selected ? '#074135' : '#11130b',
+        fontFamily: '"Poppins", sans-serif',
+        fontSize: '14px',
+        fontWeight: 400,
+        lineHeight: selected ? '21px' : 'normal',
+        cursor: 'pointer',
+        whiteSpace: 'nowrap',
+        textAlign: 'center',
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
 export function OnboardingPage() {
   const navigate = useNavigate();
   const { user, checkOnboardingStatus } = useAuth();
   const [step, setStep] = useState<OnboardingStep>(1);
-  const [showInviteModal, setShowInviteModal] = useState(false);
   const [saving, setSaving] = useState(false);
-
-  // Form state
-  const [helpWith, setHelpWith] = useState<string | null>(null);
   const [dietaryPreferences, setDietaryPreferences] = useState<string[]>([]);
   const [allergies, setAllergies] = useState<string[]>([]);
   const [ingredientExclusions, setIngredientExclusions] = useState<string[]>([]);
-  const [notifyExpireIn, setNotifyExpireIn] = useState<string | null>(null);
-  const [notifyTimeOfDay, setNotifyTimeOfDay] = useState<string | null>(null);
+  const [notifyExpireIn, setNotifyExpireIn] = useState<string | null>('1_day');
+  const [notifyTimeOfDay, setNotifyTimeOfDay] = useState<string | null>('afternoon');
 
-  const handleSkip = async () => {
-    if (!user) return;
+  const toggleArrayItem = (
+    array: string[],
+    setArray: React.Dispatch<React.SetStateAction<string[]>>,
+    item: string
+  ) => {
+    if (array.includes(item)) {
+      setArray(array.filter((entry) => entry !== item));
+      return;
+    }
+
+    setArray([...array, item]);
+  };
+
+  const completeOnboarding = async (nextPath = '/') => {
+    if (!user || saving) return;
+
     setSaving(true);
+
     try {
-      await saveUserPreferences(user.uid, { onboardingCompleted: true });
-      // Refresh onboarding status in context before navigating
+      const pushEnabled = Boolean(notifyExpireIn && notifyTimeOfDay);
+
+      if (pushEnabled) {
+        await requestNotificationPermission(user.uid);
+      }
+
+      await saveUserPreferences(user.uid, {
+        onboardingCompleted: true,
+        dietaryPreferences,
+        allergies,
+        ingredientExclusions,
+        notifyExpireIn,
+        notifyTimeOfDay,
+        pushEnabled,
+      });
+
       await checkOnboardingStatus();
-      navigate('/', { replace: true });
+      navigate(nextPath, { replace: true });
     } catch (error) {
-      console.error('Error skipping onboarding:', error);
+      console.error('Error saving onboarding preferences:', error);
     } finally {
       setSaving(false);
     }
   };
 
-  const handleContinue = () => {
-    if (step < 3) {
+  const handleSkip = async () => {
+    await completeOnboarding('/');
+  };
+
+  const handleContinue = async () => {
+    if (step < 4) {
       setStep((step + 1) as OnboardingStep);
-    } else {
-      // Show invite modal on step 3
-      setShowInviteModal(true);
+      return;
     }
+
+    await completeOnboarding('/add-item?method=scan');
   };
 
   const handleBack = () => {
@@ -76,476 +268,210 @@ export function OnboardingPage() {
     }
   };
 
-  const handleFinish = async () => {
-    if (!user) return;
-    setSaving(true);
-    try {
-      // If user set notification preferences, request permission + register token
-      const pushEnabled = !!(notifyExpireIn && notifyTimeOfDay);
-      if (pushEnabled) {
-        await requestNotificationPermission(user.uid);
-      }
-
-      await saveUserPreferences(user.uid, {
-        onboardingCompleted: true,
-        helpWith,
-        dietaryPreferences,
-        allergies,
-        ingredientExclusions,
-        notifyExpireIn,
-        notifyTimeOfDay,
-        pushEnabled,
-      });
-      // Refresh onboarding status in context before navigating
-      await checkOnboardingStatus();
-      navigate('/', { replace: true });
-    } catch (error) {
-      console.error('Error saving preferences:', error);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const toggleArrayItem = (
-    array: string[],
-    setArray: React.Dispatch<React.SetStateAction<string[]>>,
-    item: string
-  ) => {
-    if (array.includes(item)) {
-      setArray(array.filter(i => i !== item));
-    } else {
-      setArray([...array, item]);
-    }
-  };
-
-  const renderProgressBar = () => (
-    <div style={{
-      display: 'flex',
-      alignItems: 'center',
-      gap: '8px',
-      padding: '8px 24px 8px 16px',
-      width: '100%',
-      boxSizing: 'border-box',
-    }}>
-      {/* Back button */}
-      <button
-        onClick={handleBack}
-        style={{
-          width: '48px',
-          height: '40px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          background: 'none',
-          border: 'none',
-          cursor: step > 1 ? 'pointer' : 'default',
-          opacity: step > 1 ? 1 : 0.3,
-        }}
-        disabled={step === 1}
-      >
-        <svg width="15" height="12" viewBox="0 0 15 12" fill="none">
-          <path d="M6 1L1 6L6 11" stroke="#333" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-          <path d="M1 6H14" stroke="#333" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-        </svg>
-      </button>
-
-      {/* Progress indicators */}
-      <div style={{ display: 'flex', flex: 1, gap: '8px' }}>
-        {[1, 2, 3].map(i => (
-          <div
-            key={i}
-            style={{
-              flex: 1,
-              height: '2px',
-              borderRadius: '100px',
-              backgroundColor: i <= step ? '#333' : '#e7e6db',
-            }}
+  const renderWelcomeStep = () => (
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '134px 24px 40px' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '24px' }}>
+        <div style={{ width: '191px', height: '194px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <img
+            src={broccoliImage}
+            alt="Fresh broccoli"
+            style={{ width: '100%', height: '100%', objectFit: 'contain' }}
           />
-        ))}
-      </div>
-
-      {/* Skip button */}
-      <button
-        onClick={handleSkip}
-        disabled={saving}
-        style={{
-          width: '48px',
-          height: '40px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'flex-end',
-          background: 'none',
-          border: 'none',
-          cursor: 'pointer',
-          fontFamily: '"Poppins", sans-serif',
-          fontSize: '14px',
-          color: '#1a1a1a',
-        }}
-      >
-        Skip
-      </button>
-    </div>
-  );
-
-  const renderStep1 = () => (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '32px', padding: '0 24px' }}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-        <h1 style={{
-          fontFamily: '"Playfair Display", Georgia, serif',
-          fontSize: '28px',
-          fontWeight: '300',
-          color: '#11130b',
-          letterSpacing: '-1.12px',
-          margin: 0,
-        }}>
-          What would you like us to help with most?
-        </h1>
-        <p style={{
-          fontFamily: '"Poppins", sans-serif',
-          fontSize: '13px',
-          color: '#11130b',
-          margin: 0,
-        }}>
-          Tell us what matters most to you right now
-        </p>
-      </div>
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-        {helpWithOptions.map(option => (
-          <button
-            key={option.id}
-            onClick={() => setHelpWith(option.id)}
-            style={{
-              padding: '16px',
-              borderRadius: '16px',
-              border: helpWith === option.id ? '1.5px solid #073d35' : 'none',
-              backgroundColor: helpWith === option.id ? '#e3e9e3' : '#efeee7',
-              textAlign: 'left',
-              cursor: 'pointer',
-              fontFamily: '"Poppins", sans-serif',
-              fontSize: '16px',
-              color: helpWith === option.id ? '#073d35' : '#1a1a1a',
-            }}
-          >
-            {option.label}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-
-  const renderChip = (
-    label: string,
-    selected: boolean,
-    onClick: () => void
-  ) => (
-    <button
-      onClick={onClick}
-      style={{
-        padding: '8px 12px',
-        borderRadius: selected ? '16px' : '20000px',
-        border: selected ? '1px solid #073d35' : 'none',
-        backgroundColor: selected ? '#e3e9e3' : '#efeee7',
-        cursor: 'pointer',
-        fontFamily: '"Poppins", sans-serif',
-        fontSize: '14px',
-        color: '#11130b',
-      }}
-    >
-      {label}
-    </button>
-  );
-
-  const renderStep2 = () => (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '32px', padding: '0 24px' }}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-        <h1 style={{
-          fontFamily: '"Playfair Display", Georgia, serif',
-          fontSize: '28px',
-          fontWeight: '300',
-          color: '#11130b',
-          letterSpacing: '-1.12px',
-          margin: 0,
-        }}>
-          Any food rules in your household?
-        </h1>
-        <p style={{
-          fontFamily: '"Poppins", sans-serif',
-          fontSize: '13px',
-          color: '#11130b',
-          margin: 0,
-        }}>
-          Select all that apply to get personalized recipes
-        </p>
-      </div>
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-        {/* Dietary preferences */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <p style={{
-            fontFamily: '"Poppins", sans-serif',
-            fontSize: '13px',
-            color: '#11130b',
-            margin: 0,
-          }}>
-            Dietary preferences
-          </p>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
-            {dietaryOptions.map(option => renderChip(
-              option,
-              dietaryPreferences.includes(option),
-              () => toggleArrayItem(dietaryPreferences, setDietaryPreferences, option)
-            ))}
-          </div>
         </div>
 
-        {/* Allergies */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <p style={{
-            fontFamily: '"Poppins", sans-serif',
-            fontSize: '13px',
-            color: '#11130b',
-            margin: 0,
-          }}>
-            Allergies
+        <div style={{ width: '100%', maxWidth: '327px', display: 'flex', flexDirection: 'column', gap: '12px', textAlign: 'center', color: '#073d33' }}>
+          <h1 style={{ ...headingStyle, color: '#073d33', letterSpacing: '-0.042px' }}>
+            Your food, seen clearly before it&apos;s wasted.
+          </h1>
+          <p style={{ fontFamily: '"Poppins", sans-serif', fontSize: '16px', fontWeight: 400, lineHeight: 1.35, letterSpacing: '-0.4316px', margin: 0 }}>
+            See what&apos;s still here, with expiry alert
+            <br />
+            and personalized recipe.
           </p>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
-            {allergyOptions.map(option => renderChip(
-              option,
-              allergies.includes(option),
-              () => toggleArrayItem(allergies, setAllergies, option)
-            ))}
-          </div>
-        </div>
-
-        {/* Ingredient exclusions */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <p style={{
-            fontFamily: '"Poppins", sans-serif',
-            fontSize: '13px',
-            color: '#11130b',
-            margin: 0,
-          }}>
-            Ingredient exclusions
-          </p>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
-            {exclusionOptions.map(option => renderChip(
-              option,
-              ingredientExclusions.includes(option),
-              () => toggleArrayItem(ingredientExclusions, setIngredientExclusions, option)
-            ))}
-          </div>
         </div>
       </div>
-    </div>
-  );
 
-  const renderStep3 = () => (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '32px', padding: '0 24px' }}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-        <h1 style={{
-          fontFamily: '"Playfair Display", Georgia, serif',
-          fontSize: '28px',
-          fontWeight: '300',
-          color: '#11130b',
-          letterSpacing: '-1.12px',
-          margin: 0,
-        }}>
-          When is it helpful for us to notify you?
-        </h1>
-        <p style={{
-          fontFamily: '"Poppins", sans-serif',
-          fontSize: '13px',
-          color: '#11130b',
-          margin: 0,
-        }}>
-          You can choose when and how to be notified.
-        </p>
-      </div>
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-        {/* Notify when expire in */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <p style={{
-            fontFamily: '"Poppins", sans-serif',
-            fontSize: '13px',
-            color: '#11130b',
-            margin: 0,
-          }}>
-            Notify me when expire in
-          </p>
-          <div style={{ display: 'flex', gap: '12px' }}>
-            {expireInOptions.map(option => (
-              <button
-                key={option.id}
-                onClick={() => setNotifyExpireIn(option.id)}
-                style={{
-                  flex: 1,
-                  padding: '8px 12px',
-                  borderRadius: notifyExpireIn === option.id ? '16px' : '20000px',
-                  border: notifyExpireIn === option.id ? '1px solid #073d35' : 'none',
-                  backgroundColor: notifyExpireIn === option.id ? '#e3e9e3' : '#efeee7',
-                  cursor: 'pointer',
-                  fontFamily: '"Poppins", sans-serif',
-                  fontSize: '14px',
-                  color: '#11130b',
-                  textAlign: 'center',
-                }}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Time of day */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <p style={{
-            fontFamily: '"Poppins", sans-serif',
-            fontSize: '13px',
-            color: '#11130b',
-            margin: 0,
-          }}>
-            Time of day
-          </p>
-          <div style={{ display: 'flex', gap: '12px' }}>
-            {timeOfDayOptions.map(option => (
-              <button
-                key={option.id}
-                onClick={() => setNotifyTimeOfDay(option.id)}
-                style={{
-                  flex: 1,
-                  padding: '8px 12px',
-                  borderRadius: notifyTimeOfDay === option.id ? '16px' : '20000px',
-                  border: notifyTimeOfDay === option.id ? '1px solid #073d35' : 'none',
-                  backgroundColor: notifyTimeOfDay === option.id ? '#e3e9e3' : '#efeee7',
-                  cursor: 'pointer',
-                  fontFamily: '"Poppins", sans-serif',
-                  fontSize: '14px',
-                  color: '#11130b',
-                  textAlign: 'center',
-                }}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-
-  const renderInviteModal = () => (
-    <>
-      {/* Backdrop */}
-      <div style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: 'rgba(17, 19, 11, 0.5)',
-        zIndex: 1000,
-      }} />
-
-      {/* Modal */}
-      <div style={{
-        position: 'fixed',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        backgroundColor: '#f7f6ef',
-        borderTopLeftRadius: '16px',
-        borderTopRightRadius: '16px',
-        zIndex: 1001,
-        padding: '20px 24px 40px',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-      }}>
-        {/* Close button */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '100%', alignItems: 'center' }}>
         <button
-          onClick={handleFinish}
+          onClick={handleContinue}
+          disabled={saving}
           style={{
-            position: 'absolute',
-            top: '20px',
-            right: '20px',
-            width: '40px',
-            height: '40px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            background: 'none',
+            width: '100%',
+            maxWidth: '220px',
             border: 'none',
+            borderRadius: '16px',
+            backgroundColor: '#d3e2d0',
+            color: '#073d33',
+            fontFamily: '"Poppins", sans-serif',
+            fontSize: '14px',
+            fontWeight: 500,
+            lineHeight: '24px',
+            padding: '12px 24px',
             cursor: 'pointer',
+            opacity: saving ? 0.7 : 1,
           }}
         >
-          <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
-            <path d="M1 1L14 14M14 1L1 14" stroke="#11130b" strokeWidth="1.5" strokeLinecap="round"/>
-          </svg>
+          Continue
         </button>
+      </div>
+    </div>
+  );
 
-        <div style={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '32px',
-          alignItems: 'center',
-          marginTop: '56px',
-        }}>
-          {/* Heading */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '100%' }}>
-            <h2 style={{
-              fontFamily: '"Playfair Display", Georgia, serif',
-              fontSize: '28px',
-              fontWeight: '300',
-              color: '#11130b',
-              letterSpacing: '-1.12px',
-              margin: 0,
-            }}>
-              Invite family members
-            </h2>
-            <p style={{
-              fontFamily: '"Poppins", sans-serif',
-              fontSize: '13px',
-              color: '#11130b',
-              margin: 0,
-            }}>
-              Invite family members and start managing your food at home together!
+  const renderFoodRulesStep = () => (
+    <>
+      <ProgressHeader activeBars={1} onBack={handleBack} onSkip={handleSkip} />
+      <div style={{ flex: 1, overflowY: 'auto', padding: '32px 20px 160px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <h1 style={headingStyle}>Any food rules in your household?</h1>
+            <p style={subheadingStyle}>Select all that apply to get personalized recipes</p>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <p style={sectionLabelStyle}>Dietary preferences</p>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
+                {dietaryOptions.map((option) => (
+                  <SelectChip
+                    key={option}
+                    label={option}
+                    selected={dietaryPreferences.includes(option)}
+                    onClick={() => toggleArrayItem(dietaryPreferences, setDietaryPreferences, option)}
+                  />
+                ))}
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <p style={sectionLabelStyle}>Allergies</p>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
+                {allergyOptions.map((option) => (
+                  <SelectChip
+                    key={option}
+                    label={option}
+                    selected={allergies.includes(option)}
+                    onClick={() => toggleArrayItem(allergies, setAllergies, option)}
+                  />
+                ))}
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <p style={sectionLabelStyle}>Ingredient exclusions</p>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
+                {exclusionOptions.map((option) => (
+                  <SelectChip
+                    key={option}
+                    label={option}
+                    selected={ingredientExclusions.includes(option)}
+                    onClick={() => toggleArrayItem(ingredientExclusions, setIngredientExclusions, option)}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style={{ position: 'fixed', left: 0, right: 0, bottom: 0, padding: '16px 20px 34px', backgroundColor: '#f7f6ef' }}>
+        <button onClick={handleContinue} disabled={saving} style={{ ...primaryButtonStyle, opacity: saving ? 0.7 : 1 }}>
+          Continue
+        </button>
+      </div>
+    </>
+  );
+
+  const renderNotificationStep = () => (
+    <>
+      <ProgressHeader activeBars={2} onBack={handleBack} onSkip={handleSkip} />
+      <div style={{ flex: 1, overflowY: 'auto', padding: '32px 20px 160px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <h1 style={headingStyle}>When is it helpful for us to notify you?</h1>
+            <p style={subheadingStyle}>You can choose when and how to be notified.</p>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <p style={sectionLabelStyle}>Notify me when expire in</p>
+              <div style={{ display: 'flex', gap: '12px' }}>
+                {expireInOptions.map((option) => (
+                  <SelectChip
+                    key={option.id}
+                    label={option.label}
+                    selected={notifyExpireIn === option.id}
+                    onClick={() => setNotifyExpireIn(option.id)}
+                    grow
+                  />
+                ))}
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <p style={sectionLabelStyle}>Time of day</p>
+              <div style={{ display: 'flex', gap: '12px' }}>
+                {timeOfDayOptions.map((option) => (
+                  <SelectChip
+                    key={option.id}
+                    label={option.label}
+                    selected={notifyTimeOfDay === option.id}
+                    onClick={() => setNotifyTimeOfDay(option.id)}
+                    grow
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style={{ position: 'fixed', left: 0, right: 0, bottom: 0, padding: '16px 20px 34px', backgroundColor: '#f7f6ef' }}>
+        <button onClick={handleContinue} disabled={saving} style={{ ...primaryButtonStyle, opacity: saving ? 0.7 : 1 }}>
+          Done
+        </button>
+      </div>
+    </>
+  );
+
+  const renderReceiptStep = () => (
+    <>
+      <SkipHeader onSkip={handleSkip} />
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '32px 20px 34px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <h1 style={headingStyle}>Let&apos;s stock up!</h1>
+            <p style={{ ...subheadingStyle, color: '#333333' }}>
+              Scan your grocery receipt to see your items&apos; lifespan and get recipe matches.
             </p>
           </div>
 
-          {/* Illustration */}
-          <div style={{
-            width: '240px',
-            height: '200px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: '120px',
-          }}>
-            🎉
+          <div style={{ width: '100%', display: 'flex', justifyContent: 'center', paddingTop: '12px' }}>
+            <img
+              src="/receipt-scan-illustration.png"
+              alt="Receipt scan illustration"
+              style={{ width: '240px', height: '240px', objectFit: 'contain' }}
+            />
           </div>
+        </div>
 
-          {/* Send invite button */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <button onClick={handleContinue} disabled={saving} style={{ ...primaryButtonStyle, opacity: saving ? 0.7 : 1 }}>
+            Scan my receipt
+          </button>
           <button
-            onClick={handleFinish}
+            onClick={() => completeOnboarding('/add-item?method=manual')}
             disabled={saving}
             style={{
-              width: '100%',
-              maxWidth: '327px',
-              padding: '15px',
-              borderRadius: '9999px',
               border: 'none',
-              backgroundColor: '#e3fd5c',
-              cursor: 'pointer',
+              background: 'transparent',
+              color: '#074135',
               fontFamily: '"Poppins", sans-serif',
-              fontSize: '16px',
-              fontWeight: '500',
-              color: '#073d35',
-              opacity: saving ? 0.7 : 1,
+              fontSize: '12px',
+              fontWeight: 400,
+              lineHeight: 1.4,
+              textDecoration: 'underline',
+              cursor: 'pointer',
             }}
           >
-            {saving ? 'Saving...' : 'Send invite'}
+            Add items manually instead
           </button>
         </div>
       </div>
@@ -553,60 +479,11 @@ export function OnboardingPage() {
   );
 
   return (
-    <div style={{
-      height: '100dvh',
-      backgroundColor: '#f7f6ef',
-      display: 'flex',
-      flexDirection: 'column',
-      overflow: 'hidden',
-    }}>
-      {/* Progress bar */}
-      {renderProgressBar()}
-
-      {/* Content */}
-      <div style={{
-        flex: 1,
-        overflowY: 'auto',
-        paddingTop: '24px',
-        paddingBottom: '120px',
-      }}>
-        {step === 1 && renderStep1()}
-        {step === 2 && renderStep2()}
-        {step === 3 && renderStep3()}
-      </div>
-
-      {/* Bottom button */}
-      <div style={{
-        position: 'fixed',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        padding: '16px 24px 40px',
-        backgroundColor: '#f7f6ef',
-      }}>
-        <button
-          onClick={handleContinue}
-          disabled={saving}
-          style={{
-            width: '100%',
-            padding: '15px',
-            borderRadius: '9999px',
-            border: 'none',
-            backgroundColor: '#073d35',
-            cursor: 'pointer',
-            fontFamily: '"Poppins", sans-serif',
-            fontSize: '16px',
-            fontWeight: '500',
-            color: '#f7f6ef',
-            opacity: saving ? 0.7 : 1,
-          }}
-        >
-          {step === 3 ? 'Done' : 'Continue'}
-        </button>
-      </div>
-
-      {/* Invite modal */}
-      {showInviteModal && renderInviteModal()}
+    <div style={pageStyle}>
+      {step === 1 && renderWelcomeStep()}
+      {step === 2 && renderFoodRulesStep()}
+      {step === 3 && renderNotificationStep()}
+      {step === 4 && renderReceiptStep()}
     </div>
   );
 }
