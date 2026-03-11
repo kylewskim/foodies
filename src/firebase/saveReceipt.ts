@@ -417,3 +417,33 @@ export async function saveUserPreferences(userId: string, preferences: Partial<U
     throw new Error('Failed to save user preferences');
   }
 }
+
+/**
+ * Delete all receipt/item data for a user and clear onboarding preferences.
+ *
+ * @param userId - User ID
+ */
+export async function resetUserData(userId: string): Promise<void> {
+  try {
+    const [receiptsSnapshot, itemsSnapshot] = await Promise.all([
+      getDocs(query(collection(db, 'receipts'), where('userId', '==', userId))),
+      getDocs(query(collection(db, 'items'), where('userId', '==', userId))),
+    ]);
+
+    const batch = writeBatch(db);
+
+    receiptsSnapshot.forEach((receiptDoc) => {
+      batch.delete(receiptDoc.ref);
+    });
+
+    itemsSnapshot.forEach((itemDoc) => {
+      batch.delete(itemDoc.ref);
+    });
+
+    batch.delete(doc(db, 'userPreferences', userId));
+    await batch.commit();
+  } catch (error) {
+    console.error('Error resetting user data:', error);
+    throw new Error('Failed to reset user data');
+  }
+}

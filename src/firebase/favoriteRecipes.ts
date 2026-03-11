@@ -212,3 +212,26 @@ export async function isRecipeFavorited(userId: string, recipeId: string): Promi
     return false;
   }
 }
+
+/**
+ * Delete all favorite recipes for a user.
+ *
+ * @param userId - User ID
+ */
+export async function clearFavoriteRecipes(userId: string): Promise<void> {
+  try {
+    const q = query(
+      collection(db, 'favoriteRecipes'),
+      where('userId', '==', userId)
+    );
+
+    const querySnapshot = await getDocs(q);
+
+    await Promise.all(
+      querySnapshot.docs.map((favoriteDoc) => deleteDoc(favoriteDoc.ref))
+    );
+  } catch (error) {
+    console.error('Error clearing favorite recipes:', error);
+    throw new Error('Failed to clear favorite recipes');
+  }
+}
