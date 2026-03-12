@@ -6,8 +6,8 @@ import { markItemAsTrashed, markItemAsUsed } from '../firebase/saveReceipt';
 import type { Item, StoredRecipe } from '../types';
 import { getRecipesForItem } from '../services/recommendationService';
 import { getDaysUntilExpiration } from '../utils/dateHelpers';
-
 import { ProductImage } from '../components/ProductImage';
+import { RecipeCard } from '../components/RecipeCard';
 
 export function ItemDetailPage() {
   const { itemId } = useParams<{ itemId: string }>();
@@ -385,125 +385,33 @@ export function ItemDetailPage() {
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
             {relatedRecipes.map((recipe, index) => (
-              <Link
+              <RecipeCard
                 key={recipe.id || index}
-                to={`/recipes/${recipe.id}`}
-                state={{
-                  id: recipe.id,
-                  name: recipe.name,
-                  source: recipe.source,
-                  description: recipe.description,
-                  image: recipe.image,
-                  ingredients: recipe.ingredients,
-                  matchedIngredients: recipe.matchedIngredients,
-                  missingIngredients: recipe.missingIngredients,
-                  prepTime: recipe.prepTime,
-                  cookTime: recipe.cookTime,
-                  totalTime: recipe.totalTime,
-                  servingSize: recipe.servingSize,
-                  recipeType: recipe.recipeType,
-                  recipeTypes: recipe.recipeTypes,
-                  calories: recipe.calories,
-                  difficulty: recipe.difficulty,
-                  instructions: recipe.instructions,
-                  url: recipe.url || null,
-                }}
-                style={{ textDecoration: 'none' }}
-              >
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  {/* Recipe Image */}
-                  <div style={{
-                    width: '100%',
-                    height: '152px',
-                    borderRadius: '16px',
-                    backgroundColor: '#e8e8e8',
-                    overflow: 'hidden',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}>
-                    {recipe.image ? (
-                      <img
-                        src={recipe.image}
-                        alt={recipe.name}
-                        style={{
-                          width: '100%',
-                          height: '100%',
-                          objectFit: 'cover',
-                        }}
-                      />
-                    ) : (
-                      <span style={{ fontSize: '48px' }}>🍽️</span>
-                    )}
-                  </div>
-
-                  {/* Recipe Info */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    {/* Title and Heart */}
-                    <div style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                    }}>
-                      <p style={{
-                        fontSize: '14px',
-                        fontFamily: '"Canela", Georgia, serif',
-                        color: '#000',
-                        margin: 0,
-                      }}>
-                        {recipe.name}
-                      </p>
-                      <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                        <path d="M10.517 17.3417C10.2337 17.4417 9.76699 17.4417 9.48366 17.3417C7.06699 16.5167 1.66699 13.075 1.66699 7.24167C1.66699 4.66667 3.74199 2.58333 6.30033 2.58333C7.81699 2.58333 9.15866 3.31667 10.0003 4.45C10.842 3.31667 12.192 2.58333 13.7003 2.58333C16.2587 2.58333 18.3337 4.66667 18.3337 7.24167C18.3337 13.075 12.9337 16.5167 10.517 17.3417Z" stroke="#333" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round"/>
-                      </svg>
-                    </div>
-
-                    {/* Time and Tags */}
-                    {(recipe.prepTime || recipe.difficulty) && (
-                      <div style={{
-                        display: 'flex',
-                        gap: '4px',
-                        alignItems: 'center',
-                        opacity: 0.6,
-                      }}>
-                        {recipe.prepTime && (
-                          <p style={{
-                            fontSize: '12px',
-                            fontFamily: '"Poppins", sans-serif',
-                            color: '#333',
-                            margin: 0,
-                          }}>
-                            {recipe.prepTime}
-                          </p>
-                        )}
-                        {recipe.prepTime && recipe.difficulty && (
-                          <span style={{ fontSize: '12px', color: '#333' }}>·</span>
-                        )}
-                        {recipe.difficulty && (
-                          <p style={{
-                            fontSize: '12px',
-                            fontFamily: '"Poppins", sans-serif',
-                            color: '#333',
-                            margin: 0,
-                          }}>
-                            {recipe.difficulty}
-                          </p>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Matched Ingredients */}
-                    <p style={{
-                      fontSize: '12px',
-                      fontFamily: '"Poppins", sans-serif',
-                      color: 'rgba(0,0,0,0.8)',
-                      margin: 0,
-                    }}>
-                      Uses <strong>{recipe.matchedIngredients?.length || 0}</strong> item{(recipe.matchedIngredients?.length || 0) === 1 ? '' : 's'} from your inventory
-                    </p>
-                  </div>
-                </div>
-              </Link>
+                recipe={recipe}
+                matchedCount={recipe.matchedIngredients?.length || 0}
+                onClick={() => navigate(`/recipes/${recipe.id}`, {
+                  state: {
+                    id: recipe.id,
+                    name: recipe.name,
+                    source: recipe.source,
+                    description: recipe.description,
+                    image: recipe.image,
+                    ingredients: recipe.ingredients,
+                    matchedIngredients: recipe.matchedIngredients,
+                    missingIngredients: recipe.missingIngredients,
+                    prepTime: recipe.prepTime,
+                    cookTime: recipe.cookTime,
+                    totalTime: recipe.totalTime,
+                    servingSize: recipe.servingSize,
+                    recipeType: recipe.recipeType,
+                    recipeTypes: recipe.recipeTypes,
+                    calories: recipe.calories,
+                    difficulty: recipe.difficulty,
+                    instructions: recipe.instructions,
+                    url: recipe.url || null,
+                  },
+                })}
+              />
             ))}
           </div>
         )}
