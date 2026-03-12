@@ -16,6 +16,7 @@ import {
 interface Recipe extends StoredRecipe {
   userItems: Item[];
   matchedUserItemCount: number;
+  serverRank: number;
 }
 
 type FilterTag = 'All' | 'Breakfast' | 'Lunch/Dinner' | 'Snack' | 'Dessert' | 'Beverage' | 'Others';
@@ -109,7 +110,7 @@ export function RecipesPage() {
       const result = await getRecommendations(user.uid, items, false);
       const recommendationsDurationMs = Math.round(performance.now() - recommendationsStartedAt);
 
-      const recipesWithUI: Recipe[] = result.recipes.map((stored) => {
+      const recipesWithUI: Recipe[] = result.recipes.map((stored, index) => {
         const matchedUserItems = items.filter((item) =>
           stored.matchedIngredients.some((ing) =>
             item.name.toLowerCase().includes(ing.toLowerCase()) ||
@@ -128,6 +129,7 @@ export function RecipesPage() {
           image: stored.image,
           userItems: matchedUserItems,
           matchedUserItemCount: matchedUserItems.length,
+          serverRank: index,
         };
       });
 
@@ -194,22 +196,15 @@ export function RecipesPage() {
       return recipe.uiCategory === activeTag;
     });
 
-    const sorted = [...byCategory].sort((a, b) => {
-      if (sortMode === 'quickest') {
-        const quickDiff = quickestMinutes(a) - quickestMinutes(b);
-        if (quickDiff !== 0) return quickDiff;
-      }
+    if (sortMode !== 'quickest') {
+      return byCategory;
+    }
 
-      const matchedDiff = b.matchedUserItemCount - a.matchedUserItemCount;
-      if (matchedDiff !== 0) return matchedDiff;
-      const coverageDiff = (b.coverage || 0) - (a.coverage || 0);
-      if (coverageDiff !== 0) return coverageDiff;
-      const scoreDiff = (b.score || 0) - (a.score || 0);
-      if (scoreDiff !== 0) return scoreDiff;
-      return quickestMinutes(a) - quickestMinutes(b);
+    return [...byCategory].sort((a, b) => {
+      const quickDiff = quickestMinutes(a) - quickestMinutes(b);
+      if (quickDiff !== 0) return quickDiff;
+      return a.serverRank - b.serverRank;
     });
-
-    return sorted;
   }, [recipes, activeTag, sortMode]);
 
   return (

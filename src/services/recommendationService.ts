@@ -539,15 +539,6 @@ function normalizeRecipeTypes(recipe: APIRecipe): string[] {
   return [...new Set(out)].filter((v) => v.toLowerCase() !== 'main' && v.toLowerCase() !== 'quick_bites');
 }
 
-function getRecipeSortMinutes(recipe: Pick<StoredRecipe, 'cookTime' | 'prepTime' | 'totalTime'>): number {
-  const prep = parseMinutesFromUnknown(recipe.prepTime);
-  const cook = parseMinutesFromUnknown(recipe.cookTime);
-  if (prep != null && cook != null) return prep + cook;
-  if (prep != null) return prep;
-  if (cook != null) return cook;
-  return parseMinutesFromUnknown(recipe.totalTime) ?? Number.MAX_SAFE_INTEGER;
-}
-
 function normalizeCalories(recipe: APIRecipe): number | undefined {
   const rec = asRecord(recipe);
   const nutrition = asRecord(rec.nutrition);
@@ -727,12 +718,16 @@ function summarizePayload(
 function summarizeUpstreamDebug(debug: unknown): Record<string, unknown> | undefined {
   if (!debug || typeof debug !== 'object') return undefined;
   const d = debug as Record<string, unknown>;
+  const searchExpressions = Array.isArray(d.search_expressions) ? d.search_expressions : undefined;
   return {
-    provider_candidate_count: d.provider_candidate_count,
-    scored_count: d.scored_count,
-    exclusion_counts: d.exclusion_counts,
-    candidate_thresholds: d.candidate_thresholds,
-    inventory_set_size: Array.isArray(d.inventory_set) ? d.inventory_set.length : undefined,
+    search_pass_count: searchExpressions?.length,
+    search_expressions: searchExpressions,
+    detail_fetch_count: d.detail_fetch_count,
+    candidate_count_before_after_dedupe: d.candidate_count_before_after_dedupe,
+    diversity_penalty_summary: d.diversity_penalty_summary,
+    dropped_no_image: d.dropped_no_image,
+    timings_ms: d.timings_ms,
+    request_total_ms: d.request_total_ms,
   };
 }
 
@@ -1263,15 +1258,6 @@ export async function getRecommendations(
   };
 
   const recipes = timeEnrichment.enriched.map(apiRecipeToStoredRecipe);
-  recipes.sort((a, b) => {
-    const matchedDiff = (b.matchedIngredients?.length || 0) - (a.matchedIngredients?.length || 0);
-    if (matchedDiff !== 0) return matchedDiff;
-    const coverageDiff = (b.coverage || 0) - (a.coverage || 0);
-    if (coverageDiff !== 0) return coverageDiff;
-    const scoreDiff = (b.score || 0) - (a.score || 0);
-    if (scoreDiff !== 0) return scoreDiff;
-    return getRecipeSortMinutes(a) - getRecipeSortMinutes(b);
-  });
 
   console.log('🧪 Recipe pipeline trace:', {
     request: canonicalSummary,
