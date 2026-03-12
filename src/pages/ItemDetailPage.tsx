@@ -8,15 +8,24 @@ import { getRecipesForItem } from '../services/recommendationService';
 import { getDaysUntilExpiration } from '../utils/dateHelpers';
 import { ProductImage } from '../components/ProductImage';
 import { RecipeCard } from '../components/RecipeCard';
+import { useAuth } from '../contexts/AuthContext';
+import {
+  addFavoriteRecipe,
+  getFavoriteRecipesByUser,
+  removeFavoriteRecipe,
+  generateRecipeId,
+} from '../firebase/favoriteRecipes';
 
 export function ItemDetailPage() {
   const { itemId } = useParams<{ itemId: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   const [item, setItem] = useState<Item | null>(null);
   const [loading, setLoading] = useState(true);
   const [relatedRecipes, setRelatedRecipes] = useState<StoredRecipe[]>([]);
   const [loadingRecipes, setLoadingRecipes] = useState(true);
+  const [favoritedIds, setFavoritedIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (itemId) {
@@ -67,6 +76,58 @@ export function ItemDetailPage() {
     } finally {
       setLoadingRecipes(false);
     }
+  };
+
+  useEffect(() => {
+    if (!user) {
+      setFavoritedIds(new Set());
+      return;
+    }
+
+    const loadFavorites = async () => {
+      try {
+        const favoriteRecipes = await getFavoriteRecipesByUser(user.uid);
+        setFavoritedIds(new Set(favoriteRecipes.map((fav) => fav.recipeId)));
+      } catch (error) {
+        console.error('Error loading favorite recipes:', error);
+      }
+    };
+
+    loadFavorites();
+  }, [user]);
+
+  const toggleFavorite = async (recipe: StoredRecipe) => {
+    if (!user) return;
+
+    const recipeId = generateRecipeId(recipe.name);
+    const wasFav = favoritedIds.has(recipeId);
+    const newFavs = new Set(favoritedIds);
+
+    if (wasFav) {
+      newFavs.delete(recipeId);
+      setFavoritedIds(newFavs);
+      await removeFavoriteRecipe(user.uid, recipeId);
+      return;
+    }
+
+    newFavs.add(recipeId);
+    setFavoritedIds(newFavs);
+    await addFavoriteRecipe(user.uid, {
+      sourceRecipeId: recipe.id,
+      recipeName: recipe.name,
+      recipeSource: recipe.source,
+      recipeDescription: recipe.description,
+      recipeImage: recipe.image,
+      ingredients: recipe.ingredients,
+      instructions: recipe.instructions,
+      prepTime: recipe.prepTime,
+      cookTime: recipe.cookTime,
+      totalTime: recipe.totalTime,
+      servingSize: recipe.servingSize,
+      recipeType: recipe.recipeType,
+      recipeTypes: recipe.recipeTypes,
+      calories: recipe.calories,
+    });
   };
 
   const handleTrash = async () => {
@@ -384,11 +445,17 @@ export function ItemDetailPage() {
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-            {relatedRecipes.map((recipe, index) => (
+            {relatedRecipes.map((recipe, index) => {
+              const recipeId = generateRecipeId(recipe.name);
+              const isFav = favoritedIds.has(recipeId);
+
+              return (
               <RecipeCard
                 key={recipe.id || index}
                 recipe={recipe}
                 matchedCount={recipe.matchedIngredients?.length || 0}
+                isFavorite={isFav}
+                onToggleFavorite={() => toggleFavorite(recipe)}
                 onClick={() => navigate(`/recipes/${recipe.id}`, {
                   state: {
                     id: recipe.id,
@@ -412,7 +479,7 @@ export function ItemDetailPage() {
                   },
                 })}
               />
-            ))}
+            )})}
           </div>
         )}
       </div>
