@@ -322,8 +322,8 @@ export function AddItemPage() {
       // Mark recipes for refresh since new items were added
       markRecipesNeedRefresh();
 
-      // After saving scanned items, move to inventory ("At Home") view
-      navigate('/inventory');
+      // After saving scanned items, return to the At Home screen
+      navigate('/');
     } catch (error) {
       console.error('Error saving items:', error);
       alert('Failed to save items. Please try again.');
@@ -421,7 +421,7 @@ export function AddItemPage() {
         alert('Item saved successfully!');
       }
 
-      navigate('/inventory');
+      navigate('/');
     } catch (error) {
       console.error('Error saving item:', error);
       alert('Failed to save item. Please try again.');

@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback } from 'react';
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from './contexts/AuthContext';
 import { HomePage } from './pages/HomePage';
-import { InventoryPage } from './pages/InventoryPage';
 import { AddItemPage } from './pages/AddItemPage';
 import { RecipesPage } from './pages/RecipesPage';
 import { RecipeDetailPage } from './pages/RecipeDetailPage';
@@ -144,7 +143,7 @@ function App() {
       <Route path="/onboarding" element={<OnboardingRoute><OnboardingPage /></OnboardingRoute>} />
       <Route path="/" element={<ProtectedRoute><HomePage /></ProtectedRoute>} />
       <Route path="/location/:locationName" element={<ProtectedRoute><LocationDetailPage /></ProtectedRoute>} />
-      <Route path="/inventory" element={<ProtectedRoute><InventoryPage /></ProtectedRoute>} />
+      <Route path="/inventory" element={<ProtectedRoute><Navigate to="/" replace /></ProtectedRoute>} />
       <Route path="/add-item" element={<ProtectedRoute><AddItemPage /></ProtectedRoute>} />
       <Route path="/recipes" element={<ProtectedRoute><RecipesPage /></ProtectedRoute>} />
       <Route path="/recipes/:recipeId" element={<ProtectedRoute><RecipeDetailPage /></ProtectedRoute>} />

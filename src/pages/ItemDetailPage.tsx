@@ -44,12 +44,12 @@ export function ItemDetailPage() {
         } as Item);
       } else {
         alert('Item not found');
-        navigate('/inventory');
+        navigate('/');
       }
     } catch (error) {
       console.error('Error loading item:', error);
       alert('Failed to load item');
-      navigate('/inventory');
+      navigate('/');
     } finally {
       setLoading(false);
     }
@@ -74,7 +74,7 @@ export function ItemDetailPage() {
 
     try {
       await markItemAsTrashed(item.itemId);
-      navigate('/inventory');
+      navigate('/');
     } catch (error) {
       console.error('Error trashing item:', error);
       alert('Failed to trash item');
@@ -86,7 +86,7 @@ export function ItemDetailPage() {
 
     try {
       await markItemAsUsed(item.itemId);
-      navigate('/inventory');
+      navigate('/');
     } catch (error) {
       console.error('Error marking item as used:', error);
       alert('Failed to update item');

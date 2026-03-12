@@ -1,13 +1,15 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { getRecipeDetailById } from '../services/recommendationService';
+import { getItemsByUser } from '../firebase/saveReceipt';
+import { getRecipeDetailById, normalizeIngredientName } from '../services/recommendationService';
 import {
   addFavoriteRecipe,
   removeFavoriteRecipe,
   isRecipeFavorited,
   generateRecipeId,
 } from '../firebase/favoriteRecipes';
+import type { Item, StorageLocation } from '../types';
 
 interface RecipeDetailState {
   id?: string;
@@ -41,6 +43,26 @@ const INGREDIENT_EMOJI: Record<string, string> = {
   lettuce: '🥬', pepper: '🫑', mushroom: '🍄', corn: '🌽', avocado: '🥑',
 };
 
+const MAYBE_STAPLE_INGREDIENTS = new Set([
+  'salt',
+  'sea salt',
+  'pepper',
+  'black pepper',
+  'oil',
+  'olive oil',
+  'vegetable oil',
+  'canola oil',
+  'sesame oil',
+  'avocado oil',
+  'coconut oil',
+  'cooking spray',
+  'oil spray',
+  'butter',
+  'flour',
+  'sugar',
+  'brown sugar',
+]);
+
 function getIngredientEmoji(name: string): string {
   const lower = name.toLowerCase();
   for (const [key, emoji] of Object.entries(INGREDIENT_EMOJI)) {
@@ -68,6 +90,47 @@ function parseIngredient(ingredient: string): { name: string; quantity: string }
   if (genericQty) return { name: genericQty[2].trim(), quantity: genericQty[1].trim() };
 
   return { name: ingredient, quantity: '' };
+}
+
+function getIngredientMatchScore(ingredientName: string, itemName: string): number {
+  const normalizedIngredient = normalizeIngredientName(ingredientName);
+  const normalizedItem = normalizeIngredientName(itemName);
+
+  if (!normalizedIngredient || !normalizedItem) return 0;
+  if (normalizedIngredient === normalizedItem) return 4;
+  if (
+    normalizedIngredient.includes(normalizedItem) ||
+    normalizedItem.includes(normalizedIngredient)
+  ) {
+    return 3;
+  }
+
+  const ingredientTokens = normalizedIngredient.split(' ').filter((token) => token.length > 2);
+  const itemTokens = new Set(normalizedItem.split(' ').filter((token) => token.length > 2));
+  const sharedTokens = ingredientTokens.filter((token) => itemTokens.has(token));
+  if (sharedTokens.length > 0) return 1 + sharedTokens.length;
+
+  return 0;
+}
+
+function formatStockLocation(location: StorageLocation): string {
+  if (location === 'fridge') return 'In fridge';
+  if (location === 'freezer') return 'In freezer';
+  return 'In pantry';
+}
+
+function isMaybeStapleIngredient(name: string): boolean {
+  const normalizedName = normalizeIngredientName(name);
+  if (!normalizedName) return false;
+  if (MAYBE_STAPLE_INGREDIENTS.has(normalizedName)) return true;
+
+  for (const staple of MAYBE_STAPLE_INGREDIENTS) {
+    if (normalizedName.includes(staple) || staple.includes(normalizedName)) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 function sourceLabel(source?: string, url?: string | null): string {
@@ -141,6 +204,8 @@ export function RecipeDetailPage() {
   const initialRecipe = location.state as RecipeDetailState | undefined;
   const [apiRecipe, setApiRecipe] = useState<RecipeDetailState | null>(null);
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
+  const [inventoryItems, setInventoryItems] = useState<Item[]>([]);
+  const [inventoryLoaded, setInventoryLoaded] = useState(false);
   const displayRecipe = apiRecipe ?? initialRecipe;
 
   const [isFavorited, setIsFavorited] = useState(false);
@@ -151,6 +216,39 @@ export function RecipeDetailPage() {
   useEffect(() => {
     if (user && favoriteRecipeId) loadFavoriteStatus();
   }, [user, favoriteRecipeId]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!user) {
+      setInventoryItems([]);
+      setInventoryLoaded(true);
+      return;
+    }
+
+    setInventoryLoaded(false);
+    getItemsByUser(user.uid)
+      .then((items) => {
+        if (!cancelled) {
+          setInventoryItems(items);
+        }
+      })
+      .catch((error) => {
+        console.error('Error loading inventory for recipe detail:', error);
+        if (!cancelled) {
+          setInventoryItems([]);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setInventoryLoaded(true);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
 
   useEffect(() => {
     const routeId = (routeRecipeId || '').trim();
@@ -255,16 +353,6 @@ export function RecipeDetailPage() {
     }
   };
 
-  const isInFridge = (ingredientName: string): boolean => {
-    if (!displayRecipe?.matchedIngredients || displayRecipe.matchedIngredients.length === 0) return false;
-    const lower = ingredientName.toLowerCase();
-    return displayRecipe.matchedIngredients.some(matched => {
-      const ml = matched.toLowerCase();
-      return lower.includes(ml) || ml.includes(lower) ||
-        lower.split(/[\s,]+/).some(word => word.length > 2 && ml.includes(word));
-    });
-  };
-
   useEffect(() => {
     if (!displayRecipe && !routeRecipeId) {
       console.warn('RecipeDetailPage: no location.state — redirecting to /recipes');
@@ -288,6 +376,44 @@ export function RecipeDetailPage() {
     .filter((item) => item.length > 0 && !item.startsWith('Full recipe:')), [displayRecipe.instructions]);
   const minutesForDisplay = displayRecipeMinutes(displayRecipe);
   const recipeTypeChipValues = recipeTypeChips(displayRecipe);
+  const ingredientStockMap = useMemo(() => {
+    const entries = displayRecipe.ingredients.map((ingredient) => {
+      const { name } = parseIngredient(ingredient);
+      let bestMatch: Item | null = null;
+      let bestScore = 0;
+
+      for (const item of inventoryItems) {
+        const score = getIngredientMatchScore(name, item.name);
+        if (score > bestScore) {
+          bestScore = score;
+          bestMatch = item;
+        }
+      }
+
+      const stockStatus = {
+        label: 'Unstocked',
+        backgroundColor: 'rgba(17,19,11,0.2)',
+        textColor: '#333',
+      };
+
+      if (bestMatch !== null && bestScore > 0) {
+        stockStatus.label = formatStockLocation(bestMatch.location);
+        stockStatus.backgroundColor = '#d3e2d0';
+        stockStatus.textColor = '#073d33';
+      } else if (isMaybeStapleIngredient(name)) {
+        stockStatus.label = 'Maybe';
+        stockStatus.backgroundColor = '#dbeafe';
+        stockStatus.textColor = '#1d4ed8';
+      }
+
+      return [
+        ingredient,
+        stockStatus,
+      ] as const;
+    });
+
+    return new Map(entries);
+  }, [displayRecipe.ingredients, inventoryItems]);
 
   useEffect(() => {
     if (!displayRecipe) return;
@@ -516,7 +642,7 @@ export function RecipeDetailPage() {
             )}
             {displayRecipe.ingredients.map((ingredient, idx) => {
               const { name, quantity } = parseIngredient(ingredient);
-              const inFridge = isInFridge(name);
+              const stockStatus = ingredientStockMap.get(ingredient);
               return (
                 <div
                   key={idx}
@@ -566,9 +692,9 @@ export function RecipeDetailPage() {
                   </div>
 
                   {/* Right: In fridge / Unstocked badge */}
-                  {displayRecipe.matchedIngredients && displayRecipe.matchedIngredients.length > 0 && (
+                  {inventoryLoaded && stockStatus && (
                     <div style={{
-                      backgroundColor: '#d3e2d0',
+                      backgroundColor: stockStatus.backgroundColor,
                       borderRadius: '8px',
                       padding: '0 8px',
                       height: '20px',
@@ -580,9 +706,9 @@ export function RecipeDetailPage() {
                       <span style={{
                         fontFamily: '"Poppins", sans-serif',
                         fontSize: '10px',
-                        color: '#073d33',
+                        color: stockStatus.textColor,
                       }}>
-                        {inFridge ? 'In fridge' : 'Unstocked'}
+                        {stockStatus.label}
                       </span>
                     </div>
                   )}

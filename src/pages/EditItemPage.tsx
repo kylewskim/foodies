@@ -23,7 +23,7 @@ export function EditItemPage() {
 
   useEffect(() => {
     if (!item) {
-      navigate('/inventory');
+      navigate('/');
     }
   }, [item, navigate]);
 

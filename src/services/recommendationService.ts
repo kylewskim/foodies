@@ -396,6 +396,10 @@ function pickPrimaryIngredientName(tokens: string[]): string {
   return selected;
 }
 
+export function normalizeIngredientName(name: string): string {
+  return pickPrimaryIngredientName(parseIngredientTokens(name)) || canonicalizeText(name);
+}
+
 function normalizeDate(dateLike?: string | null): string {
   if (!dateLike) return new Date().toISOString().split('T')[0];
   const dt = new Date(dateLike);

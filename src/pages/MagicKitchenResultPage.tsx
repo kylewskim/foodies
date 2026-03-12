@@ -42,7 +42,7 @@ export function MagicKitchenResultPage() {
 
       if (items.length === 0) {
         alert('No ingredients in your fridge. Please add some items first!');
-        navigate('/inventory');
+        navigate('/');
         return;
       }
 
