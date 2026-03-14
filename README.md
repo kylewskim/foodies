@@ -8,6 +8,10 @@ Production URL: [https://foodies-dusky-pi.vercel.app](https://foodies-dusky-pi.v
 
 The app is also installable as a Progressive Web App (PWA), so users can add it to their phone home screen and use it like a native app.
 
+## User Guide
+
+The PDF user manual is available at [Freshli_User_Guide.pdf](./Freshli_User_Guide.pdf).
+
 ## What The App Does
 
 - Scan or upload a grocery receipt image
@@ -80,6 +84,7 @@ freshli/
 ├── scripts/                 # Utility scripts, including API smoke tests
 ├── functions/               # Backend helper functions used by the project
 ├── public/                  # Static assets served directly
+├── Freshli_User_Guide.pdf   # User manual PDF
 ├── README.md
 └── package.json
 ```
